@@ -1,15 +1,19 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "retrospectai-obsidian-plugin",
+	"version": "0.1.0",
+	"description": "AI-powered retrospective analysis plugin for Obsidian that analyzes your notes to provide insights on productivity patterns and personal growth",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "jest",
+		"test:watch": "jest --watch",
+		"test:coverage": "jest --coverage",
+		"deploy:test": "npm run build && cp main.js manifest.json .obsidian-test/.obsidian/plugins/retrospectai/",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["obsidian", "plugin", "ai", "retrospective", "productivity", "analysis"],
+	"author": "Your Name",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^16.11.6",
