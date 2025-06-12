@@ -28,7 +28,8 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 export enum PrivacyActionType {
   FILE_EXCLUDED = 'file_excluded',
   SECTION_REDACTED = 'section_redacted',
-  FOLDER_EXCLUDED = 'folder_excluded'
+  FOLDER_EXCLUDED = 'folder_excluded',
+  CONTENT_REDACTED = 'content_redacted'
 }
 
 /**
@@ -150,8 +151,70 @@ export class PrivacyFilter {
    * @returns Filtered content with private sections redacted
    */
   filterContent(content: string): string {
-    // TODO: Implementation in subtask 3.6
-    throw new Error('Not implemented yet');
+    // Early validation - handle null, undefined, or empty content
+    if (!content) {
+      this.logger.debug('filterContent: No content provided, returning empty string');
+      return '';
+    }
+
+    // Handle whitespace-only content
+    if (content.trim().length === 0) {
+      this.logger.debug('filterContent: Whitespace-only content, returning as-is');
+      return content;
+    }
+
+    // Check if section redaction is enabled
+    if (!this.enableSectionRedaction) {
+      this.logger.debug('filterContent: Section redaction disabled, checking for full exclusion');
+      
+      // If section redaction is disabled, check if entire content should be excluded
+      if (this.hasExclusionTags(content)) {
+        this.logger.debug('filterContent: Content contains exclusion tags, returning redaction placeholder');
+        this.logPrivacyAction({
+          type: PrivacyActionType.CONTENT_REDACTED,
+          filePath: 'unknown', // File path not available in this context
+          timestamp: Date.now(),
+          metadata: {
+            reason: 'Entire content redacted due to privacy tags (section redaction disabled)',
+            sectionsRedacted: 1
+          }
+        });
+        return this.redactionPlaceholder;
+      }
+      
+      // No exclusion tags found, return original content
+      return content;
+    }
+
+    // Section redaction is enabled - process content with redaction strategies
+    this.logger.debug('filterContent: Processing content with section redaction enabled');
+    
+    const originalLength = content.length;
+    const filteredContent = this.redactPrivateSections(content);
+    const filteredLength = filteredContent.length;
+
+    // Log processing results
+    if (filteredLength !== originalLength) {
+      this.logger.debug(`filterContent: Content processed, length changed from ${originalLength} to ${filteredLength} characters`);
+    } else {
+      this.logger.debug('filterContent: Content processed, no changes made');
+    }
+
+    // Check if entire content was redacted (edge case handling)
+    if (filteredContent.trim() === this.redactionPlaceholder.trim()) {
+      this.logger.debug('filterContent: Entire content was redacted');
+      this.logPrivacyAction({
+        type: PrivacyActionType.CONTENT_REDACTED,
+        filePath: 'unknown', // File path not available in this context
+        timestamp: Date.now(),
+        metadata: {
+          reason: 'Entire content redacted through section processing',
+          sectionsRedacted: 1
+        }
+      });
+    }
+
+    return filteredContent;
   }
 
   /**
@@ -466,8 +529,53 @@ export class PrivacyFilter {
    * @param action Privacy action to log
    */
   private logPrivacyAction(action: PrivacyActionLog): void {
-    // TODO: Implementation in subtask 3.7
-    throw new Error('Not implemented yet');
+    // Validate action before logging
+    if (!action.type || !action.filePath || !action.timestamp) {
+      this.logger.warn('Invalid privacy action provided for logging', action);
+      return;
+    }
+
+    // Add action to log
+    this.actionLog.push(action);
+
+    // Log to console for debugging (without exposing private content)
+    this.logger.debug(`Privacy action logged: ${action.type}`, {
+      filePath: action.filePath,
+      timestamp: new Date(action.timestamp).toISOString(),
+      metadata: action.metadata
+    });
+
+    // Log summary for audit purposes
+    this.logPrivacyActionSummary(action);
+  }
+
+  /**
+   * Log a privacy action summary for audit purposes
+   * @param action Privacy action to summarize
+   */
+  private logPrivacyActionSummary(action: PrivacyActionLog): void {
+    let summary = '';
+    
+    switch (action.type) {
+      case PrivacyActionType.FILE_EXCLUDED:
+        summary = `File excluded: ${action.filePath} (${action.metadata?.reason || 'privacy tags detected'})`;
+        break;
+      case PrivacyActionType.FOLDER_EXCLUDED:
+        summary = `Folder exclusion: ${action.filePath} (folder: ${action.metadata?.folderPath || 'unknown'})`;
+        break;
+      case PrivacyActionType.SECTION_REDACTED: {
+        const sections = action.metadata?.sectionsRedacted || 1;
+        summary = `Section redaction: ${action.filePath} (${sections} section${sections > 1 ? 's' : ''} redacted)`;
+        break;
+      }
+      case PrivacyActionType.CONTENT_REDACTED:
+        summary = `Content redaction: ${action.filePath} (${action.metadata?.reason || 'privacy protection applied'})`;
+        break;
+      default:
+        summary = `Privacy action: ${action.type} on ${action.filePath}`;
+    }
+
+    this.logger.info(`PRIVACY: ${summary}`);
   }
 
   /**
@@ -499,6 +607,122 @@ export class PrivacyFilter {
   clearActionLog(): void {
     this.actionLog = [];
     this.logger.debug('Privacy action log cleared');
+  }
+
+  /**
+   * Get privacy actions filtered by type
+   * @param actionType Type of actions to retrieve
+   * @returns Array of matching privacy actions
+   */
+  getActionsByType(actionType: PrivacyActionType): PrivacyActionLog[] {
+    return this.actionLog.filter(action => action.type === actionType);
+  }
+
+  /**
+   * Get privacy actions for a specific file path
+   * @param filePath File path to search for
+   * @returns Array of privacy actions for the file
+   */
+  getActionsForFile(filePath: string): PrivacyActionLog[] {
+    return this.actionLog.filter(action => action.filePath === filePath);
+  }
+
+  /**
+   * Get privacy actions within a time range
+   * @param startTime Start timestamp (inclusive)
+   * @param endTime End timestamp (inclusive)
+   * @returns Array of privacy actions within the time range
+   */
+  getActionsInTimeRange(startTime: number, endTime: number): PrivacyActionLog[] {
+    return this.actionLog.filter(action => 
+      action.timestamp >= startTime && action.timestamp <= endTime
+    );
+  }
+
+  /**
+   * Generate a comprehensive privacy audit report
+   * @param options Report generation options
+   * @returns Privacy audit report
+   */
+  generateAuditReport(options: {
+    includeFileList?: boolean;
+    timeRange?: { start: number; end: number };
+    actionTypes?: PrivacyActionType[];
+  } = {}): {
+    summary: {
+      totalActions: number;
+      fileExclusions: number;
+      folderExclusions: number;
+      sectionRedactions: number;
+      contentRedactions: number;
+      uniqueFilesAffected: number;
+      reportGeneratedAt: string;
+    };
+    timeRange?: {
+      start: string;
+      end: string;
+    };
+    actions?: PrivacyActionLog[];
+    affectedFiles?: string[];
+  } {
+    let actionsToAnalyze = this.actionLog;
+
+    // Apply time range filter if specified
+    if (options.timeRange) {
+      actionsToAnalyze = this.getActionsInTimeRange(options.timeRange.start, options.timeRange.end);
+    }
+
+    // Apply action type filter if specified
+    if (options.actionTypes && options.actionTypes.length > 0) {
+      actionsToAnalyze = actionsToAnalyze.filter(action => 
+        options.actionTypes!.includes(action.type)
+      );
+    }
+
+    // Calculate summary statistics
+    const fileExclusions = actionsToAnalyze.filter(a => a.type === PrivacyActionType.FILE_EXCLUDED).length;
+    const folderExclusions = actionsToAnalyze.filter(a => a.type === PrivacyActionType.FOLDER_EXCLUDED).length;
+    const sectionRedactions = actionsToAnalyze.filter(a => a.type === PrivacyActionType.SECTION_REDACTED).length;
+    const contentRedactions = actionsToAnalyze.filter(a => a.type === PrivacyActionType.CONTENT_REDACTED).length;
+    
+    const uniqueFilesAffected = new Set(actionsToAnalyze.map(a => a.filePath)).size;
+
+    const report: any = {
+      summary: {
+        totalActions: actionsToAnalyze.length,
+        fileExclusions,
+        folderExclusions,
+        sectionRedactions,
+        contentRedactions,
+        uniqueFilesAffected,
+        reportGeneratedAt: new Date().toISOString()
+      }
+    };
+
+    // Add time range info if specified
+    if (options.timeRange) {
+      report.timeRange = {
+        start: new Date(options.timeRange.start).toISOString(),
+        end: new Date(options.timeRange.end).toISOString()
+      };
+    }
+
+    // Include actions list if requested
+    if (options.includeFileList) {
+      report.actions = actionsToAnalyze.map(action => ({
+        ...action,
+        timestamp: new Date(action.timestamp).toISOString()
+      }));
+      
+      report.affectedFiles = Array.from(new Set(actionsToAnalyze.map(a => a.filePath))).sort();
+    }
+
+    this.logger.info('Privacy audit report generated', {
+      totalActions: report.summary.totalActions,
+      uniqueFiles: report.summary.uniqueFilesAffected
+    });
+
+    return report;
   }
 
   /**
