@@ -1,5 +1,18 @@
 # RetrospectAI - Obsidian Plugin
 
+RetrospectAI is an Obsidian plugin that provides AI-powered retrospective analysis of your notes while respecting your privacy.
+
+## Privacy First
+
+RetrospectAI includes comprehensive privacy protection to ensure sensitive content never reaches AI services:
+
+- **File-level exclusion** using privacy tags (`#private`, `#noai`, `#confidential`)
+- **Folder-based exclusion** for organizing private content
+- **Section-level redaction** for mixed public/private documents
+- **Local processing** - privacy filtering happens before any external API calls
+
+📖 **[Read the complete Privacy Guide](docs/privacy-guide.md)** to learn how to protect your sensitive content.
+
 ## Development & Testing
 
 ### Manual Testing Procedures

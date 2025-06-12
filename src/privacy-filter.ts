@@ -589,8 +589,337 @@ export class PrivacyFilter {
     violations: string[];
     summary: string;
   } {
-    // TODO: Implementation in subtask 3.8
-    throw new Error('Not implemented yet');
+    const violations: string[] = [];
+    
+    // Early validation
+    if (originalContent === null || originalContent === undefined) {
+      violations.push('Original content is null or undefined');
+    }
+    
+    if (filteredContent === null || filteredContent === undefined) {
+      violations.push('Filtered content is null or undefined');
+    }
+    
+    if (violations.length > 0) {
+      return {
+        isValid: false,
+        violations,
+        summary: 'Content validation failed due to null/undefined values'
+      };
+    }
+
+    // Check 1: Verify no exclusion tags remain in filtered content
+    const remainingTags = this.findRemainingPrivacyTags(filteredContent);
+    if (remainingTags.length > 0) {
+      violations.push(`Privacy tags found in filtered content: ${remainingTags.join(', ')}`);
+    }
+
+    // Check 2: Verify content between privacy markers has been redacted
+    const unredactedMarkerContent = this.findUnredactedMarkerContent(filteredContent);
+    if (unredactedMarkerContent.length > 0) {
+      violations.push(`Unredacted content found between privacy markers: ${unredactedMarkerContent.length} instance(s)`);
+    }
+
+    // Check 3: Verify private heading sections have been properly redacted
+    const unredactedHeadingSections = this.findUnredactedHeadingSections(filteredContent);
+    if (unredactedHeadingSections.length > 0) {
+      violations.push(`Private heading sections not properly redacted: ${unredactedHeadingSections.length} section(s)`);
+    }
+
+    // Check 4: Verify content integrity (filtered content should be subset of original)
+    const integrityViolations = this.verifyContentIntegrity(originalContent, filteredContent);
+    violations.push(...integrityViolations);
+
+    // Check 5: Verify redaction placeholders are properly formatted
+    // Note: Placeholder verification is currently simplified to avoid false positives
+    const placeholderViolations = this.verifyRedactionPlaceholders(filteredContent);
+    violations.push(...placeholderViolations);
+
+    // Generate summary
+    const isValid = violations.length === 0;
+    let summary: string;
+    
+    if (isValid) {
+      summary = 'Privacy enforcement verification passed. All privacy markers have been properly respected.';
+    } else {
+      summary = `Privacy enforcement verification failed with ${violations.length} violation(s). Manual review required.`;
+    }
+
+    // Log verification results
+    if (isValid) {
+      this.logger.info('Privacy verification passed', {
+        originalLength: originalContent.length,
+        filteredLength: filteredContent.length,
+        reductionPercentage: Math.round(((originalContent.length - filteredContent.length) / originalContent.length) * 100)
+      });
+    } else {
+      this.logger.warn('Privacy verification failed', {
+        violationCount: violations.length,
+        violations: violations.slice(0, 3) // Log first 3 violations to avoid spam
+      });
+    }
+
+    return {
+      isValid,
+      violations,
+      summary
+    };
+  }
+
+  /**
+   * Find any privacy tags that remain in filtered content
+   * @param content Content to check
+   * @returns Array of remaining privacy tags
+   */
+  private findRemainingPrivacyTags(content: string): string[] {
+    const remainingTags: string[] = [];
+    
+    for (const tag of this.exclusionTags) {
+      // Use the same regex pattern as hasExclusionTags for consistency
+      const tagPattern = new RegExp(`(?:^|\\s)${this.escapeRegex(tag)}(?=\\s|$)`, 'gi');
+      const matches = content.match(tagPattern);
+      
+      if (matches) {
+        remainingTags.push(...matches.map(match => match.trim()));
+      }
+    }
+    
+    return [...new Set(remainingTags)]; // Remove duplicates
+  }
+
+  /**
+   * Find content between privacy markers that hasn't been redacted
+   * @param content Content to check
+   * @returns Array of unredacted marker content instances
+   */
+  private findUnredactedMarkerContent(content: string): string[] {
+    const unredactedInstances: string[] = [];
+    
+    for (const tag of this.exclusionTags) {
+      // Check for HTML comment style markers with content
+      const htmlPattern = new RegExp(
+        `<!--\\s*${this.escapeRegex(tag)}\\s*-->([\\s\\S]*?)<!--\\s*\\/${this.escapeRegex(tag)}\\s*-->`,
+        'gi'
+      );
+      
+      let match;
+      while ((match = htmlPattern.exec(content)) !== null) {
+        const markerContent = match[1].trim();
+        // If content between markers is not just our redaction placeholder, it's a violation
+        if (markerContent && markerContent !== this.redactionPlaceholder) {
+          unredactedInstances.push(`HTML marker content: "${markerContent.substring(0, 50)}..."`);
+        }
+      }
+      
+      // Check for markdown style markers with content
+      const markdownPattern = new RegExp(
+        `${this.escapeRegex(tag)}\\s*start([\\s\\S]*?)${this.escapeRegex(tag)}\\s*end`,
+        'gi'
+      );
+      
+      while ((match = markdownPattern.exec(content)) !== null) {
+        const markerContent = match[1].trim();
+        if (markerContent && markerContent !== this.redactionPlaceholder) {
+          unredactedInstances.push(`Markdown marker content: "${markerContent.substring(0, 50)}..."`);
+        }
+      }
+    }
+    
+    return unredactedInstances;
+  }
+
+  /**
+   * Find private heading sections that haven't been properly redacted
+   * @param content Content to check
+   * @returns Array of unredacted heading sections
+   */
+  private findUnredactedHeadingSections(content: string): string[] {
+    const unredactedSections: string[] = [];
+    const lines = content.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Check if this is a heading line with privacy tags
+      if (line.match(/^#+\s/) && this.hasExclusionTags(line)) {
+        // This heading should have been redacted
+        if (!line.includes(this.redactionPlaceholder)) {
+          unredactedSections.push(`Heading: "${line.substring(0, 50)}..."`);
+        }
+        
+        // Check if content under this heading exists (it shouldn't)
+        const headingLevel = (line.match(/^#+/)?.[0].length) || 1;
+        let j = i + 1;
+        
+        while (j < lines.length) {
+          const nextLine = lines[j];
+          const nextHeadingMatch = nextLine.match(/^#+/);
+          
+          if (nextHeadingMatch && nextHeadingMatch[0].length <= headingLevel) {
+            // Found a heading of same or higher level, stop checking
+            break;
+          }
+          
+          // If there's non-empty content under a private heading, it's a violation
+          if (nextLine.trim() && !nextLine.includes(this.redactionPlaceholder)) {
+            unredactedSections.push(`Content under private heading: "${nextLine.substring(0, 50)}..."`);
+            break; // Only report first instance per section
+          }
+          
+          j++;
+        }
+      }
+    }
+    
+    return unredactedSections;
+  }
+
+  /**
+   * Verify content integrity - filtered content should be a valid subset of original
+   * @param originalContent Original content
+   * @param filteredContent Filtered content
+   * @returns Array of integrity violations
+   */
+  private verifyContentIntegrity(originalContent: string, filteredContent: string): string[] {
+    const violations: string[] = [];
+    
+    // Check 1: Filtered content shouldn't be longer than original (unless placeholders are longer)
+    if (filteredContent.length > originalContent.length * 1.5) { // Allow 50% increase for placeholders
+      violations.push('Filtered content is significantly longer than original content');
+    }
+    
+    // Check 2: If original content had no privacy tags, filtered should be identical
+    if (!this.hasExclusionTags(originalContent) && originalContent !== filteredContent) {
+      violations.push('Content without privacy tags was modified during filtering');
+    }
+    
+    // Check 3: Basic structure preservation - line count shouldn't change dramatically
+    const originalLines = originalContent.split('\n').length;
+    const filteredLines = filteredContent.split('\n').length;
+    
+    if (Math.abs(originalLines - filteredLines) > originalLines * 0.5) {
+      violations.push('Document structure significantly altered during filtering');
+    }
+    
+    return violations;
+  }
+
+  /**
+   * Verify redaction placeholders are properly formatted
+   * @param content Content to check
+   * @returns Array of placeholder violations
+   */
+  private verifyRedactionPlaceholders(content: string): string[] {
+    const violations: string[] = [];
+    
+    // Simplified placeholder verification to avoid false positives
+    // Focus on the most obvious malformed patterns only
+    
+    // Check for incomplete brackets like "[REDACT" without closing "]"
+    const incompleteBrackets = /\[REDACT(?!\])/g;
+    const incompleteMatches = content.match(incompleteBrackets) || [];
+    
+    if (incompleteMatches.length > 0) {
+      violations.push(`Found ${incompleteMatches.length} incomplete redaction placeholder(s)`);
+    }
+    
+    return violations;
+  }
+
+  /**
+   * Perform a comprehensive privacy audit on a file
+   * @param filePath Path to the file being audited
+   * @param originalContent Original file content
+   * @param filteredContent Content after privacy filtering
+   * @returns Comprehensive audit report
+   */
+  auditFilePrivacy(filePath: string, originalContent: string, filteredContent: string): {
+    filePath: string;
+    shouldBeExcluded: boolean;
+    wasFiltered: boolean;
+    verificationResult: {
+      isValid: boolean;
+      violations: string[];
+      summary: string;
+    };
+    statistics: {
+      originalLength: number;
+      filteredLength: number;
+      reductionPercentage: number;
+      privacyTagsFound: number;
+      redactionPlaceholders: number;
+    };
+    recommendations: string[];
+  } {
+    // Determine if file should be excluded entirely
+    const shouldBeExcluded = this.shouldExcludeFile(filePath, originalContent);
+    
+    // Check if content was actually filtered
+    const wasFiltered = originalContent !== filteredContent;
+    
+    // Run verification
+    const verificationResult = this.verifyPrivacyEnforcement(originalContent, filteredContent);
+    
+    // Calculate statistics
+    const originalLength = originalContent.length;
+    const filteredLength = filteredContent.length;
+    const reductionPercentage = originalLength > 0 ? 
+      Math.round(((originalLength - filteredLength) / originalLength) * 100) : 0;
+    
+    const privacyTagsFound = this.exclusionTags.reduce((count, tag) => {
+      const pattern = new RegExp(`(?:^|\\s)${this.escapeRegex(tag)}(?=\\s|$)`, 'gi');
+      const matches = originalContent.match(pattern);
+      return count + (matches ? matches.length : 0);
+    }, 0);
+    
+    const redactionPlaceholders = (filteredContent.match(new RegExp(this.escapeRegex(this.redactionPlaceholder), 'g')) || []).length;
+    
+    // Generate recommendations
+    const recommendations: string[] = [];
+    
+    if (shouldBeExcluded && !wasFiltered) {
+      recommendations.push('File should be excluded entirely from analysis');
+    }
+    
+    if (privacyTagsFound > 0 && !wasFiltered) {
+      recommendations.push('File contains privacy tags but was not filtered');
+    }
+    
+    if (!verificationResult.isValid) {
+      recommendations.push('Manual review required due to verification failures');
+    }
+    
+    if (reductionPercentage > 50) {
+      recommendations.push('High content reduction - verify important information is preserved');
+    }
+    
+    if (recommendations.length === 0) {
+      recommendations.push('No issues detected - privacy enforcement appears correct');
+    }
+    
+    // Log audit completion
+    this.logger.debug('File privacy audit completed', {
+      filePath,
+      shouldBeExcluded,
+      wasFiltered,
+      isValid: verificationResult.isValid,
+      reductionPercentage
+    });
+    
+    return {
+      filePath,
+      shouldBeExcluded,
+      wasFiltered,
+      verificationResult,
+      statistics: {
+        originalLength,
+        filteredLength,
+        reductionPercentage,
+        privacyTagsFound,
+        redactionPlaceholders
+      },
+      recommendations
+    };
   }
 
   /**
