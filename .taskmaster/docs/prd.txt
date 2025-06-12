@@ -1,0 +1,210 @@
+
+<context> 
+# Overview 
+RetrospectAI is a desktop plug-in for Obsidian designed for knowledge workers, particularly those with ADHD, who seek to uncover hidden patterns in their daily and weekly notes. The product automatically scans journal entries and generates concise summaries to help users identify productivity blockers and recurring themes across work, emotions, health, and personal habits. By providing clear, actionable insights in a supportive, non-judgmental way, RetrospectAI empowers users to recognize patterns that would otherwise take hours of manual self-reflection to discover.
+
+The target market includes knowledge workers with ADHD who struggle with recurring productivity challenges, and productivity enthusiasts who want to optimize their personal processes through data-driven insights from their own notes.
+
+# Core Features
+**Pattern Extraction Engine**
+- Performs natural-language analysis of daily and weekly entries to detect recurring themes, productivity blockers, and sentiment changes
+- Recognizes patterns across all life domains (work, habits, moods, health, personal activities) rather than just traditional work structures
+- Identifies language patterns indicative of procrastination, distraction, task-switching, or positive momentum
+- Critical for the core value proposition of uncovering hidden insights that users can't easily see themselves
+
+**Intelligent Summarization**
+- Produces clear, concise summary notes in Obsidian highlighting the top 3-5 most significant insights
+- Creates timestamped summary notes that are easily accessible and linked to original entries
+- Labels analysis scope (whole-life, work-only, custom) to enhance user awareness
+- Essential for transforming raw pattern data into actionable insights users can quickly understand and act upon
+
+**Privacy Control System**
+- Enables users to tag entire notes or specific sections (#private, #noai) to exclude them from AI analysis
+- Ensures all data processing remains local by default, with no uploads or external sharing
+- Builds user trust and addresses privacy concerns that are critical for adoption among knowledge workers
+
+**AI Model Selection & Configuration**
+
+Users can select and configure the AI model used for processing notes, supporting both local models (Ollama, Llama.cpp) and cloud APIs (OpenAI)
+Provides clear guidance about privacy implications of each model choice
+Offers flexibility while maintaining transparency about data handling
+Comprehensive Settings Management
+
+Settings page in Obsidian plug-in panel for adjusting scan frequency, selecting vaults/folders, and setting privacy tags
+Options for manual scans or scheduled automatic scans
+Analysis scope selection (whole-life, work-only, custom)
+Provides user control over all aspects of the plugin operation
+User Experience
+Primary Persona: Alex (Knowledge Worker with ADHD)
+
+Marketing strategist who journals daily but struggles with recurring issues like missed deadlines and overwhelm
+Needs supportive, non-judgmental pattern recognition to identify productivity blockers
+Values privacy and wants control over which data is analyzed
+Seeks clear, actionable insights without cognitive overload
+Secondary Persona: Jamie (Productivity Geek)
+
+Organized user who wants to optimize personal processes through subtle pattern detection
+Interested in comparing weekly summaries to track progress and experiment with habits
+Values detailed control and customization options
+Key User Flows:
+
+Installation & Onboarding: Discover plugin → Install → Quick setup (analysis frequency, vaults, AI model, privacy tags) → Select analysis scope
+Daily Usage: Continue normal journaling → Plugin scans in background/on-demand → Receive notification of new summary → Review insights → Link back to original entries
+Privacy Management: Tag sensitive content → Verify exclusion from analysis → Adjust privacy settings as needed
+UI/UX Principles:
+
+All UI inherits from user's current Obsidian theme (fonts, colors, contrast, layouts)
+Uses standard Obsidian components (modals, side panels, settings tabs)
+Supports Obsidian's accessibility options
+Outputs summaries as native Markdown notes for flexible editing and theming
+No custom pop-ups; all dialogs use Obsidian's standard UI framework 
+</context>
+<PRD> 
+# Technical Architecture 
+**Core System Components:** 
+- **Pattern Extraction Engine**: TypeScript module using local NLP to identify productivity themes, blockers, and sentiment patterns 
+- **AI Model Abstraction Layer**: Pluggable adapter system supporting local models (Ollama, Llama.cpp) and cloud APIs (OpenAI, etc.) 
+- **Privacy Filter**: Tag-based exclusion system that respects #private, #noai, and custom exclusion markers 
+- **Markdown Parser & Indexer**: Robust content processor handling all Obsidian vault formats and edge-case formatting 
+- **Summary Generator**: Context-aware system producing timestamped, linked summary notes 
+- **Settings Manager**: Centralized configuration for scan intervals, privacy options, AI model selection, and output management
+
+**Data Models**
+- Note Analysis Record: Source file path, content hash, analysis timestamp, excluded sections, detected patterns
+- Pattern Definition: Theme classification, confidence score, supporting evidence, frequency metrics
+- Summary Template: Date range, key insights, linked examples, suggested focus points, analysis scope metadata
+- Privacy Configuration: Exclusion tags, folder restrictions, model privacy settings
+
+**Integration Points**
+- Obsidian API: File scanning, note creation, UI panel integration, notification system
+- Local AI Models: Direct integration with Ollama/Llama.cpp for privacy-first processing
+- Cloud AI APIs: Optional integration with OpenAI/similar services with explicit user consent
+- File System: Efficient vault scanning with incremental indexing for performance
+
+**Infrastructure Requirements**
+- Local-first architecture with zero external dependencies by default
+- Incremental file scanning system for large vaults (1000+ notes)
+- Modular plugin architecture supporting future expansion
+- Error handling and logging system for reliability
+
+# Development Roadmap
+
+**Phase 1: Foundation MVP**
+- Basic Obsidian plugin framework integration
+- Simple note parsing and content extraction
+- Local pattern detection using basic NLP techniques
+- Privacy tag system (#private, #noai exclusion)
+- Manual summary generation with basic insights
+- Minimal settings interface for core configuration
+
+**Phase 2: AI Integration & Automation**
+- AI model abstraction layer implementation
+- Local AI model integration (Ollama/Llama.cpp)
+- Automated pattern extraction engine
+- Enhanced summary generation with actionable insights
+- Scheduled scanning capabilities
+- Progress indicators and user notifications
+
+**Phase 3: Enhanced User Experience**
+- Advanced settings management interface
+- Cloud AI model integration with privacy controls
+- Improved pattern recognition algorithms
+- Analysis scope selection (whole-life, work-only, custom)
+- Summary note linking and navigation
+- User feedback collection system
+
+**Phase 4: Polish & Optimization**
+- Performance optimization for large vaults
+- Advanced privacy controls and granular exclusions
+- Enhanced UI/UX with better theme integration
+- Comprehensive error handling and edge case management
+- Beta testing and user feedback integration
+- Documentation and marketplace preparation
+
+**Future Enhancements (Post-Launch):**
+- Visual pattern indicators and basic charting
+- Related tag suggestions based on detected patterns
+- Mobile support (view-only access to summaries)
+- Advanced analytics and detailed reporting
+- Third-party tool integrations (task managers, calendars)
+
+# Logical Dependency Chain
+- Foundation Layer (Must Build First):
+- Obsidian Plugin Framework - Core integration and API access
+- File System Scanner - Ability to read and index vault contents
+- Privacy Filter System - Tag-based exclusion before any analysis
+- Basic Settings Interface - User control over core functionality
+- Core Processing Layer (Build Upon Foundation): 
+5. Markdown Parser - Robust content extraction from varied note formats 
+6. Pattern Detection Engine - Basic NLP for theme identification 
+7. AI Model Abstraction - Framework for pluggable AI backends 
+8. Local AI Integration - Default privacy-first processing
+
+- User-Facing Layer (Build for Visibility/Usability): 
+9. Summary Generation System - Transform patterns into readable insights 
+10. Summary Note Creation - Output formatted results to Obsidian 
+11. User Notifications - Alert users to new summaries 
+12. Manual Scan Triggers - User-initiated analysis
+
+- Enhancement Layer (Iterate and Improve): 
+13. Automated Scheduling - Background processing capabilities 
+14. Advanced Settings - Granular user control and customization 
+15. Cloud AI Integration - Optional external model support 
+16. Performance Optimization - Incremental scanning and caching
+
+Atomic Feature Scoping:
+Each component can be developed, tested, and deployed independently
+Early phases focus on core functionality that provides immediate value
+Later phases add convenience and advanced features
+Each feature builds logically on previous components without breaking existing functionality
+
+# Risks and Mitigations
+**Technical Challenges:**
+Risk: Varied note structures may confuse pattern extraction
+Mitigation: Implement robust markdown parsing with graceful fallbacks; start with simple pattern detection and iterate
+Risk: Performance issues with large vaults (1000+ notes)
+Mitigation: Implement incremental scanning, file indexing, and processing chunking from early phases
+Risk: AI model integration complexity across local/cloud options
+Mitigation: Build abstraction layer first; start with one local model and expand iteratively
+
+MVP Definition Risks:
+
+Risk: Over-engineering the initial version with too many features
+Mitigation: Focus Phase 1 on manual scanning with basic insights; automate in Phase 2
+Risk: Privacy concerns preventing user adoption
+Mitigation: Default to local-only processing; make privacy controls highly visible and easy to use
+Risk: Users finding limited value in basic pattern detection
+Mitigation: Prioritize summary quality over quantity; focus on 3-5 clear, actionable insights rather than comprehensive analysis
+
+**Resource and Scope Risks:**
+Risk: Underestimating Obsidian API complexity
+Mitigation: Build minimal plugin integration first; expand API usage incrementally
+Risk: AI model performance inconsistency across different user content
+Mitigation: Implement model quality scoring and fallback options; allow users to adjust settings based on results
+Risk: User onboarding complexity reducing adoption
+Mitigation: Design progressive disclosure for settings; provide sensible defaults with optional customization
+
+# Appendix
+Success Metrics:
+
+User Engagement: 40% of users generate weekly summaries, 75% review summaries monthly
+Privacy Adoption: 30% of users utilize privacy exclusion features
+Performance: Sub-10 second scans for typical vaults (<1000 notes)
+Quality: <1% error rate in summary generation, 4+ user satisfaction rating
+Technical Specifications:
+
+Platform: Obsidian Desktop Plugin (TypeScript)
+AI Models: Local (Ollama, Llama.cpp), Cloud (OpenAI API)
+Data Storage: Local file system only (no external databases)
+Privacy: Zero telemetry by default, opt-in diagnostics only
+Performance: Incremental scanning, indexed processing, chunk-based analysis
+User Research Insights:
+
+ADHD users need supportive, non-judgmental feedback on productivity patterns
+Privacy control is essential for adoption among knowledge workers
+Users prefer whole-life pattern recognition over work-only analysis
+Clear, actionable insights (3-5 per summary) preferred over comprehensive analysis
+Integration with existing Obsidian workflow is critical for sustained usage
+</PRD>
+
+```
