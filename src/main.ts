@@ -11,7 +11,11 @@ import {
 } from "obsidian";
 import { ErrorHandler } from "./error-handler";
 import { Logger, LogLevel } from "./logger";
-import { MarkdownProcessingService, MarkdownProcessingConfig, ProcessingResult } from "./markdown-processing-service";
+import {
+	MarkdownProcessingService,
+	MarkdownProcessingConfig,
+	ProcessingResult,
+} from "./markdown-processing-service";
 
 interface RetrospectiveAISettings {
 	// Processing settings
@@ -19,12 +23,12 @@ interface RetrospectiveAISettings {
 	privacyTags: string[];
 	enableMetadataExtraction: boolean;
 	enableSectionDetection: boolean;
-	
+
 	// Performance settings
 	maxFileSize: number;
 	batchSize: number;
 	enableCaching: boolean;
-	
+
 	// Debug settings
 	debugMode: boolean;
 	logLevel: LogLevel;
@@ -32,7 +36,7 @@ interface RetrospectiveAISettings {
 
 const DEFAULT_SETTINGS: RetrospectiveAISettings = {
 	enablePrivacyFilter: true,
-	privacyTags: ['private', 'confidential', 'personal'],
+	privacyTags: ["private-ai", "confidential-ai", "no-ai"],
 	enableMetadataExtraction: true,
 	enableSectionDetection: true,
 	maxFileSize: 10 * 1024 * 1024, // 10MB
@@ -61,7 +65,10 @@ export default class RetrospectiveAIPlugin extends Plugin {
 
 			this.logger.info("RetrospectAI plugin initialized successfully");
 		} catch (error) {
-			this.logger.userError("Error initializing RetrospectAI plugin", error);
+			this.logger.userError(
+				"Error initializing RetrospectAI plugin",
+				error
+			);
 		}
 	}
 
@@ -156,30 +163,35 @@ export default class RetrospectiveAIPlugin extends Plugin {
 
 		try {
 			new Notice("Analyzing note...");
-			const result = await this.markdownProcessor.processFile(activeFile.path);
-			
+			const result = await this.markdownProcessor.processFile(
+				activeFile.path
+			);
+
 			if (result.skipped) {
 				new Notice(`Note skipped: ${result.skipReason}`);
 				return;
 			}
 
 			if (!result.success) {
-				new Notice(`Analysis failed: ${result.errors[0]?.message || 'Unknown error'}`);
+				new Notice(
+					`Analysis failed: ${
+						result.errors[0]?.message || "Unknown error"
+					}`
+				);
 				return;
 			}
 
 			// Show basic results
 			const stats = this.formatBasicStats(result);
 			new Notice(`Analysis complete: ${stats}`, 5000);
-			
+
 			this.logger.info("Note analysis completed", {
 				filePath: activeFile.path,
 				processingTime: result.processingTime,
 				elementCount: result.parsedContent?.elements.length,
 				sectionCount: result.sections?.length,
-				wordCount: result.metadata?.wordCount
+				wordCount: result.metadata?.wordCount,
 			});
-
 		} catch (error) {
 			this.logger.error("Failed to analyze note", error);
 			new Notice("Failed to analyze note - check console for details");
@@ -199,7 +211,9 @@ export default class RetrospectiveAIPlugin extends Plugin {
 		}
 
 		try {
-			const result = await this.markdownProcessor.processFile(activeFile.path);
+			const result = await this.markdownProcessor.processFile(
+				activeFile.path
+			);
 			new DetailedAnalysisModal(this.app, result).open();
 		} catch (error) {
 			this.logger.error("Failed to analyze note", error);
@@ -210,14 +224,16 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	private showProcessingStats() {
 		const stats = this.markdownProcessor.getStatistics();
 		const config = this.markdownProcessor.getConfig();
-		
+
 		const message = `Processing Statistics:
 • Cache size: ${stats.cacheSize} files
 • Total processed: ${stats.totalProcessedFiles} files
 • Average time: ${stats.averageProcessingTime.toFixed(2)}ms
-• Privacy filter: ${config.enablePrivacyFilter ? 'Enabled' : 'Disabled'}
-• Metadata extraction: ${config.enableMetadataExtraction ? 'Enabled' : 'Disabled'}
-• Section detection: ${config.enableSectionDetection ? 'Enabled' : 'Disabled'}`;
+• Privacy filter: ${config.enablePrivacyFilter ? "Enabled" : "Disabled"}
+• Metadata extraction: ${
+			config.enableMetadataExtraction ? "Enabled" : "Disabled"
+		}
+• Section detection: ${config.enableSectionDetection ? "Enabled" : "Disabled"}`;
 
 		new Notice(message, 8000);
 		this.logger.info("Processing statistics", stats);
@@ -231,22 +247,22 @@ export default class RetrospectiveAIPlugin extends Plugin {
 
 	private formatBasicStats(result: ProcessingResult): string {
 		const parts: string[] = [];
-		
+
 		if (result.parsedContent) {
 			parts.push(`${result.parsedContent.elements.length} elements`);
 		}
-		
+
 		if (result.sections) {
 			parts.push(`${result.sections.length} sections`);
 		}
-		
+
 		if (result.metadata) {
 			parts.push(`${result.metadata.wordCount} words`);
 		}
-		
+
 		parts.push(`${result.processingTime}ms`);
-		
-		return parts.join(', ');
+
+		return parts.join(", ");
 	}
 
 	onunload() {
@@ -282,27 +298,29 @@ class DetailedAnalysisModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		
+
 		contentEl.createEl("h2", { text: "Detailed Analysis Results" });
-		
+
 		if (this.result.skipped) {
-			contentEl.createEl("p", { 
+			contentEl.createEl("p", {
 				text: `Analysis skipped: ${this.result.skipReason}`,
-				cls: "mod-warning"
+				cls: "mod-warning",
 			});
 			return;
 		}
 
 		if (!this.result.success) {
-			contentEl.createEl("p", { 
+			contentEl.createEl("p", {
 				text: "Analysis failed",
-				cls: "mod-error"
+				cls: "mod-error",
 			});
-			
+
 			if (this.result.errors.length > 0) {
 				const errorList = contentEl.createEl("ul");
-				this.result.errors.forEach(error => {
-					errorList.createEl("li", { text: `${error.component}: ${error.message}` });
+				this.result.errors.forEach((error) => {
+					errorList.createEl("li", {
+						text: `${error.component}: ${error.message}`,
+					});
 				});
 			}
 			return;
@@ -311,21 +329,30 @@ class DetailedAnalysisModal extends Modal {
 		// Processing info
 		const processingDiv = contentEl.createDiv();
 		processingDiv.createEl("h3", { text: "Processing Information" });
-		processingDiv.createEl("p", { text: `Processing time: ${this.result.processingTime}ms` });
-		processingDiv.createEl("p", { text: `File path: ${this.result.filePath}` });
+		processingDiv.createEl("p", {
+			text: `Processing time: ${this.result.processingTime}ms`,
+		});
+		processingDiv.createEl("p", {
+			text: `File path: ${this.result.filePath}`,
+		});
 
 		// Content analysis
 		if (this.result.parsedContent) {
 			const contentDiv = contentEl.createDiv();
 			contentDiv.createEl("h3", { text: "Content Analysis" });
-			contentDiv.createEl("p", { text: `Elements found: ${this.result.parsedContent.elements.length}` });
-			
+			contentDiv.createEl("p", {
+				text: `Elements found: ${this.result.parsedContent.elements.length}`,
+			});
+
 			// Element breakdown
-			const elementTypes = this.result.parsedContent.elements.reduce((acc, el) => {
-				acc[el.type] = (acc[el.type] || 0) + 1;
-				return acc;
-			}, {} as Record<string, number>);
-			
+			const elementTypes = this.result.parsedContent.elements.reduce(
+				(acc, el) => {
+					acc[el.type] = (acc[el.type] || 0) + 1;
+					return acc;
+				},
+				{} as Record<string, number>
+			);
+
 			const elementList = contentDiv.createEl("ul");
 			Object.entries(elementTypes).forEach(([type, count]) => {
 				elementList.createEl("li", { text: `${type}: ${count}` });
@@ -336,23 +363,35 @@ class DetailedAnalysisModal extends Modal {
 		if (this.result.metadata) {
 			const metadataDiv = contentEl.createDiv();
 			metadataDiv.createEl("h3", { text: "Metadata" });
-			metadataDiv.createEl("p", { text: `Word count: ${this.result.metadata.wordCount}` });
-			metadataDiv.createEl("p", { text: `Character count: ${this.result.metadata.characterCount}` });
-			metadataDiv.createEl("p", { text: `Tags: ${this.result.metadata.tags.length}` });
-			metadataDiv.createEl("p", { text: `Links: ${this.result.metadata.links.length}` });
+			metadataDiv.createEl("p", {
+				text: `Word count: ${this.result.metadata.wordCount}`,
+			});
+			metadataDiv.createEl("p", {
+				text: `Character count: ${this.result.metadata.characterCount}`,
+			});
+			metadataDiv.createEl("p", {
+				text: `Tags: ${this.result.metadata.tags.length}`,
+			});
+			metadataDiv.createEl("p", {
+				text: `Links: ${this.result.metadata.links.length}`,
+			});
 		}
 
 		// Sections
 		if (this.result.sections) {
 			const sectionsDiv = contentEl.createDiv();
 			sectionsDiv.createEl("h3", { text: "Sections" });
-			sectionsDiv.createEl("p", { text: `Sections found: ${this.result.sections.length}` });
-			
+			sectionsDiv.createEl("p", {
+				text: `Sections found: ${this.result.sections.length}`,
+			});
+
 			const sectionList = sectionsDiv.createEl("ul");
-			this.result.sections.forEach(section => {
+			this.result.sections.forEach((section) => {
 				const item = sectionList.createEl("li");
 				item.createEl("strong", { text: section.title });
-				item.createEl("span", { text: ` (Level ${section.level}, ${section.wordCount} words, Category: ${section.category})` });
+				item.createEl("span", {
+					text: ` (Level ${section.level}, ${section.wordCount} words, Category: ${section.category})`,
+				});
 			});
 		}
 
@@ -361,10 +400,13 @@ class DetailedAnalysisModal extends Modal {
 			const errorsDiv = contentEl.createDiv();
 			errorsDiv.createEl("h3", { text: "Errors" });
 			const errorList = errorsDiv.createEl("ul");
-			this.result.errors.forEach(error => {
-				errorList.createEl("li", { 
+			this.result.errors.forEach((error) => {
+				errorList.createEl("li", {
 					text: `${error.component}: ${error.message}`,
-					cls: error.severity === 'error' ? 'mod-error' : 'mod-warning'
+					cls:
+						error.severity === "error"
+							? "mod-error"
+							: "mod-warning",
 				});
 			});
 		}
@@ -373,8 +415,11 @@ class DetailedAnalysisModal extends Modal {
 			const warningsDiv = contentEl.createDiv();
 			warningsDiv.createEl("h3", { text: "Warnings" });
 			const warningList = warningsDiv.createEl("ul");
-			this.result.warnings.forEach(warning => {
-				warningList.createEl("li", { text: warning, cls: 'mod-warning' });
+			this.result.warnings.forEach((warning) => {
+				warningList.createEl("li", {
+					text: warning,
+					cls: "mod-warning",
+				});
 			});
 		}
 	}
@@ -397,92 +442,111 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'RetrospectAI Settings' });
+		containerEl.createEl("h2", { text: "RetrospectAI Settings" });
 
 		// Privacy settings
-		containerEl.createEl('h3', { text: 'Privacy Settings' });
+		containerEl.createEl("h3", { text: "Privacy Settings" });
 
 		new Setting(containerEl)
-			.setName('Enable Privacy Filter')
-			.setDesc('Filter out private content based on tags and folders')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enablePrivacyFilter)
-				.onChange(async (value) => {
-					this.plugin.settings.enablePrivacyFilter = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Enable Privacy Filter")
+			.setDesc("Filter out private content based on tags and folders")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enablePrivacyFilter)
+					.onChange(async (value) => {
+						this.plugin.settings.enablePrivacyFilter = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Privacy Tags')
-			.setDesc('Comma-separated list of tags that mark content as private')
-			.addText(text => text
-				.setPlaceholder('private, confidential, personal')
-				.setValue(this.plugin.settings.privacyTags.join(', '))
-				.onChange(async (value) => {
-					this.plugin.settings.privacyTags = value.split(',').map(tag => tag.trim()).filter(tag => tag);
-					await this.plugin.saveSettings();
-				}));
+			.setName("Privacy Tags")
+			.setDesc(
+				"Comma-separated list of tags that mark content as private"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("private, confidential, personal")
+					.setValue(this.plugin.settings.privacyTags.join(", "))
+					.onChange(async (value) => {
+						this.plugin.settings.privacyTags = value
+							.split(",")
+							.map((tag) => tag.trim())
+							.filter((tag) => tag);
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// Processing settings
-		containerEl.createEl('h3', { text: 'Processing Settings' });
+		containerEl.createEl("h3", { text: "Processing Settings" });
 
 		new Setting(containerEl)
-			.setName('Enable Metadata Extraction')
-			.setDesc('Extract metadata, links, tags, and references from notes')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enableMetadataExtraction)
-				.onChange(async (value) => {
-					this.plugin.settings.enableMetadataExtraction = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Enable Metadata Extraction")
+			.setDesc("Extract metadata, links, tags, and references from notes")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableMetadataExtraction)
+					.onChange(async (value) => {
+						this.plugin.settings.enableMetadataExtraction = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Enable Section Detection')
-			.setDesc('Detect and categorize sections within notes')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enableSectionDetection)
-				.onChange(async (value) => {
-					this.plugin.settings.enableSectionDetection = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Enable Section Detection")
+			.setDesc("Detect and categorize sections within notes")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableSectionDetection)
+					.onChange(async (value) => {
+						this.plugin.settings.enableSectionDetection = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// Performance settings
-		containerEl.createEl('h3', { text: 'Performance Settings' });
+		containerEl.createEl("h3", { text: "Performance Settings" });
 
 		new Setting(containerEl)
-			.setName('Max File Size')
-			.setDesc('Maximum file size to process (in MB)')
-			.addSlider(slider => slider
-				.setLimits(1, 50, 1)
-				.setValue(this.plugin.settings.maxFileSize / (1024 * 1024))
-				.setDynamicTooltip()
-				.onChange(async (value) => {
-					this.plugin.settings.maxFileSize = value * 1024 * 1024;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Max File Size")
+			.setDesc("Maximum file size to process (in MB)")
+			.addSlider((slider) =>
+				slider
+					.setLimits(1, 50, 1)
+					.setValue(this.plugin.settings.maxFileSize / (1024 * 1024))
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.maxFileSize = value * 1024 * 1024;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Enable Caching')
-			.setDesc('Cache processing results for better performance')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enableCaching)
-				.onChange(async (value) => {
-					this.plugin.settings.enableCaching = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Enable Caching")
+			.setDesc("Cache processing results for better performance")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableCaching)
+					.onChange(async (value) => {
+						this.plugin.settings.enableCaching = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// Debug settings
-		containerEl.createEl('h3', { text: 'Debug Settings' });
+		containerEl.createEl("h3", { text: "Debug Settings" });
 
 		new Setting(containerEl)
-			.setName('Debug Mode')
-			.setDesc('Enable debug logging and detailed error messages')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.debugMode)
-				.onChange(async (value) => {
-					this.plugin.settings.debugMode = value;
-					this.plugin.logger.setDebugMode(value);
-					await this.plugin.saveSettings();
-				}));
+			.setName("Debug Mode")
+			.setDesc("Enable debug logging and detailed error messages")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.debugMode)
+					.onChange(async (value) => {
+						this.plugin.settings.debugMode = value;
+						this.plugin.logger.setDebugMode(value);
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }

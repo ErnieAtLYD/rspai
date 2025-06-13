@@ -229,13 +229,13 @@ export class PrivacyFilter {
 
     // Check each exclusion tag
     for (const tag of this.exclusionTags) {
-      // Create regex pattern for tag detection
-      // Use word boundaries that work properly with hashtags
-      // Matches tag at start of line or after whitespace, followed by whitespace or end of line
-      const tagPattern = new RegExp(`(?:^|\\s)${this.escapeRegex(tag)}(?=\\s|$)`, 'i');
+      // Create regex pattern for hashtag detection
+      // Only match actual hashtags, not words in regular text
+      // Pattern: #tag followed by whitespace, punctuation, or end of line
+      const tagPattern = new RegExp(`#${this.escapeRegex(tag)}(?=\\s|[.,!?;:]|$)`, 'i');
       
       if (tagPattern.test(content)) {
-        this.logger.debug(`Exclusion tag detected: ${tag}`);
+        this.logger.debug(`Exclusion hashtag detected: #${tag}`);
         return true;
       }
     }
