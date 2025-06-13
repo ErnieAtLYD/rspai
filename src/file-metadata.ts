@@ -1,4 +1,33 @@
 /**
+ * Privacy status for a file
+ */
+export interface FilePrivacyStatus {
+  /** Whether the entire file should be excluded from AI analysis */
+  isExcluded: boolean;
+  
+  /** Reason for exclusion (if excluded) */
+  exclusionReason?: 'privacy_tags' | 'excluded_folder' | 'user_setting';
+  
+  /** Whether the file content has been privacy-filtered */
+  isFiltered: boolean;
+  
+  /** Original content length before filtering */
+  originalLength?: number;
+  
+  /** Filtered content length after privacy processing */
+  filteredLength?: number;
+  
+  /** Privacy tags found in the content */
+  privacyTagsFound?: string[];
+  
+  /** Folder that caused exclusion (if applicable) */
+  excludedFolder?: string;
+  
+  /** Timestamp when privacy analysis was performed */
+  privacyAnalyzedAt?: number;
+}
+
+/**
  * Represents metadata for a file in the Obsidian vault
  */
 export interface FileMetadata {
@@ -31,6 +60,9 @@ export interface FileMetadata {
   
   /** Optional: Additional tags or categories */
   tags?: string[];
+  
+  /** Privacy analysis results for this file */
+  privacy?: FilePrivacyStatus;
 }
 
 /**

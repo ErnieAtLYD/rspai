@@ -684,7 +684,7 @@ export class PrivacyFilter {
       }
     }
     
-    return [...new Set(remainingTags)]; // Remove duplicates
+    return Array.from(new Set(remainingTags)); // Remove duplicates
   }
 
   /**
@@ -816,7 +816,8 @@ export class PrivacyFilter {
     // Focus on the most obvious malformed patterns only
     
     // Check for incomplete brackets like "[REDACT" without closing "]"
-    const incompleteBrackets = /\[REDACT(?!\])/g;
+    // But exclude our valid placeholder "[REDACTED]"
+    const incompleteBrackets = /\[REDACT(?!ED\])/g;
     const incompleteMatches = content.match(incompleteBrackets) || [];
     
     if (incompleteMatches.length > 0) {
