@@ -12,6 +12,9 @@ node_modules
 # They should be uploaded to GitHub releases instead.
 main.js
 
+# Don't include the dist folder with compiled files
+dist/
+
 # Exclude sourcemaps
 *.map
 
