@@ -1,3 +1,4 @@
+import * as os from 'os';
 import { Logger } from './logger';
 import {
   AIModelAdapter,
@@ -10,18 +11,23 @@ import {
   AIAnalysisResult,
   ModelHealth,
   AIError,
-  AIErrorType
+  AIErrorType,
+  PerformanceOptimized,
+  PerformanceConfig,
+  PerformanceMetrics,
+  ResourceUsage
 } from './ai-interfaces';
 
 /**
  * Base implementation for AI model adapters
  * Provides common functionality and error handling
  */
-export abstract class BaseAIAdapter implements AIModelAdapter {
+export abstract class BaseAIAdapter implements AIModelAdapter, PerformanceOptimized {
   protected initialized = false;
   protected lastHealthCheck: Date = new Date(0);
   protected healthCheckInterval: number = 5 * 60 * 1000; // 5 minutes
   protected cachedHealth?: ModelHealth;
+  protected performanceConfig?: PerformanceConfig;
 
   constructor(
     protected logger: Logger,
@@ -37,6 +43,115 @@ export abstract class BaseAIAdapter implements AIModelAdapter {
 
   get config(): AIModelConfig {
     return { ...this._config };
+  }
+
+  /**
+   * Get default performance configuration
+   */
+  protected getDefaultPerformanceConfig(): PerformanceConfig {
+    return {
+      batching: {
+        enabled: true,
+        maxBatchSize: 5,
+        maxWaitTime: 100, // 100ms
+        similarityThreshold: 0.7
+      },
+      memory: {
+        maxMemoryUsage: 512, // 512MB
+        enableGarbageCollection: true,
+        memoryPoolSize: 128, // 128MB
+        contextWindowOptimization: true
+      },
+      caching: {
+        enabled: true,
+        maxCacheSize: 256, // 256MB
+        ttl: 3600, // 1 hour
+        enablePartialMatching: true,
+        compressionEnabled: false
+      },
+      hardware: {
+        autoDetectResources: true,
+        memoryLock: true,
+        memoryMap: true
+      },
+      enableMetrics: true,
+      enableProfiling: false
+    };
+  }
+
+  /**
+   * Configure performance optimizations
+   */
+  async configurePerformance(config: PerformanceConfig): Promise<void> {
+    this.performanceConfig = { ...this.getDefaultPerformanceConfig(), ...config };
+    this.logger.info(`Performance configuration updated for ${this.name}`);
+  }
+
+  /**
+   * Get current performance metrics
+   */
+  async getPerformanceMetrics(): Promise<PerformanceMetrics> {
+    // Default implementation - subclasses should override for specific metrics
+    return {
+      requestsPerSecond: 0,
+      averageLatency: 0,
+      memoryUsage: 0,
+      cpuUsage: 0,
+      cacheHitRate: 0,
+      batchEfficiency: 0,
+      throughput: 0,
+      errorRate: 0,
+      lastUpdated: new Date()
+    };
+  }
+
+  /**
+   * Get resource usage statistics
+   */
+  async getResourceUsage(): Promise<ResourceUsage> {
+    return {
+      memory: {
+        used: process.memoryUsage().heapUsed / (1024 * 1024), // MB
+        available: (os.totalmem() - process.memoryUsage().heapUsed) / (1024 * 1024), // MB
+        peak: process.memoryUsage().heapTotal / (1024 * 1024) // MB
+      },
+      cpu: {
+        usage: 0, // Would need process monitoring to calculate
+        cores: os.cpus().length,
+        threads: this.performanceConfig?.hardware.maxThreads || os.cpus().length
+      }
+    };
+  }
+
+  /**
+   * Clear performance caches
+   */
+  async clearCaches(): Promise<void> {
+    // Clear health check cache
+    this.cachedHealth = undefined;
+    this.lastHealthCheck = new Date(0);
+    this.logger.info(`Caches cleared for ${this.name}`);
+  }
+
+  /**
+   * Optimize for current hardware
+   */
+  async optimizeForHardware(): Promise<void> {
+    if (!this.performanceConfig) {
+      this.performanceConfig = this.getDefaultPerformanceConfig();
+    }
+
+    if (this.performanceConfig.hardware.autoDetectResources) {
+      const cpus = os.cpus().length;
+      const totalMemory = os.totalmem() / (1024 * 1024 * 1024); // GB
+
+      // Adjust configuration based on hardware
+      this.performanceConfig.hardware.maxThreads = Math.max(1, Math.floor(cpus * 0.8));
+      this.performanceConfig.memory.maxMemoryUsage = Math.floor(totalMemory * 0.3 * 1024); // 30% of RAM in MB
+      this.performanceConfig.batching.maxBatchSize = Math.min(10, Math.max(2, Math.floor(cpus / 2)));
+
+      this.logger.info(`${this.name} optimized for hardware: ${cpus} CPUs, ${totalMemory.toFixed(1)}GB RAM`);
+    }
   }
 
   /**

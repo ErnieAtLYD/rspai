@@ -1,5 +1,6 @@
 import { Logger } from './logger';
 import { BaseAIAdapter } from './base-ai-adapter';
+import { PerformanceOptimizer } from './performance-optimizer';
 import {
   AIModelType,
   PrivacyLevel,
@@ -9,7 +10,11 @@ import {
   AIAnalysisResult,
   AIModelConfig,
   AIError,
-  AIErrorType
+  AIErrorType,
+  PerformanceConfig,
+  PerformanceMetrics,
+  ResourceUsage,
+  RequestBatch
 } from './ai-interfaces';
 
 /**
@@ -65,6 +70,52 @@ interface OllamaErrorResponse {
 }
 
 /**
+ * Extended Ollama API interfaces for model management
+ */
+interface OllamaPullRequest {
+  name: string;
+  stream?: boolean;
+}
+
+interface OllamaPullResponse {
+  status: string;
+  digest?: string;
+  total?: number;
+  completed?: number;
+}
+
+interface OllamaDeleteRequest {
+  name: string;
+}
+
+interface OllamaShowRequest {
+  name: string;
+}
+
+interface OllamaShowResponse {
+  license: string;
+  modelfile: string;
+  parameters: string;
+  template: string;
+  details: {
+    format: string;
+    family: string;
+    families?: string[];
+    parameter_size: string;
+    quantization_level: string;
+  };
+}
+
+interface OllamaModelStatus {
+  name: string;
+  isAvailable: boolean;
+  isLoaded: boolean;
+  size: number;
+  lastModified: string;
+  details?: OllamaModelInfo['details'];
+}
+
+/**
  * Ollama model configurations
  */
 const OLLAMA_MODEL_CAPABILITIES: Record<string, AICapability[]> = {
@@ -91,6 +142,10 @@ export class OllamaAdapter extends BaseAIAdapter {
   private model: string;
   private availableModels: string[] = [];
   private requestTimeout: number;
+  private modelCache: Map<string, OllamaModelStatus> = new Map();
+  private lastModelListUpdate = 0;
+  private readonly MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private performanceOptimizer?: PerformanceOptimizer;
 
   constructor(logger: Logger, config: AIModelConfig) {
     super(logger, config);
@@ -118,6 +173,9 @@ export class OllamaAdapter extends BaseAIAdapter {
       
       // Test the model with a simple request
       await this.testModel();
+      
+      // Initialize performance optimizer
+      await this.initializePerformanceOptimizer();
       
       this.logger.info(`Ollama adapter initialized with model: ${this.model}`);
       return true;
@@ -148,6 +206,15 @@ export class OllamaAdapter extends BaseAIAdapter {
   }
 
   protected async doGenerateCompletion(prompt: string, options?: CompletionOptions): Promise<string> {
+    // Use performance optimizer if available
+    if (this.performanceOptimizer) {
+      return this.performanceOptimizer.processRequest(prompt, options);
+    }
+
+    return this.generateCompletionDirect(prompt, options);
+  }
+
+  private async generateCompletionDirect(prompt: string, options?: CompletionOptions): Promise<string> {
     const request: OllamaGenerateRequest = {
       model: this.model,
       prompt,
@@ -452,7 +519,94 @@ Respond with only a JSON object:
 
   protected async doDispose(): Promise<void> {
     // Clean up any resources
+    this.performanceOptimizer = undefined;
     this.logger.info('Ollama adapter disposed');
+  }
+
+  /**
+   * Initialize performance optimizer
+   */
+  private async initializePerformanceOptimizer(): Promise<void> {
+    if (!this.performanceConfig) {
+      this.performanceConfig = this.getDefaultPerformanceConfig();
+    }
+
+    this.performanceOptimizer = new PerformanceOptimizer(
+      this.logger,
+      this.performanceConfig,
+      this.processBatch.bind(this)
+    );
+
+    await this.optimizeForHardware();
+    this.logger.info('Performance optimizer initialized for Ollama adapter');
+  }
+
+  /**
+   * Process a batch of requests
+   */
+  private async processBatch(batch: RequestBatch): Promise<string[]> {
+    const results: string[] = [];
+    
+    for (const request of batch.requests) {
+      try {
+        const result = await this.generateCompletionDirect(request.prompt, request.options);
+        results.push(result);
+      } catch (error) {
+        this.logger.error(`Batch request failed: ${request.id}`, error);
+        results.push(''); // Empty result for failed request
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Override performance configuration
+   */
+  async configurePerformance(config: PerformanceConfig): Promise<void> {
+    await super.configurePerformance(config);
+    
+    if (this.performanceOptimizer) {
+      // Reinitialize optimizer with new config
+      await this.initializePerformanceOptimizer();
+    }
+  }
+
+  /**
+   * Get performance metrics from optimizer
+   */
+  async getPerformanceMetrics(): Promise<PerformanceMetrics> {
+    if (this.performanceOptimizer) {
+      return this.performanceOptimizer.getPerformanceMetrics();
+    }
+    
+    return super.getPerformanceMetrics();
+  }
+
+  /**
+   * Get resource usage from optimizer
+   */
+  async getResourceUsage(): Promise<ResourceUsage> {
+    if (this.performanceOptimizer) {
+      return this.performanceOptimizer.getResourceUsage();
+    }
+    
+    return super.getResourceUsage();
+  }
+
+  /**
+   * Clear caches including performance caches
+   */
+  async clearCaches(): Promise<void> {
+    await super.clearCaches();
+    
+    if (this.performanceOptimizer) {
+      await this.performanceOptimizer.clearCaches();
+    }
+    
+    // Clear model cache
+    this.modelCache.clear();
+    this.lastModelListUpdate = 0;
   }
 
   // Private helper methods
@@ -528,7 +682,7 @@ Respond with only a JSON object:
     }
   }
 
-  private async makeRequest<T>(endpoint: string, method: 'GET' | 'POST', data?: any): Promise<T> {
+  private async makeRequest<T>(endpoint: string, method: 'GET' | 'POST' | 'DELETE', data?: any): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
     try {
@@ -545,7 +699,7 @@ Respond with only a JSON object:
         signal: controller.signal
       };
 
-      if (method === 'POST' && data) {
+      if ((method === 'POST' || method === 'DELETE') && data) {
         requestOptions.body = JSON.stringify(data);
       }
 
@@ -567,7 +721,13 @@ Respond with only a JSON object:
         throw this.mapOllamaError(response.status, errorMessage);
       }
 
-      return await response.json() as T;
+      // Handle empty responses (like DELETE operations)
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json() as T;
+      } else {
+        return {} as T;
+      }
     } catch (error) {
       if (error instanceof AIError) {
         throw error;
@@ -603,6 +763,273 @@ Respond with only a JSON object:
         return new AIError(AIErrorType.REQUEST_FAILED, `Server error: ${message}`, undefined, true);
       default:
         return new AIError(AIErrorType.UNKNOWN_ERROR, `Ollama error (${status}): ${message}`, undefined, true);
+    }
+  }
+
+  /**
+   * Get detailed information about available models
+   */
+  async getAvailableModels(): Promise<OllamaModelStatus[]> {
+    await this.refreshModelCache();
+    return Array.from(this.modelCache.values());
+  }
+
+  /**
+   * Get detailed information about a specific model
+   */
+  async getModelInfo(modelName: string): Promise<OllamaModelStatus | null> {
+    await this.refreshModelCache();
+    return this.modelCache.get(modelName) || null;
+  }
+
+  /**
+   * Check if a specific model is available and loaded
+   */
+  async isModelAvailable(modelName: string): Promise<boolean> {
+    const modelInfo = await this.getModelInfo(modelName);
+    return modelInfo?.isAvailable || false;
+  }
+
+  /**
+   * Download/pull a model with progress tracking
+   */
+  async downloadModel(modelName: string, onProgress?: (progress: { completed: number; total: number; status: string }) => void): Promise<void> {
+    this.logger.info(`Starting download of model: ${modelName}`);
+    
+    try {
+      const request: OllamaPullRequest = {
+        name: modelName,
+        stream: !!onProgress
+      };
+
+      if (onProgress) {
+        // Handle streaming response for progress tracking
+        await this.streamModelPull(modelName, onProgress);
+      } else {
+        // Simple non-streaming pull
+        await this.makeRequest('/api/pull', 'POST', request);
+      }
+
+      this.logger.info(`Successfully downloaded model: ${modelName}`);
+      
+      // Refresh model cache
+      await this.refreshModelCache(true);
+    } catch (error) {
+      throw new AIError(
+        AIErrorType.MODEL_UNAVAILABLE,
+        `Failed to download model ${modelName}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Delete a model from local storage
+   */
+  async deleteModel(modelName: string): Promise<void> {
+    this.logger.info(`Deleting model: ${modelName}`);
+    
+    try {
+      const request: OllamaDeleteRequest = {
+        name: modelName
+      };
+
+      await this.makeRequest('/api/delete', 'DELETE', request);
+      this.logger.info(`Successfully deleted model: ${modelName}`);
+      
+      // Remove from cache and refresh
+      this.modelCache.delete(modelName);
+      await this.refreshModelCache(true);
+    } catch (error) {
+      throw new AIError(
+        AIErrorType.REQUEST_FAILED,
+        `Failed to delete model ${modelName}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Get detailed model information including modelfile and parameters
+   */
+  async getDetailedModelInfo(modelName: string): Promise<OllamaShowResponse | null> {
+    try {
+      const request: OllamaShowRequest = {
+        name: modelName
+      };
+
+      const response = await this.makeRequest<OllamaShowResponse>('/api/show', 'POST', request);
+      return response;
+    } catch (error) {
+      this.logger.warn(`Failed to get detailed info for model ${modelName}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update a model to the latest version
+   */
+  async updateModel(modelName: string, onProgress?: (progress: { completed: number; total: number; status: string }) => void): Promise<void> {
+    this.logger.info(`Updating model: ${modelName}`);
+    
+    // Check if model exists first
+    const modelInfo = await this.getModelInfo(modelName);
+    if (!modelInfo) {
+      throw new AIError(
+        AIErrorType.MODEL_UNAVAILABLE,
+        `Model ${modelName} not found locally`
+      );
+    }
+
+    // Re-download the model (Ollama will update if newer version available)
+    await this.downloadModel(modelName, onProgress);
+  }
+
+  /**
+   * List all models with their current status
+   */
+  async listModelsWithStatus(): Promise<{ available: string[]; loaded: string[]; total: number }> {
+    const models = await this.getAvailableModels();
+    
+    return {
+      available: models.filter(m => m.isAvailable).map(m => m.name),
+      loaded: models.filter(m => m.isLoaded).map(m => m.name),
+      total: models.length
+    };
+  }
+
+  /**
+   * Get recommended models for different use cases
+   */
+  getRecommendedModels(): { [useCase: string]: string[] } {
+    return {
+      'general': ['llama2', 'mistral', 'neural-chat'],
+      'coding': ['codellama', 'starling-lm'],
+      'fast': ['mistral', 'llama2:7b'],
+      'accurate': ['llama2:13b', 'llama2:70b', 'starling-lm'],
+      'lightweight': ['llama2:7b', 'mistral']
+    };
+  }
+
+  // Enhanced private methods
+
+  private async refreshModelCache(force = false): Promise<void> {
+    const now = Date.now();
+    
+    if (!force && (now - this.lastModelListUpdate) < this.MODEL_CACHE_TTL) {
+      return; // Cache is still fresh
+    }
+
+    try {
+      const response = await this.makeRequest<OllamaListResponse>('/api/tags', 'GET');
+      
+      if (response && response.models) {
+        this.modelCache.clear();
+        
+        for (const model of response.models) {
+          const status: OllamaModelStatus = {
+            name: model.name,
+            isAvailable: true,
+            isLoaded: true, // Assume loaded if in the list
+            size: model.size,
+            lastModified: model.modified_at,
+            details: model.details
+          };
+          
+          this.modelCache.set(model.name, status);
+        }
+        
+        this.availableModels = response.models.map(model => model.name);
+        this.lastModelListUpdate = now;
+        
+        this.logger.debug(`Refreshed model cache with ${this.modelCache.size} models`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to refresh model cache', error);
+      throw new AIError(
+        AIErrorType.NETWORK_ERROR,
+        `Failed to refresh model list: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async streamModelPull(modelName: string, onProgress: (progress: { completed: number; total: number; status: string }) => void): Promise<void> {
+    const url = `${this.baseURL}/api/pull`;
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout * 10); // Longer timeout for downloads
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'RetrospectAI-Plugin/1.0'
+        },
+        body: JSON.stringify({ name: modelName, stream: true }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body available');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+             try {
+         // eslint-disable-next-line no-constant-condition
+         while (true) {
+           const { done, value } = await reader.read();
+           
+           if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const data = JSON.parse(line) as OllamaPullResponse;
+                
+                if (data.total && data.completed !== undefined) {
+                  onProgress({
+                    completed: data.completed,
+                    total: data.total,
+                    status: data.status || 'downloading'
+                  });
+                }
+              } catch (parseError) {
+                // Ignore malformed JSON lines
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new AIError(
+          AIErrorType.TIMEOUT,
+          `Model download timed out: ${modelName}`,
+          error,
+          true
+        );
+      }
+      
+      throw new AIError(
+        AIErrorType.NETWORK_ERROR,
+        `Failed to download model ${modelName}: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+        true
+      );
     }
   }
 } 

@@ -2,13 +2,27 @@ import { PrivacyAwareScanner } from '../../src/privacy-aware-scanner';
 import { Logger, LogLevel } from '../../src/logger';
 
 /**
+ * Mock Obsidian App interface for testing
+ */
+interface MockApp {
+  vault: {
+    getMarkdownFiles(): Array<{ path: string; name: string; extension: string; stat: { mtime: number; size: number } }>;
+    getAbstractFileByPath(path: string): any;
+    read(file: { path: string }): Promise<string>;
+    adapter: {
+      stat(path: string): Promise<{ ctime: number; mtime: number; size: number }>;
+    };
+  };
+}
+
+/**
  * Mock Obsidian App for testing
  */
-class MockObsidianApp {
+class MockObsidianApp implements MockApp {
   vault = {
     getMarkdownFiles: () => this.mockFiles,
     getAbstractFileByPath: (path: string) => this.mockFiles.find(f => f.path === path),
-    read: async (file: any) => this.mockFileContents[file.path] || '',
+    read: async (file: { path: string }) => this.mockFileContents[file.path] || '',
     adapter: {
       stat: async (path: string) => ({
         ctime: Date.now() - 86400000, // 1 day ago
@@ -18,7 +32,12 @@ class MockObsidianApp {
     }
   };
 
-  private mockFiles: any[] = [];
+  private mockFiles: Array<{
+    path: string;
+    name: string;
+    extension: string;
+    stat: { mtime: number; size: number };
+  }> = [];
   private mockFileContents: Record<string, string> = {};
 
   addMockFile(path: string, content: string) {

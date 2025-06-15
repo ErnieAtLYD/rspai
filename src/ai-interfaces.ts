@@ -328,4 +328,286 @@ export interface AIEvent {
 /**
  * AI service event listener
  */
-export type AIEventListener = (event: AIEvent) => void; 
+export type AIEventListener = (event: AIEvent) => void;
+
+/**
+ * Performance optimization interfaces
+ */
+
+/**
+ * Request batching configuration
+ */
+export interface BatchingConfig {
+  enabled: boolean;
+  maxBatchSize: number;
+  maxWaitTime: number; // milliseconds
+  similarityThreshold: number; // 0-1 for grouping similar requests
+}
+
+/**
+ * Memory management configuration
+ */
+export interface MemoryConfig {
+  maxMemoryUsage: number; // MB
+  enableGarbageCollection: boolean;
+  memoryPoolSize: number;
+  contextWindowOptimization: boolean;
+}
+
+/**
+ * Caching configuration
+ */
+export interface CachingConfig {
+  enabled: boolean;
+  maxCacheSize: number; // MB
+  ttl: number; // seconds
+  enablePartialMatching: boolean;
+  compressionEnabled: boolean;
+}
+
+/**
+ * Hardware optimization configuration
+ */
+export interface HardwareConfig {
+  autoDetectResources: boolean;
+  maxThreads?: number;
+  gpuLayers?: number;
+  cpuAffinity?: number[];
+  memoryLock: boolean;
+  memoryMap: boolean;
+}
+
+/**
+ * Performance optimization configuration
+ */
+export interface PerformanceConfig {
+  batching: BatchingConfig;
+  memory: MemoryConfig;
+  caching: CachingConfig;
+  hardware: HardwareConfig;
+  enableMetrics: boolean;
+  enableProfiling: boolean;
+}
+
+/**
+ * Request batch for processing multiple requests together
+ */
+export interface RequestBatch {
+  id: string;
+  requests: BatchedRequest[];
+  createdAt: Date;
+  priority: number;
+}
+
+/**
+ * Individual request in a batch
+ */
+export interface BatchedRequest {
+  id: string;
+  prompt: string;
+  options?: CompletionOptions;
+  resolve: (result: string) => void;
+  reject: (error: Error) => void;
+  createdAt: Date;
+  similarity?: number;
+}
+
+/**
+ * Cache entry for storing responses
+ */
+export interface CacheEntry {
+  key: string;
+  response: string;
+  metadata: {
+    modelUsed: string;
+    tokensUsed?: number;
+    createdAt: Date;
+    accessCount: number;
+    lastAccessed: Date;
+  };
+  expiresAt: Date;
+}
+
+/**
+ * Performance metrics for monitoring
+ */
+export interface PerformanceMetrics {
+  requestsPerSecond: number;
+  averageLatency: number;
+  memoryUsage: number;
+  cpuUsage: number;
+  cacheHitRate: number;
+  batchEfficiency: number;
+  throughput: number;
+  errorRate: number;
+  lastUpdated: Date;
+}
+
+/**
+ * Resource usage statistics
+ */
+export interface ResourceUsage {
+  memory: {
+    used: number;
+    available: number;
+    peak: number;
+  };
+  cpu: {
+    usage: number;
+    cores: number;
+    threads: number;
+  };
+  gpu?: {
+    usage: number;
+    memory: number;
+    temperature?: number;
+  };
+}
+
+/**
+ * Performance optimization interface for AI adapters
+ */
+export interface PerformanceOptimized {
+  /**
+   * Configure performance optimizations
+   */
+  configurePerformance(config: PerformanceConfig): Promise<void>;
+
+  /**
+   * Get current performance metrics
+   */
+  getPerformanceMetrics(): Promise<PerformanceMetrics>;
+
+  /**
+   * Get resource usage statistics
+   */
+  getResourceUsage(): Promise<ResourceUsage>;
+
+  /**
+   * Clear performance caches
+   */
+  clearCaches(): Promise<void>;
+
+  /**
+   * Optimize for current hardware
+   */
+  optimizeForHardware(): Promise<void>;
+}
+
+/**
+ * Request queue manager interface
+ */
+export interface RequestQueueManager {
+  /**
+   * Add request to queue
+   */
+  enqueue(request: BatchedRequest): Promise<void>;
+
+  /**
+   * Process queued requests
+   */
+  processQueue(): Promise<void>;
+
+  /**
+   * Get queue statistics
+   */
+  getQueueStats(): {
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+  };
+}
+
+/**
+ * Memory pool manager interface
+ */
+export interface MemoryPoolManager {
+  /**
+   * Allocate memory from pool
+   */
+  allocate(size: number): Promise<ArrayBuffer | null>;
+
+  /**
+   * Release memory back to pool
+   */
+  release(buffer: ArrayBuffer): Promise<void>;
+
+  /**
+   * Get memory pool statistics
+   */
+  getStats(): {
+    totalSize: number;
+    usedSize: number;
+    availableSize: number;
+    fragmentationRatio: number;
+  };
+}
+
+/**
+ * Enhanced error classification for better handling
+ */
+export interface EnhancedErrorClassification {
+  type: AIErrorType;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  retryable: boolean;
+  fallbackRecommended: boolean;
+  recoveryStrategy: 'immediate' | 'delayed' | 'manual' | 'circuit-breaker';
+  estimatedRecoveryTime?: number;
+}
+
+
+
+/**
+ * Fallback strategy configuration
+ */
+export interface FallbackStrategy {
+  enabled: boolean;
+  maxFallbackDepth: number;
+  fallbackTimeout: number;
+  capabilityDegradation: boolean;
+  performanceDegradation: boolean;
+  qualityThreshold: number;
+}
+
+/**
+ * Fallback chain configuration
+ */
+export interface FallbackChain {
+  primary: string;
+  fallbacks: Array<{
+    adapterId: string;
+    priority: number;
+    requiredCapabilities?: AICapability[];
+    maxLatency?: number;
+    qualityThreshold?: number;
+  }>;
+  strategy: FallbackStrategy;
+}
+
+/**
+ * Cache configuration for different cache levels
+ */
+export interface CacheConfig {
+  enabled: boolean;
+  maxSize: number;
+  ttl: number;
+  compressionEnabled: boolean;
+  encryptionEnabled: boolean;
+  persistToDisk: boolean;
+  diskPath?: string;
+}
+
+/**
+ * Multi-level cache configuration
+ */
+export interface MultiLevelCacheConfig {
+  memory: CacheConfig;
+  disk: CacheConfig;
+  distributed?: CacheConfig & {
+    nodes: string[];
+    replicationFactor: number;
+  };
+}
+
+ 

@@ -1,5 +1,6 @@
 import { Logger } from './logger';
 import { DefaultAIModelFactory } from './ai-model-factory';
+import * as crypto from 'crypto';
 import {
   AIModelAdapter,
   AIModelConfig,
@@ -11,6 +12,15 @@ import {
   AIErrorType,
   PrivacyLevel
 } from './ai-interfaces';
+import {
+  ResilienceManager,
+  ResilienceConfig,
+  RequestContext as ResilienceRequestContext,
+  AdapterHealthStatus,
+  CircuitBreakerState,
+  CacheStats
+} from './resilience-interfaces';
+import { DefaultResilienceManager as ResilienceManagerImpl } from './resilience-manager';
 
 /**
  * Orchestrator configuration options
@@ -37,6 +47,12 @@ export interface OrchestratorConfig {
   minimumConfidence?: number;
   requireConsensus?: boolean;
   consensusThreshold?: number;
+
+  // Resilience settings
+  resilience?: ResilienceConfig;
+  enableAdvancedErrorHandling?: boolean;
+  enableIntelligentCaching?: boolean;
+  enableCircuitBreakers?: boolean;
 }
 
 /**
@@ -64,6 +80,12 @@ export interface OrchestratorMetrics {
   fallbackUsageCount: number;
   retryCount: number;
   lastActivity: Date;
+  
+  // Enhanced metrics
+  circuitBreakerTrips: number;
+  cacheHitRate: number;
+  adaptiveTimeouts: number;
+  resilienceRecoveries: number;
 }
 
 /**
@@ -77,6 +99,9 @@ export interface EnhancedAnalysisResult extends AIAnalysisResult {
     totalProcessingTime: number;
     confidenceScore: number;
     routingDecision: string;
+    cacheHit: boolean;
+    circuitBreakerState?: CircuitBreakerState;
+    resilienceApplied: boolean;
   };
 }
 
@@ -93,6 +118,11 @@ export interface RetrospectAnalysisOptions {
   compareWithHistory?: boolean;
   privacyLevel?: PrivacyLevel;
   analysisDepth?: 'quick' | 'standard' | 'comprehensive';
+  
+  // Resilience options
+  enableCaching?: boolean;
+  fallbackStrategy?: 'aggressive' | 'conservative' | 'disabled';
+  maxRetries?: number;
 }
 
 /**
@@ -108,6 +138,7 @@ export class AIServiceOrchestrator {
   private config: OrchestratorConfig;
   private metrics: OrchestratorMetrics;
   private isInitialized = false;
+  private resilienceManager?: ResilienceManager;
 
   constructor(logger: Logger, config: OrchestratorConfig = {}) {
     this.logger = logger;
@@ -123,6 +154,9 @@ export class AIServiceOrchestrator {
       minimumConfidence: 0.6,
       requireConsensus: false,
       consensusThreshold: 0.8,
+      enableAdvancedErrorHandling: true,
+      enableIntelligentCaching: true,
+      enableCircuitBreakers: true,
       ...config
     };
     
@@ -134,15 +168,83 @@ export class AIServiceOrchestrator {
       adapterUsageStats: new Map(),
       fallbackUsageCount: 0,
       retryCount: 0,
-      lastActivity: new Date()
+      lastActivity: new Date(),
+      circuitBreakerTrips: 0,
+      cacheHitRate: 0,
+      adaptiveTimeouts: 0,
+      resilienceRecoveries: 0
     };
+
+    // Initialize resilience manager if enabled
+    if (this.config.enableAdvancedErrorHandling) {
+      this.initializeResilienceManager();
+    }
+  }
+
+  private initializeResilienceManager(): void {
+    const defaultResilienceConfig: ResilienceConfig = {
+      circuitBreaker: {
+        failureThreshold: 5,
+        recoveryTimeout: 30000,
+        monitoringPeriod: 60000,
+        halfOpenMaxCalls: 3
+      },
+      fallback: {
+        enabled: true,
+        maxFallbackDepth: 3,
+        fallbackTimeout: 10000,
+        capabilityDegradation: true,
+        performanceDegradation: true,
+        qualityThreshold: 0.7
+      },
+      cache: {
+        memory: {
+          enabled: this.config.enableIntelligentCaching || false,
+          maxSize: 100,
+          ttl: 3600,
+          compressionEnabled: false,
+          encryptionEnabled: false,
+          persistToDisk: false
+        },
+        disk: {
+          enabled: false,
+          maxSize: 1000,
+          ttl: 86400,
+          compressionEnabled: true,
+          encryptionEnabled: true,
+          persistToDisk: true,
+          diskPath: './cache'
+        }
+      },
+      timeout: {
+        default: this.config.requestTimeout || 30000,
+        adaptive: true,
+        maxTimeout: 60000,
+        minTimeout: 5000
+      },
+      bulkhead: {
+        enabled: true,
+        maxConcurrentRequests: 10,
+        queueSize: 50,
+        isolationGroups: ['local', 'cloud', 'fallback']
+      },
+      healthCheck: {
+        interval: 30000,
+        timeout: 5000,
+        retryCount: 3,
+        degradedThreshold: 0.8
+      },
+      ...this.config.resilience
+    };
+
+    this.resilienceManager = new ResilienceManagerImpl(defaultResilienceConfig, this.logger);
   }
 
   /**
    * Initialize the orchestrator with configured adapters
    */
   async initialize(adapterConfigs: Map<string, AIModelConfig>): Promise<void> {
-    this.logger.info('Initializing AI Service Orchestrator');
+    this.logger.info('Initializing AI Service Orchestrator with resilience features');
     
     try {
       // Create and initialize all configured adapters
@@ -153,6 +255,12 @@ export class AIServiceOrchestrator {
           this.adapters.set(name, adapter);
           this.metrics.adapterUsageStats.set(name, 0);
           this.logger.info(`Initialized adapter: ${name}`);
+
+          // Initialize circuit breaker for this adapter
+          if (this.resilienceManager && this.config.enableCircuitBreakers) {
+            this.resilienceManager.getCircuitBreaker(name);
+            this.logger.debug(`Circuit breaker initialized for adapter: ${name}`);
+          }
         } catch (error) {
           this.logger.warn(`Failed to initialize adapter ${name}:`, error);
         }
@@ -171,7 +279,7 @@ export class AIServiceOrchestrator {
       }
 
       this.isInitialized = true;
-      this.logger.info(`Orchestrator initialized with ${this.adapters.size} adapters`);
+      this.logger.info(`Orchestrator initialized with ${this.adapters.size} adapters and resilience features`);
     } catch (error) {
       this.logger.error('Failed to initialize orchestrator:', error);
       throw error;
@@ -193,57 +301,247 @@ export class AIServiceOrchestrator {
       this.metrics.totalRequests++;
       this.metrics.lastActivity = new Date();
 
-      // Determine the best adapter for this request
-      const selectedAdapter = await this.selectAdapter(context);
-      const orchestratorMetadata = {
-        adaptersUsed: [selectedAdapter.name],
-        fallbacksTriggered: 0,
-        retriesAttempted: 0,
-        totalProcessingTime: 0,
-        confidenceScore: 0,
-        routingDecision: `Selected ${selectedAdapter.name} based on context`
-      };
+      // Check cache first if enabled
+      let cacheHit = false;
+      if (this.resilienceManager && options.enableCaching !== false) {
+        const cacheResult = await this.checkCache(content, options);
+        if (cacheResult) {
+          cacheHit = true;
+          this.metrics.successfulRequests++;
+          return this.enhanceResultWithMetadata(cacheResult, {
+            adaptersUsed: ['cache'],
+            fallbacksTriggered: 0,
+            retriesAttempted: 0,
+            totalProcessingTime: Date.now() - startTime,
+            confidenceScore: cacheResult.confidence,
+            routingDecision: 'cache-hit',
+            cacheHit: true,
+            resilienceApplied: false
+          });
+        }
+      }
 
-      // Perform the analysis with retry logic
-      const result = await this.executeWithRetry(async () => {
-        return await this.performRetrospectAnalysis(selectedAdapter, content, options);
-      }, orchestratorMetadata);
+      // Convert context for resilience manager
+      const resilienceContext = this.convertToResilienceContext(context);
 
-      orchestratorMetadata.totalProcessingTime = Date.now() - startTime;
-      orchestratorMetadata.confidenceScore = result.confidence || 0;
+      // Execute with resilience if enabled
+      const result = this.resilienceManager && this.config.enableAdvancedErrorHandling
+        ? await this.executeWithResilience(content, options, resilienceContext)
+        : await this.executeWithBasicRetry(content, options, context);
+
+      // Cache the result if enabled
+      if (this.resilienceManager && options.enableCaching !== false && !cacheHit) {
+        await this.cacheResult(content, options, result);
+      }
 
       this.metrics.successfulRequests++;
-      this.updateAdapterUsage(selectedAdapter.name);
-
-      return {
-        ...result,
-        orchestratorMetadata
-      };
+      return this.enhanceResultWithMetadata(result, {
+        adaptersUsed: [this.config.primaryAdapter || 'unknown'],
+        fallbacksTriggered: 0,
+        retriesAttempted: 0,
+        totalProcessingTime: Date.now() - startTime,
+        confidenceScore: result.confidence,
+        routingDecision: 'primary',
+        cacheHit,
+        resilienceApplied: !!this.resilienceManager
+      });
 
     } catch (error) {
       this.metrics.failedRequests++;
-      this.logger.error('Personal content analysis failed:', error);
-      
-      // Return a fallback result
-      return {
-        success: false,
-        patterns: [],
-        summary: 'Analysis failed due to technical issues. Please try again.',
-        insights: ['Unable to analyze content at this time'],
-        recommendations: ['Please check your AI service configuration'],
-        confidence: 0,
-        processingTime: Date.now() - startTime,
-        modelUsed: 'orchestrator-fallback',
-        error: error instanceof Error ? error.message : String(error),
-        orchestratorMetadata: {
-          adaptersUsed: [],
-          fallbacksTriggered: 1,
-          retriesAttempted: 0,
-          totalProcessingTime: Date.now() - startTime,
-          confidenceScore: 0,
-          routingDecision: 'Fallback due to error'
+      this.logger.error('Failed to analyze personal content:', error);
+      throw error;
+    }
+  }
+
+  private async executeWithResilience(
+    content: string,
+    options: RetrospectAnalysisOptions,
+    context?: ResilienceRequestContext
+  ): Promise<AIAnalysisResult> {
+    if (!this.resilienceManager) {
+      throw new Error('Resilience manager not initialized');
+    }
+
+    return await this.resilienceManager.executeWithResilience(async () => {
+      const adapter = await this.selectAdapterWithResilience(context);
+      return await this.performRetrospectAnalysis(adapter, content, options);
+    }, context);
+  }
+
+  private async executeWithBasicRetry(
+    content: string,
+    options: RetrospectAnalysisOptions,
+    context?: RequestContext
+  ): Promise<AIAnalysisResult> {
+    const adapter = await this.selectAdapter(context);
+    return await this.executeWithRetry(async () => {
+      return await this.performRetrospectAnalysis(adapter, content, options);
+    });
+  }
+
+  private async selectAdapterWithResilience(context?: ResilienceRequestContext): Promise<AIModelAdapter> {
+    if (!this.resilienceManager) {
+      throw new Error('Resilience manager not initialized');
+    }
+
+    // Get fallback chain
+    const fallbackChain = this.resilienceManager.getFallbackChain(context);
+    
+    // Try primary adapter first
+    const primaryAdapter = this.adapters.get(fallbackChain.primary);
+    if (primaryAdapter) {
+      const circuitBreaker = this.resilienceManager.getCircuitBreaker(fallbackChain.primary);
+      if (circuitBreaker.canExecute() && await primaryAdapter.isAvailable()) {
+        return primaryAdapter;
+      }
+    }
+
+    // Try fallback adapters
+    for (const fallback of fallbackChain.fallbacks) {
+      const adapter = this.adapters.get(fallback.adapterId);
+      if (adapter) {
+        const circuitBreaker = this.resilienceManager.getCircuitBreaker(fallback.adapterId);
+        if (circuitBreaker.canExecute() && await adapter.isAvailable()) {
+          this.metrics.fallbackUsageCount++;
+          return adapter;
         }
+      }
+    }
+
+    throw new AIError(
+      AIErrorType.MODEL_UNAVAILABLE,
+      'No healthy adapters available after resilience checks'
+    );
+  }
+
+  private convertToResilienceContext(context?: RequestContext): ResilienceRequestContext | undefined {
+    if (!context) return undefined;
+
+    return {
+      contentType: context.contentType,
+      privacyLevel: context.privacyLevel,
+      urgency: context.urgency,
+      complexity: context.complexity,
+      requiredCapabilities: context.requiredCapabilities,
+      maxCost: context.maxCost,
+      preferredAdapter: context.preferredAdapter
+    };
+  }
+
+  private async checkCache(content: string, options: any): Promise<AIAnalysisResult | null> {
+    if (!this.resilienceManager) return null;
+
+    try {
+      const cache = this.resilienceManager.getCache('memory');
+      const key = this.generateCacheKey(content, options);
+      const entry = await cache.get(key);
+      
+      if (entry) {
+        this.logger.debug('Cache hit for analysis request');
+        return entry.data as AIAnalysisResult;
+      }
+    } catch (error) {
+      this.logger.warn('Cache check failed:', error);
+    }
+
+    return null;
+  }
+
+  private async cacheResult(content: string, options: any, result: AIAnalysisResult): Promise<void> {
+    if (!this.resilienceManager) return;
+
+    try {
+      const cache = this.resilienceManager.getCache('memory');
+      const key = this.generateCacheKey(content, options);
+      const tags = this.generateCacheTags(content, options);
+      
+      await cache.set(key, result, undefined, tags);
+      this.logger.debug('Cached analysis result');
+    } catch (error) {
+      this.logger.warn('Failed to cache result:', error);
+    }
+  }
+
+  private generateCacheKey(content: string, options: any): string {
+    const combined = JSON.stringify({ content, options });
+    return crypto.createHash('sha256').update(combined).digest('hex');
+  }
+
+  private generateCacheTags(content: string, options: any): string[] {
+    const tags: string[] = [];
+    
+    if (content.includes('daily')) tags.push('daily-reflection');
+    if (content.includes('goal')) tags.push('goal-review');
+    if (content.includes('habit')) tags.push('habit-tracking');
+    if (options.analysisDepth) tags.push(`depth:${options.analysisDepth}`);
+    
+    return tags;
+  }
+
+  private enhanceResultWithMetadata(
+    result: AIAnalysisResult,
+    metadata: EnhancedAnalysisResult['orchestratorMetadata']
+  ): EnhancedAnalysisResult {
+    return {
+      ...result,
+      orchestratorMetadata: metadata
+    };
+  }
+
+  /**
+   * Get resilience statistics
+   */
+  async getResilienceStats(): Promise<{
+    circuitBreakers: Map<string, any>;
+    cacheStats: CacheStats | null;
+    healthStatuses: Map<string, AdapterHealthStatus>;
+  }> {
+    if (!this.resilienceManager) {
+      return {
+        circuitBreakers: new Map(),
+        cacheStats: null,
+        healthStatuses: new Map()
       };
+    }
+
+    const circuitBreakers = new Map();
+    for (const adapterId of this.adapters.keys()) {
+      const cb = this.resilienceManager.getCircuitBreaker(adapterId);
+      circuitBreakers.set(adapterId, cb.getMetrics());
+    }
+
+    let cacheStats: CacheStats | null = null;
+    try {
+      const cache = this.resilienceManager.getCache('memory');
+      cacheStats = await cache.getStats();
+    } catch (error) {
+      this.logger.debug('No cache stats available');
+    }
+
+    const healthStatuses = new Map();
+    for (const adapterId of this.adapters.keys()) {
+      healthStatuses.set(adapterId, this.resilienceManager.getHealthStatus(adapterId));
+    }
+
+    return {
+      circuitBreakers,
+      cacheStats,
+      healthStatuses
+    };
+  }
+
+  /**
+   * Clear all caches
+   */
+  async clearCaches(): Promise<void> {
+    if (!this.resilienceManager) return;
+
+    try {
+      const cache = this.resilienceManager.getCache('memory');
+      await cache.clear();
+      this.logger.info('Cleared all caches');
+    } catch (error) {
+      this.logger.warn('Failed to clear caches:', error);
     }
   }
 
@@ -346,6 +644,13 @@ export class AIServiceOrchestrator {
     }
     
     return status;
+  }
+
+  /**
+   * Get the registered adapters
+   */
+  getAdapters(): Map<string, AIModelAdapter> {
+    return new Map(this.adapters);
   }
 
   /**

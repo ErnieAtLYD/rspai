@@ -2,6 +2,7 @@ import { Logger } from './logger';
 import { ErrorHandler } from './error-handler';
 import { AIServiceOrchestrator, OrchestratorConfig, RequestContext, RetrospectAnalysisOptions, EnhancedAnalysisResult } from './ai-service-orchestrator';
 import { AIModelConfig, AIModelType, PrivacyLevel, AICapability, DetectedPattern, CompletionOptions } from './ai-interfaces';
+import { UnifiedModelManager, UnifiedModelInfo, ModelDownloadProgress, ModelOperationResult, ModelSearchOptions, ModelRecommendation } from './unified-model-manager';
 
 /**
  * AI model provider types
@@ -135,6 +136,7 @@ export class AIService {
   private logger: Logger;
   private errorHandler: ErrorHandler;
   private orchestrator: AIServiceOrchestrator | null = null;
+  private modelManager: UnifiedModelManager;
   private settings: AIServiceSettings;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
@@ -147,6 +149,7 @@ export class AIService {
     this.logger = logger;
     this.errorHandler = errorHandler;
     this.settings = { ...settings };
+    this.modelManager = new UnifiedModelManager(logger);
   }
 
   /**
@@ -204,6 +207,14 @@ export class AIService {
 
       // Initialize orchestrator with adapters
       await this.orchestrator.initialize(adapterConfigs);
+
+      // Register adapters with model manager
+      const adapters = this.orchestrator.getAdapters();
+      for (const [name, adapter] of adapters) {
+        if (name === 'ollama' || name === 'llamacpp') {
+          this.modelManager.registerAdapter(adapter);
+        }
+      }
 
       this.isInitialized = true;
       this.logger.info('AI Service initialized successfully');
@@ -420,6 +431,78 @@ export class AIService {
   }
 
   /**
+   * Get all available models across all providers
+   */
+  async getAllModels(options?: ModelSearchOptions): Promise<UnifiedModelInfo[]> {
+    await this.ensureInitialized();
+    return this.modelManager.getAllModels(options);
+  }
+
+  /**
+   * Get models for a specific provider
+   */
+  async getModelsForProvider(provider: 'ollama' | 'llamacpp'): Promise<UnifiedModelInfo[]> {
+    await this.ensureInitialized();
+    return this.modelManager.getModelsForProvider(provider);
+  }
+
+  /**
+   * Download a model
+   */
+  async downloadModel(
+    modelId: string, 
+    provider: 'ollama' | 'llamacpp',
+    onProgress?: ModelDownloadProgress
+  ): Promise<ModelOperationResult> {
+    await this.ensureInitialized();
+    return this.modelManager.downloadModel(modelId, provider, onProgress);
+  }
+
+  /**
+   * Delete a model
+   */
+  async deleteModel(modelId: string, provider: 'ollama' | 'llamacpp'): Promise<ModelOperationResult> {
+    await this.ensureInitialized();
+    return this.modelManager.deleteModel(modelId, provider);
+  }
+
+  /**
+   * Update a model to the latest version
+   */
+  async updateModel(modelId: string, provider: 'ollama' | 'llamacpp'): Promise<ModelOperationResult> {
+    await this.ensureInitialized();
+    return this.modelManager.updateModel(modelId, provider);
+  }
+
+  /**
+   * Get model recommendations for different use cases
+   */
+  getModelRecommendations(): ModelRecommendation[] {
+    return this.modelManager.getModelRecommendations();
+  }
+
+  /**
+   * Get storage usage statistics
+   */
+  async getStorageStats(): Promise<{
+    totalModels: number;
+    totalSize: number;
+    totalSizeFormatted: string;
+    byProvider: Record<string, { count: number; size: number; sizeFormatted: string }>;
+  }> {
+    await this.ensureInitialized();
+    return this.modelManager.getStorageStats();
+  }
+
+  /**
+   * Check if a model is available
+   */
+  async isModelAvailable(modelId: string, provider: 'ollama' | 'llamacpp'): Promise<boolean> {
+    await this.ensureInitialized();
+    return this.modelManager.isModelAvailable(modelId, provider);
+  }
+
+  /**
    * Dispose of the AI service and cleanup resources
    */
   async dispose(): Promise<void> {
@@ -427,6 +510,9 @@ export class AIService {
       await this.orchestrator.dispose();
       this.orchestrator = null;
     }
+
+    this.modelManager.dispose();
+    
     this.isInitialized = false;
     this.initializationPromise = null;
   }
