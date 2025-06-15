@@ -770,62 +770,62 @@ export class NaturalLanguageGenerator {
     const insightTexts = insights.map(i => `- ${i.description}`).join('\n');
     const timeframe = this.formatDateRange(context.purpose);
     
-    return `Generate a professional executive summary based on these key insights from ${timeframe}:
+    return `Create a warm, encouraging summary based on these key insights from ${timeframe}:
 
 ${insightTexts}
 
-Style: ${options.style || 'formal'}
-Tone: ${options.tone || 'analytical'}
+Style: ${options.style || 'personal'}
+Tone: ${options.tone || 'encouraging'}
 Length: 2-3 sentences
-Focus: High-level overview with strategic implications
+Focus: Personal growth and positive patterns, written in a supportive voice
 
-Executive Summary:`;
+Summary:`;
   }
 
   private buildInsightPrompt(insight: Insight, context: TextGenerationContext): string {
-    return `Rewrite this insight in a clear, engaging way:
+    return `Rewrite this insight in a warm, personal way that feels encouraging and supportive:
 
 Original: ${insight.description}
 Category: ${insight.category}
 Importance: ${insight.importance}
-Style: ${context.options.style || 'formal'}
+Style: ${context.options.style || 'personal'}
 
-Rewritten insight:`;
+Make it sound like a supportive friend sharing an observation. Rewritten insight:`;
   }
 
   private buildRecommendationPrompt(
     recommendation: Recommendation,
     context: TextGenerationContext
   ): string {
-    return `Rewrite this recommendation in an actionable, compelling way:
+    return `Rewrite this recommendation in a gentle, encouraging way that feels motivating rather than prescriptive:
 
 Original: ${recommendation.description}
 Priority: ${recommendation.priority}
 Rationale: ${recommendation.rationale}
-Style: ${context.options.style || 'formal'}
+Style: ${context.options.style || 'personal'}
 
-Rewritten recommendation:`;
+Make it sound like friendly advice from someone who believes in you. Rewritten recommendation:`;
   }
 
   private buildTrendPrompt(trend: TrendAnalysis, context: TextGenerationContext): string {
     const timeframe = this.formatDateRange(trend.timeframe);
     
-    return `Describe this trend in clear, analytical language:
+    return `Describe this trend in a warm, personal way that highlights growth and progress:
 
 Trend: ${trend.title}
 Direction: ${trend.direction}
 Description: ${trend.description}
 Timeframe: ${timeframe}
 Confidence: ${trend.confidence}
-Style: ${context.options.style || 'formal'}
+Style: ${context.options.style || 'personal'}
 
-Trend analysis:`;
+Focus on the positive aspects and personal development. Trend description:`;
   }
 
   private cleanAIResponse(response: string): string {
     return response
       .trim()
-      .replace(/^(Executive Summary:|Rewritten insight:|Rewritten recommendation:|Trend analysis:)\s*/i, '')
+      .replace(/^(Executive Summary:|Summary:|Rewritten insight:|Rewritten recommendation:|Trend analysis:|Trend description:)\s*/i, '')
       .replace(/\n+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -841,10 +841,10 @@ Trend analysis:`;
 
   private generateGenericInsightText(insight: Insight): string {
     const starters = [
-      'Analysis reveals that',
-      'The data indicates that',
-      'Evidence suggests that',
-      'Patterns show that'
+      'Looking at your patterns, it seems that',
+      'What stands out is that',
+      'You might find it interesting that',
+      'Your data shows that'
     ];
 
     const starter = this.selectRandomVariation(starters);
@@ -853,10 +853,10 @@ Trend analysis:`;
 
   private generateImplication(insights: Insight[]): string {
     const implications = [
-      'opportunities for improvement',
-      'areas requiring attention',
-      'positive trends worth reinforcing',
-      'patterns that merit further investigation'
+      'opportunities for growth',
+      'areas where you could focus',
+      'positive trends worth celebrating',
+      'patterns that might inspire you'
     ];
 
     return this.selectRandomVariation(implications);
@@ -864,10 +864,10 @@ Trend analysis:`;
 
   private generateConclusion(insights: Insight[]): string {
     const conclusions = [
-      'These insights provide valuable direction for future actions.',
-      'Understanding these patterns can inform strategic decisions.',
-      'These findings highlight important areas of focus.',
-      'This analysis offers actionable insights for improvement.'
+      'These insights offer some thoughtful direction for your journey ahead.',
+      'Understanding these patterns can help guide your next steps.',
+      'These findings highlight some meaningful areas to explore.',
+      'This analysis reveals some encouraging opportunities for growth.'
     ];
 
     return this.selectRandomVariation(conclusions);
@@ -958,8 +958,8 @@ Trend analysis:`;
 
   private mergeWithDefaults(config: Partial<NLGConfig>): NLGConfig {
     return {
-      style: 'formal',
-      tone: 'analytical',
+      style: 'personal',
+      tone: 'encouraging',
       voice: 'active',
       enableVariation: true,
       variationLevel: 'medium',
@@ -972,7 +972,7 @@ Trend analysis:`;
       enableStyleConsistency: true,
       language: 'en',
       locale: 'en-US',
-      enablePersonalization: false,
+      enablePersonalization: true,
       contextAwareness: true,
       crossReferencing: false,
       enableTransitions: true,
@@ -1055,34 +1055,34 @@ Trend analysis:`;
   private initializeTextVariations(): TextVariation {
     return {
       synonyms: {
-        'shows': ['indicates', 'reveals', 'demonstrates', 'suggests'],
-        'important': ['significant', 'crucial', 'vital', 'key'],
-        'improve': ['enhance', 'optimize', 'strengthen', 'develop']
+        'shows': ['reveals', 'suggests', 'indicates', 'highlights'],
+        'important': ['meaningful', 'significant', 'valuable', 'noteworthy'],
+        'improve': ['grow', 'develop', 'enhance', 'strengthen']
       },
       phraseAlternatives: {
-        'analysis shows': ['data indicates', 'evidence reveals', 'findings suggest'],
-        'it is recommended': ['consider', 'it would be beneficial', 'a good approach would be']
+        'analysis shows': ['your patterns reveal', 'what stands out is', 'looking at your data'],
+        'it is recommended': ['you might consider', 'it could be helpful to', 'you could try']
       },
       sentenceStarters: [
-        'Analysis reveals',
-        'The data shows',
-        'Evidence indicates',
-        'Patterns suggest',
-        'Findings demonstrate'
+        'Looking at your patterns',
+        'What stands out',
+        'Your journey shows',
+        'Reflecting on your data',
+        'What\'s encouraging is'
       ],
       transitions: {
-        'insights-recommendations': ['Based on these insights,', 'Given these findings,', 'To address these patterns,'],
-        'recommendations-trends': ['Looking at trends,', 'From a temporal perspective,', 'Over time,'],
-        'trends-conclusion': ['In summary,', 'Overall,', 'Taking everything together,']
+        'insights-recommendations': ['Based on what you\'ve shared,', 'Given these patterns,', 'To build on this,'],
+        'recommendations-trends': ['Looking at your growth over time,', 'Your progress shows,', 'As you\'ve developed,'],
+        'trends-conclusion': ['Taking it all together,', 'Overall,', 'What this means for you is']
       },
       connectors: [
-        'furthermore',
+        'and what\'s more',
         'additionally',
-        'moreover',
-        'however',
-        'consequently',
-        'therefore',
-        'meanwhile',
+        'also',
+        'on the other hand',
+        'as a result',
+        'this means',
+        'at the same time',
         'similarly'
       ]
     };

@@ -5,7 +5,7 @@
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "npx tsc",
+		"build": "node esbuild.config.mjs production",
 		"test": "node tests/integration/privacy-integration-simple.js",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",

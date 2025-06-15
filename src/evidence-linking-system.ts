@@ -569,7 +569,10 @@ export class EvidenceLinkingSystem {
       if (!linksBySentence.has(sentenceIndex)) {
         linksBySentence.set(sentenceIndex, []);
       }
-      linksBySentence.get(sentenceIndex)!.push(link);
+      const links = linksBySentence.get(sentenceIndex);
+      if (links) {
+        links.push(link);
+      }
     }
 
     // Add citations to sentences

@@ -100,6 +100,14 @@ export class OpenAIAdapter extends BaseAIAdapter {
     this.baseURL = config.endpoint || 'https://api.openai.com/v1';
     this.model = config.model || 'gpt-3.5-turbo';
     
+    // Log configuration (without API key)
+    this.logger.debug('OpenAI adapter configuration', {
+      baseURL: this.baseURL,
+      model: this.model,
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey.length
+    });
+    
     // Set capabilities based on model
     const modelConfig = OPENAI_MODELS[this.model as keyof typeof OPENAI_MODELS];
     this.capabilities = modelConfig?.capabilities || [
@@ -112,17 +120,40 @@ export class OpenAIAdapter extends BaseAIAdapter {
   }
 
   protected async doInitialize(): Promise<boolean> {
+    this.logger.info('Initializing OpenAI adapter');
+    
     if (!this.apiKey) {
+      const errorMsg = 'OpenAI API key is required but not provided. Please configure your API key in the plugin settings.';
+      this.logger.error(errorMsg);
       throw new AIError(
         AIErrorType.AUTHENTICATION_FAILED,
-        'OpenAI API key is required'
+        errorMsg
+      );
+    }
+
+    if (this.apiKey.length < 20) {
+      const errorMsg = 'OpenAI API key appears to be invalid (too short). Please check your API key configuration.';
+      this.logger.error(errorMsg);
+      throw new AIError(
+        AIErrorType.AUTHENTICATION_FAILED,
+        errorMsg
+      );
+    }
+
+    if (!this.apiKey.startsWith('sk-')) {
+      const errorMsg = 'OpenAI API key appears to be invalid (should start with "sk-"). Please check your API key configuration.';
+      this.logger.error(errorMsg);
+      throw new AIError(
+        AIErrorType.AUTHENTICATION_FAILED,
+        errorMsg
       );
     }
 
     // Test API connection
     try {
+      this.logger.info('Testing OpenAI API connection...');
       await this.testConnection();
-      this.logger.info(`OpenAI adapter initialized with model: ${this.model}`);
+      this.logger.info(`OpenAI adapter initialized successfully with model: ${this.model}`);
       return true;
     } catch (error) {
       this.logger.error('Failed to initialize OpenAI adapter', error);
@@ -173,7 +204,7 @@ export class OpenAIAdapter extends BaseAIAdapter {
     return response.choices[0].message.content;
   }
 
-  protected async doExtractPatterns(content: string, context?: any): Promise<DetectedPattern[]> {
+  protected async doExtractPatterns(content: string, context?: unknown): Promise<DetectedPattern[]> {
     const prompt = `Analyze the following content and extract meaningful patterns related to habits, goals, challenges, insights, and trends. Return the results as a JSON array of patterns.
 
 Content to analyze:
@@ -237,7 +268,7 @@ Please identify patterns and return them in this JSON format:
     }
   }
 
-  protected async doGenerateSummary(patterns: DetectedPattern[], context?: any): Promise<string> {
+  protected async doGenerateSummary(patterns: DetectedPattern[], context?: unknown): Promise<string> {
     const patternSummary = patterns.map(p => 
       `- ${p.title} (${p.type}): ${p.description} [confidence: ${p.confidence}]`
     ).join('\n');
@@ -418,14 +449,31 @@ Respond with:
 
   private async testConnection(): Promise<void> {
     try {
+      this.logger.debug('Testing OpenAI connection', {
+        baseURL: this.baseURL,
+        model: this.model
+      });
+      
       const request: OpenAICompletionRequest = {
         model: this.model,
         messages: [{ role: 'user', content: 'Hello' }],
         max_tokens: 5
       };
 
-      await this.makeRequest<OpenAICompletionResponse>('/chat/completions', request);
+      const response = await this.makeRequest<OpenAICompletionResponse>('/chat/completions', request);
+      
+      this.logger.debug('OpenAI connection test successful', {
+        model: response.model,
+        tokensUsed: response.usage?.total_tokens
+      });
+      
     } catch (error) {
+      this.logger.error('OpenAI connection test failed', error);
+      
+      if (error instanceof AIError) {
+        throw error;
+      }
+      
       throw new AIError(
         AIErrorType.NETWORK_ERROR,
         `Failed to connect to OpenAI API: ${error instanceof Error ? error.message : String(error)}`

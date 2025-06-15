@@ -16,7 +16,15 @@ import {
 	MarkdownProcessingConfig,
 	ProcessingResult,
 } from "./markdown-processing-service";
-import { AIService, AIServiceSettings, DEFAULT_AI_SETTINGS } from "./ai-service";
+import {
+	AIService,
+	AIServiceSettings,
+	DEFAULT_AI_SETTINGS,
+	AIProvider,
+} from "./ai-service";
+import { PrivacyLevel, DetectedPattern } from "./ai-interfaces";
+import { SummaryNoteCreator } from "./summary-note-creator";
+import { EnhancedAnalysisResult } from "./ai-service-orchestrator";
 
 interface RetrospectiveAISettings {
 	// Processing settings
@@ -46,8 +54,8 @@ const DEFAULT_SETTINGS: RetrospectiveAISettings = {
 	maxFileSize: 10 * 1024 * 1024, // 10MB
 	batchSize: 50,
 	enableCaching: true,
-	debugMode: true,
-	logLevel: LogLevel.DEBUG,
+	debugMode: false,
+	logLevel: LogLevel.INFO,
 	aiSettings: DEFAULT_AI_SETTINGS,
 };
 
@@ -57,6 +65,7 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	settings: RetrospectiveAISettings;
 	markdownProcessor: MarkdownProcessingService;
 	aiService: AIService;
+	summaryNoteCreator: SummaryNoteCreator;
 
 	async onload() {
 		// Initialize logger and error handler
@@ -106,13 +115,131 @@ export default class RetrospectiveAIPlugin extends Plugin {
 			this.settings.aiSettings
 		);
 
+		// Initialize summary note creator
+		this.summaryNoteCreator = new SummaryNoteCreator(this.app, this.logger);
+
 		// Initialize AI service if enabled
 		if (this.settings.aiSettings.enableAI) {
+			if (this.settings.debugMode) {
+				console.log("🔧 RetrospectAI: AI is enabled, initializing...");
+			}
 			try {
+				this.logger.info("Initializing AI Service...");
+				if (this.settings.debugMode) {
+					console.log("🔧 RetrospectAI: AI Service settings", {
+						primaryProvider:
+							this.settings.aiSettings.primaryProvider,
+						endpoint:
+							this.settings.aiSettings.openaiConfig.endpoint,
+						hasApiKey:
+							!!this.settings.aiSettings.openaiConfig.apiKey,
+						model: this.settings.aiSettings.openaiConfig.model,
+					});
+				}
+
 				await this.aiService.initialize();
+				if (this.settings.debugMode) {
+					console.log(
+						"🔧 RetrospectAI: AI Service initialized successfully"
+					);
+				}
 				this.logger.info("AI Service initialized successfully");
+
+				// Test the connection if OpenAI is the primary provider
+				if (this.settings.aiSettings.primaryProvider === "openai") {
+					if (this.settings.debugMode) {
+						console.log(
+							"🔧 RetrospectAI: Testing OpenAI connection..."
+						);
+					}
+					this.logger.info("Testing OpenAI connection...");
+					const testResult = await this.aiService.testProvider(
+						"openai"
+					);
+					if (testResult.success) {
+						if (this.settings.debugMode) {
+							console.log(
+								"🔧 RetrospectAI: OpenAI connection test successful"
+							);
+						}
+						this.logger.info("OpenAI connection test successful");
+						new Notice(
+							"RetrospectAI: AI connection established successfully"
+						);
+					} else {
+						console.log(
+							"🔧 RetrospectAI: OpenAI connection test failed:",
+							testResult.error
+						);
+						this.logger.error(
+							"OpenAI connection test failed:",
+							testResult.error
+						);
+						new Notice(
+							`RetrospectAI: OpenAI connection failed - ${testResult.error}`,
+							8000
+						);
+					}
+				}
 			} catch (error) {
-				this.logger.warn("Failed to initialize AI Service:", error);
+				console.log(
+					"🔧 RetrospectAI: Failed to initialize AI Service:",
+					error
+				);
+				this.logger.error("Failed to initialize AI Service:", error);
+
+				// Provide user-friendly error message
+				let errorMessage = "Failed to initialize AI Service";
+				if (error instanceof Error) {
+					if (error.message.includes("API key")) {
+						errorMessage =
+							"OpenAI API key is missing or invalid. Please configure it in settings.";
+					} else if (
+						error.message.includes("network") ||
+						error.message.includes("connection")
+					) {
+						errorMessage =
+							"Unable to connect to AI service. Please check your internet connection.";
+					} else if (
+						error.message.includes("endpoint") ||
+						error.message.includes("configuration")
+					) {
+						errorMessage =
+							"AI configuration error. Please check your settings and try again.";
+					} else {
+						errorMessage = `AI Service error: ${error.message}`;
+					}
+				}
+
+				new Notice(`RetrospectAI: ${errorMessage}`, 10000);
+
+				// Don't automatically disable AI - let user fix the issue
+				this.logger.warn(
+					"AI Service initialization failed, but keeping AI enabled for user to fix"
+				);
+			}
+		} else {
+			if (this.settings.debugMode) {
+				console.log("🔧 RetrospectAI: AI is disabled in settings");
+			}
+			this.logger.info("AI Service disabled in settings");
+			// Check if AI was previously disabled due to errors
+			if (
+				this.settings.aiSettings.primaryProvider === "openai" &&
+				this.settings.aiSettings.openaiConfig.apiKey
+			) {
+				if (this.settings.debugMode) {
+					console.log(
+						"🔧 RetrospectAI: AI appears to have been disabled but API key is configured"
+					);
+				}
+				this.logger.info(
+					"AI appears to have been disabled due to previous errors, but API key is configured"
+				);
+				new Notice(
+					"RetrospectAI: AI is disabled. You can re-enable it in settings if you've fixed any configuration issues.",
+					6000
+				);
 			}
 		}
 
@@ -185,6 +312,14 @@ export default class RetrospectiveAIPlugin extends Plugin {
 			name: "Test AI Connection",
 			callback: () => {
 				this.testAIConnection();
+			},
+		});
+
+		this.addCommand({
+			id: "create-summary-note",
+			name: "Create Summary Note",
+			callback: () => {
+				this.createSummaryNote();
 			},
 		});
 
@@ -313,19 +448,26 @@ export default class RetrospectiveAIPlugin extends Plugin {
 		try {
 			new Notice("Analyzing note with AI...");
 			const content = await this.app.vault.read(activeFile);
-			
-			const result = await this.aiService.analyzePersonalContent(content, {
-				analysisDepth: 'standard',
-			});
+
+			const result = await this.aiService.analyzePersonalContent(
+				content,
+				{
+					analysisDepth: "standard",
+				}
+			);
 
 			if (result.success) {
 				new AIAnalysisModal(this.app, result).open();
 			} else {
-				new Notice(`AI analysis failed: ${result.error || "Unknown error"}`);
+				new Notice(
+					`AI analysis failed: ${result.error || "Unknown error"}`
+				);
 			}
 		} catch (error) {
 			this.logger.error("Failed to analyze note with AI", error);
-			new Notice("Failed to analyze note with AI - check console for details");
+			new Notice(
+				"Failed to analyze note with AI - check console for details"
+			);
 		}
 	}
 
@@ -340,24 +482,137 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	}
 
 	async testAIConnection() {
-		if (!this.settings.aiSettings.enableAI) {
-			new Notice("AI is disabled. Enable it in settings first.");
+		try {
+			this.logger.info("Testing AI connection...");
+
+			if (!this.settings.aiSettings.enableAI) {
+				new Notice(
+					"AI is disabled. Please enable AI in settings first.",
+					5000
+				);
+				return;
+			}
+
+			if (!this.aiService) {
+				new Notice(
+					"AI service not initialized. Please check your configuration.",
+					5000
+				);
+				return;
+			}
+
+			const provider = this.settings.aiSettings.primaryProvider;
+			this.logger.info(`Testing connection to ${provider}...`);
+
+			// Validate configuration before testing
+			if (provider === "openai") {
+				if (!this.settings.aiSettings.openaiConfig.apiKey) {
+					new Notice(
+						"OpenAI API key is required. Please configure it in settings.",
+						5000
+					);
+					return;
+				}
+				if (
+					!this.settings.aiSettings.openaiConfig.apiKey.startsWith(
+						"sk-"
+					)
+				) {
+					new Notice(
+						'OpenAI API key appears to be invalid. It should start with "sk-".',
+						5000
+					);
+					return;
+				}
+			}
+
+			const result = await this.aiService.testProvider(provider);
+
+			if (result.success) {
+				this.logger.info(`${provider} connection test successful`);
+				new Notice(
+					`✅ ${provider.toUpperCase()} connection successful!`,
+					4000
+				);
+			} else {
+				this.logger.error(
+					`${provider} connection test failed:`,
+					result.error
+				);
+				new Notice(
+					`❌ ${provider.toUpperCase()} connection failed: ${
+						result.error
+					}`,
+					8000
+				);
+			}
+		} catch (error) {
+			this.logger.error("Error testing AI connection:", error);
+			let errorMessage = "Connection test failed";
+			if (error instanceof Error) {
+				if (error.message.includes("API key")) {
+					errorMessage =
+						"Invalid API key. Please check your configuration.";
+				} else if (
+					error.message.includes("network") ||
+					error.message.includes("fetch")
+				) {
+					errorMessage =
+						"Network error. Please check your internet connection.";
+				} else {
+					errorMessage = error.message;
+				}
+			}
+			new Notice(`❌ Connection test failed: ${errorMessage}`, 8000);
+		}
+	}
+
+	private async createSummaryNote() {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile) {
+			new Notice("No active file to analyze");
+			return;
+		}
+
+		if (!(activeFile instanceof TFile)) {
+			new Notice("Active file is not a markdown file");
 			return;
 		}
 
 		try {
-			new Notice("Testing AI connection...");
-			const provider = this.settings.aiSettings.primaryProvider;
-			const result = await this.aiService.testProvider(provider);
-			
-			if (result.success) {
-				new Notice(`✅ ${provider} connection successful!`);
-			} else {
-				new Notice(`❌ ${provider} connection failed: ${result.error}`);
+			new Notice("Analyzing note and creating summary...");
+
+			// First, analyze the current note
+			const analysisResult = await this.markdownProcessor.processFile(
+				activeFile.path
+			);
+
+			if (!analysisResult.success) {
+				new Notice(
+					"Failed to analyze note - check console for details"
+				);
+				this.logger.error("Analysis failed", analysisResult.errors);
+				return;
+			}
+
+			// Create the summary note
+			const summaryPath = await this.summaryNoteCreator.createSummaryNote(
+				activeFile,
+				analysisResult,
+				{ overwriteExisting: true }
+			);
+
+			new Notice(`✅ Summary note created: ${summaryPath}`);
+
+			// Optionally open the summary note
+			const summaryFile =
+				this.app.vault.getAbstractFileByPath(summaryPath);
+			if (summaryFile instanceof TFile) {
+				await this.app.workspace.getLeaf().openFile(summaryFile);
 			}
 		} catch (error) {
-			this.logger.error("Failed to test AI connection", error);
-			new Notice("Failed to test AI connection - check console for details");
+			this.logger.error("Failed to create summary note", error);
+			new Notice(`Failed to create summary note: ${error.message}`);
 		}
 	}
 
@@ -383,25 +638,166 @@ export default class RetrospectiveAIPlugin extends Plugin {
 
 	async onunload() {
 		this.logger.info("RetrospectAI plugin unloading");
-		
+
 		// Dispose of AI service
 		if (this.aiService) {
 			await this.aiService.dispose();
 		}
-		
+
 		this.logger.info("RetrospectAI plugin unloaded");
 	}
 
 	private async loadSettings() {
+		if (this.settings?.debugMode) {
+			console.log("🔧 RetrospectAI: Loading settings - NEW CODE ACTIVE");
+		}
 		await this.errorHandler.safeAsync(
 			async () => {
 				this.logger.debug("Loading plugin settings");
-				const settings = await this.loadData();
-				this.settings = Object.assign({}, DEFAULT_SETTINGS, settings);
+				const savedSettings = await this.loadData();
+
+				if (this.settings?.debugMode) {
+					console.log("🔧 RetrospectAI: Raw saved settings", {
+						hasAiSettings: !!savedSettings?.aiSettings,
+						enableAI: savedSettings?.aiSettings?.enableAI,
+						primaryProvider:
+							savedSettings?.aiSettings?.primaryProvider,
+						hasOpenAIConfig:
+							!!savedSettings?.aiSettings?.openaiConfig,
+						openAIEndpoint:
+							savedSettings?.aiSettings?.openaiConfig?.endpoint,
+						hasApiKey:
+							!!savedSettings?.aiSettings?.openaiConfig?.apiKey,
+					});
+				}
+
+				// Deep merge settings to preserve nested defaults
+				this.settings = this.deepMergeSettings(
+					DEFAULT_SETTINGS,
+					savedSettings || {}
+				);
+
+				if (this.settings.debugMode) {
+					console.log("🔧 RetrospectAI: Merged settings result", {
+						enableAI: this.settings.aiSettings.enableAI,
+						primaryProvider:
+							this.settings.aiSettings.primaryProvider,
+						openAIEndpoint:
+							this.settings.aiSettings.openaiConfig.endpoint,
+						hasApiKey:
+							!!this.settings.aiSettings.openaiConfig.apiKey,
+						apiKeyLength:
+							this.settings.aiSettings.openaiConfig.apiKey
+								?.length || 0,
+					});
+				}
+
+				// Ensure OpenAI endpoint is set if missing
+				if (
+					this.settings.aiSettings.openaiConfig &&
+					!this.settings.aiSettings.openaiConfig.endpoint
+				) {
+					if (this.settings.debugMode) {
+						console.log(
+							"🔧 RetrospectAI: OpenAI endpoint missing, setting default"
+						);
+					}
+					this.settings.aiSettings.openaiConfig.endpoint =
+						"https://api.openai.com/v1";
+				}
 			},
 			"Failed to load plugin settings",
 			false
 		);
+	}
+
+	/**
+	 * Deep merge settings objects to preserve nested defaults
+	 */
+	private deepMergeSettings(
+		defaults: RetrospectiveAISettings,
+		saved: Partial<RetrospectiveAISettings>
+	): RetrospectiveAISettings {
+		const result = { ...defaults };
+
+		// Handle each top-level property
+		Object.keys(saved).forEach((key) => {
+			const typedKey = key as keyof RetrospectiveAISettings;
+			const savedValue = saved[typedKey];
+
+			if (savedValue === null || savedValue === undefined) {
+				return; // Keep default value
+			}
+
+			// Special handling for aiSettings to preserve nested structure
+			if (typedKey === "aiSettings" && typeof savedValue === "object") {
+				result.aiSettings = this.deepMergeAISettings(
+					defaults.aiSettings,
+					savedValue as Partial<AIServiceSettings>
+				);
+			} else {
+				// For primitive values and arrays, use saved value
+				(result as Record<string, unknown>)[typedKey] = savedValue;
+			}
+		});
+
+		return result;
+	}
+
+	/**
+	 * Deep merge AI settings to preserve nested configuration objects
+	 */
+	private deepMergeAISettings(
+		defaults: AIServiceSettings,
+		saved: Partial<AIServiceSettings>
+	): AIServiceSettings {
+		const result = { ...defaults };
+
+		Object.keys(saved).forEach((key) => {
+			const typedKey = key as keyof AIServiceSettings;
+			const savedValue = saved[typedKey];
+
+			if (savedValue === null || savedValue === undefined) {
+				return; // Keep default value
+			}
+
+			// Special handling for nested config objects
+			if (typedKey === "openaiConfig" && typeof savedValue === "object") {
+				result.openaiConfig = {
+					...defaults.openaiConfig,
+					...(savedValue as Partial<typeof defaults.openaiConfig>),
+				};
+			} else if (
+				typedKey === "ollamaConfig" &&
+				typeof savedValue === "object"
+			) {
+				result.ollamaConfig = {
+					...defaults.ollamaConfig,
+					...(savedValue as Partial<typeof defaults.ollamaConfig>),
+				};
+			} else if (
+				typedKey === "mockConfig" &&
+				typeof savedValue === "object"
+			) {
+				result.mockConfig = {
+					...defaults.mockConfig,
+					...(savedValue as Partial<typeof defaults.mockConfig>),
+				};
+			} else if (
+				typedKey === "defaultAnalysisOptions" &&
+				typeof savedValue === "object"
+			) {
+				result.defaultAnalysisOptions = {
+					...defaults.defaultAnalysisOptions,
+					...(savedValue as Partial<typeof defaults.defaultAnalysisOptions>),
+				};
+			} else {
+				// For primitive values and arrays, use saved value
+				(result as Record<string, unknown>)[typedKey] = savedValue;
+			}
+		});
+
+		return result;
 	}
 
 	async saveSettings() {
@@ -554,7 +950,7 @@ class DetailedAnalysisModal extends Modal {
 }
 
 class AIAnalysisModal extends Modal {
-	constructor(app: App, private result: any) {
+	constructor(app: App, private result: EnhancedAnalysisResult) {
 		super(app);
 	}
 
@@ -566,7 +962,9 @@ class AIAnalysisModal extends Modal {
 
 		if (!this.result.success) {
 			contentEl.createEl("p", {
-				text: `Analysis failed: ${this.result.error || "Unknown error"}`,
+				text: `Analysis failed: ${
+					this.result.error || "Unknown error"
+				}`,
 				cls: "mod-error",
 			});
 			return;
@@ -583,13 +981,17 @@ class AIAnalysisModal extends Modal {
 		if (this.result.patterns && this.result.patterns.length > 0) {
 			const patternsDiv = contentEl.createDiv();
 			patternsDiv.createEl("h3", { text: "Detected Patterns" });
-			
+
 			const patternsList = patternsDiv.createEl("ul");
-			this.result.patterns.forEach((pattern: any) => {
+			this.result.patterns.forEach((pattern: DetectedPattern) => {
 				const item = patternsList.createEl("li");
 				item.createEl("strong", { text: pattern.title });
 				item.createEl("p", { text: pattern.description });
-				item.createEl("small", { text: `Confidence: ${(pattern.confidence * 100).toFixed(1)}%` });
+				item.createEl("small", {
+					text: `Confidence: ${(pattern.confidence * 100).toFixed(
+						1
+					)}%`,
+				});
 			});
 		}
 
@@ -597,7 +999,7 @@ class AIAnalysisModal extends Modal {
 		if (this.result.insights && this.result.insights.length > 0) {
 			const insightsDiv = contentEl.createDiv();
 			insightsDiv.createEl("h3", { text: "Insights" });
-			
+
 			const insightsList = insightsDiv.createEl("ul");
 			this.result.insights.forEach((insight: string) => {
 				insightsList.createEl("li", { text: insight });
@@ -605,23 +1007,64 @@ class AIAnalysisModal extends Modal {
 		}
 
 		// Recommendations
-		if (this.result.recommendations && this.result.recommendations.length > 0) {
+		if (
+			this.result.recommendations &&
+			this.result.recommendations.length > 0
+		) {
 			const recommendationsDiv = contentEl.createDiv();
 			recommendationsDiv.createEl("h3", { text: "Recommendations" });
-			
+
 			const recommendationsList = recommendationsDiv.createEl("ul");
 			this.result.recommendations.forEach((recommendation: string) => {
 				recommendationsList.createEl("li", { text: recommendation });
 			});
 		}
 
+		// Copy to Clipboard button
+		const buttonDiv = contentEl.createDiv({
+			cls: "modal-button-container",
+		});
+		buttonDiv.style.marginTop = "20px";
+		buttonDiv.style.textAlign = "center";
+
+		const copyButton = buttonDiv.createEl("button", {
+			text: "Copy Analysis to Clipboard",
+			cls: "mod-cta",
+		});
+
+		copyButton.addEventListener("click", () => {
+			const analysisText = this.formatAnalysisForClipboard();
+			navigator.clipboard
+				.writeText(analysisText)
+				.then(() => {
+					copyButton.textContent = "Copied!";
+					setTimeout(() => {
+						copyButton.textContent = "Copy Analysis to Clipboard";
+					}, 2000);
+				})
+				.catch(() => {
+					copyButton.textContent = "Copy failed";
+					setTimeout(() => {
+						copyButton.textContent = "Copy Analysis to Clipboard";
+					}, 2000);
+				});
+		});
+
 		// Metadata
 		if (this.result.orchestratorMetadata) {
 			const metadataDiv = contentEl.createDiv();
 			metadataDiv.createEl("h3", { text: "Analysis Metadata" });
-			metadataDiv.createEl("p", { text: `Model used: ${this.result.modelUsed}` });
-			metadataDiv.createEl("p", { text: `Processing time: ${this.result.processingTime}ms` });
-			metadataDiv.createEl("p", { text: `Confidence: ${(this.result.confidence * 100).toFixed(1)}%` });
+			metadataDiv.createEl("p", {
+				text: `Model used: ${this.result.modelUsed}`,
+			});
+			metadataDiv.createEl("p", {
+				text: `Processing time: ${this.result.processingTime}ms`,
+			});
+			metadataDiv.createEl("p", {
+				text: `Confidence: ${(this.result.confidence * 100).toFixed(
+					1
+				)}%`,
+			});
 		}
 	}
 
@@ -629,10 +1072,69 @@ class AIAnalysisModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 	}
+
+	private formatAnalysisForClipboard(): string {
+		let text = "# AI Analysis Results\n\n";
+
+		// Summary
+		if (this.result.summary) {
+			text += "## Summary\n";
+			text += this.result.summary + "\n\n";
+		}
+
+		// Patterns
+		if (this.result.patterns && this.result.patterns.length > 0) {
+			text += "## Detected Patterns\n";
+			this.result.patterns.forEach((pattern) => {
+				text += `### ${pattern.title}\n`;
+				text += `${pattern.description}\n`;
+				text += `*Confidence: ${(pattern.confidence * 100).toFixed(
+					1
+				)}%*\n\n`;
+			});
+		}
+
+		// Insights
+		if (this.result.insights && this.result.insights.length > 0) {
+			text += "## Insights\n";
+			this.result.insights.forEach((insight) => {
+				text += `- ${insight}\n`;
+			});
+			text += "\n";
+		}
+
+		// Recommendations
+		if (
+			this.result.recommendations &&
+			this.result.recommendations.length > 0
+		) {
+			text += "## Recommendations\n";
+			this.result.recommendations.forEach((recommendation) => {
+				text += `- ${recommendation}\n`;
+			});
+			text += "\n";
+		}
+
+		return text;
+	}
+}
+
+interface AIStatus {
+	initialized: boolean;
+	enabled: boolean;
+	activeProvider: string | null;
+	availableProviders: string[];
+	capabilities: string[];
+	metrics: {
+		totalRequests: number;
+		successfulRequests: number;
+		averageResponseTime: number;
+	};
+	lastError?: string;
 }
 
 class AIStatusModal extends Modal {
-	constructor(app: App, private status: any) {
+	constructor(app: App, private status: AIStatus) {
 		super(app);
 	}
 
@@ -645,14 +1147,16 @@ class AIStatusModal extends Modal {
 		// Basic status
 		const statusDiv = contentEl.createDiv();
 		statusDiv.createEl("h3", { text: "Service Status" });
-		statusDiv.createEl("p", { 
-			text: `Initialized: ${this.status.initialized ? "✅ Yes" : "❌ No"}` 
+		statusDiv.createEl("p", {
+			text: `Initialized: ${
+				this.status.initialized ? "✅ Yes" : "❌ No"
+			}`,
 		});
-		statusDiv.createEl("p", { 
-			text: `Enabled: ${this.status.enabled ? "✅ Yes" : "❌ No"}` 
+		statusDiv.createEl("p", {
+			text: `Enabled: ${this.status.enabled ? "✅ Yes" : "❌ No"}`,
 		});
-		statusDiv.createEl("p", { 
-			text: `Active Provider: ${this.status.activeProvider || "None"}` 
+		statusDiv.createEl("p", {
+			text: `Active Provider: ${this.status.activeProvider || "None"}`,
 		});
 
 		// Available providers
@@ -678,17 +1182,25 @@ class AIStatusModal extends Modal {
 		// Metrics
 		const metricsDiv = contentEl.createDiv();
 		metricsDiv.createEl("h3", { text: "Usage Metrics" });
-		metricsDiv.createEl("p", { text: `Total Requests: ${this.status.metrics.totalRequests}` });
-		metricsDiv.createEl("p", { text: `Successful Requests: ${this.status.metrics.successfulRequests}` });
-		metricsDiv.createEl("p", { text: `Average Response Time: ${this.status.metrics.averageResponseTime.toFixed(2)}ms` });
+		metricsDiv.createEl("p", {
+			text: `Total Requests: ${this.status.metrics.totalRequests}`,
+		});
+		metricsDiv.createEl("p", {
+			text: `Successful Requests: ${this.status.metrics.successfulRequests}`,
+		});
+		metricsDiv.createEl("p", {
+			text: `Average Response Time: ${this.status.metrics.averageResponseTime.toFixed(
+				2
+			)}ms`,
+		});
 
 		// Errors
 		if (this.status.lastError) {
 			const errorDiv = contentEl.createDiv();
 			errorDiv.createEl("h3", { text: "Last Error" });
-			errorDiv.createEl("p", { 
+			errorDiv.createEl("p", {
 				text: this.status.lastError,
-				cls: "mod-error"
+				cls: "mod-error",
 			});
 		}
 	}
@@ -831,7 +1343,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 						this.plugin.settings.aiSettings.enableAI = value;
 						await this.plugin.saveSettings();
 						// Update AI service
-						await this.plugin.aiService.updateSettings({ enableAI: value });
+						await this.plugin.aiService.updateSettings({
+							enableAI: value,
+						});
 					})
 			);
 
@@ -845,9 +1359,12 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					.addOption("ollama", "Ollama (Local)")
 					.setValue(this.plugin.settings.aiSettings.primaryProvider)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.primaryProvider = value as any;
+						this.plugin.settings.aiSettings.primaryProvider =
+							value as AIProvider;
 						await this.plugin.saveSettings();
-						await this.plugin.aiService.updateSettings({ primaryProvider: value as any });
+						await this.plugin.aiService.updateSettings({
+							primaryProvider: value as AIProvider,
+						});
 					})
 			);
 
@@ -861,9 +1378,12 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					.addOption("cloud", "Cloud Services")
 					.setValue(this.plugin.settings.aiSettings.privacyLevel)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.privacyLevel = value as any;
+						this.plugin.settings.aiSettings.privacyLevel =
+							value as PrivacyLevel;
 						await this.plugin.saveSettings();
-						await this.plugin.aiService.updateSettings({ privacyLevel: value as any });
+						await this.plugin.aiService.updateSettings({
+							privacyLevel: value as PrivacyLevel,
+						});
 					})
 			);
 
@@ -876,10 +1396,31 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("sk-...")
-					.setValue(this.plugin.settings.aiSettings.openaiConfig.apiKey)
+					.setValue(
+						this.plugin.settings.aiSettings.openaiConfig.apiKey
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.openaiConfig.apiKey = value;
+						this.plugin.settings.aiSettings.openaiConfig.apiKey =
+							value;
 						await this.plugin.saveSettings();
+
+						// Validate API key format
+						if (value && !value.startsWith("sk-")) {
+							new Notice(
+								'Warning: OpenAI API key should start with "sk-"',
+								5000
+							);
+						} else if (value && value.length < 20) {
+							new Notice(
+								"Warning: OpenAI API key appears to be too short",
+								5000
+							);
+						} else if (value && value.length > 10) {
+							new Notice(
+								"OpenAI API key updated successfully",
+								3000
+							);
+						}
 					})
 			);
 
@@ -891,9 +1432,12 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo")
 					.addOption("gpt-4", "GPT-4")
 					.addOption("gpt-4-turbo", "GPT-4 Turbo")
-					.setValue(this.plugin.settings.aiSettings.openaiConfig.model)
+					.setValue(
+						this.plugin.settings.aiSettings.openaiConfig.model
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.openaiConfig.model = value;
+						this.plugin.settings.aiSettings.openaiConfig.model =
+							value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -907,9 +1451,12 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("http://localhost:11434")
-					.setValue(this.plugin.settings.aiSettings.ollamaConfig.endpoint)
+					.setValue(
+						this.plugin.settings.aiSettings.ollamaConfig.endpoint
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.ollamaConfig.endpoint = value;
+						this.plugin.settings.aiSettings.ollamaConfig.endpoint =
+							value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -920,9 +1467,12 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("llama2")
-					.setValue(this.plugin.settings.aiSettings.ollamaConfig.model)
+					.setValue(
+						this.plugin.settings.aiSettings.ollamaConfig.model
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.aiSettings.ollamaConfig.model = value;
+						this.plugin.settings.aiSettings.ollamaConfig.model =
+							value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -936,7 +1486,15 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					.setButtonText("Test Connection")
 					.setCta()
 					.onClick(async () => {
-						await this.plugin.testAIConnection();
+						button.setButtonText("Testing...");
+						button.setDisabled(true);
+
+						try {
+							await this.plugin.testAIConnection();
+						} finally {
+							button.setButtonText("Test Connection");
+							button.setDisabled(false);
+						}
 					})
 			);
 	}

@@ -18,7 +18,8 @@ import {
   RequestContext as ResilienceRequestContext,
   AdapterHealthStatus,
   CircuitBreakerState,
-  CacheStats
+  CacheStats,
+  CircuitBreakerMetrics
 } from './resilience-interfaces';
 import { DefaultResilienceManager as ResilienceManagerImpl } from './resilience-manager';
 
@@ -428,7 +429,7 @@ export class AIServiceOrchestrator {
     };
   }
 
-  private async checkCache(content: string, options: any): Promise<AIAnalysisResult | null> {
+  private async checkCache(content: string, options: RetrospectAnalysisOptions): Promise<AIAnalysisResult | null> {
     if (!this.resilienceManager) return null;
 
     try {
@@ -447,7 +448,7 @@ export class AIServiceOrchestrator {
     return null;
   }
 
-  private async cacheResult(content: string, options: any, result: AIAnalysisResult): Promise<void> {
+  private async cacheResult(content: string, options: RetrospectAnalysisOptions, result: AIAnalysisResult): Promise<void> {
     if (!this.resilienceManager) return;
 
     try {
@@ -462,12 +463,12 @@ export class AIServiceOrchestrator {
     }
   }
 
-  private generateCacheKey(content: string, options: any): string {
+  private generateCacheKey(content: string, options: RetrospectAnalysisOptions): string {
     const combined = JSON.stringify({ content, options });
     return crypto.createHash('sha256').update(combined).digest('hex');
   }
 
-  private generateCacheTags(content: string, options: any): string[] {
+  private generateCacheTags(content: string, options: RetrospectAnalysisOptions): string[] {
     const tags: string[] = [];
     
     if (content.includes('daily')) tags.push('daily-reflection');
@@ -492,7 +493,7 @@ export class AIServiceOrchestrator {
    * Get resilience statistics
    */
   async getResilienceStats(): Promise<{
-    circuitBreakers: Map<string, any>;
+    circuitBreakers: Map<string, CircuitBreakerMetrics>;
     cacheStats: CacheStats | null;
     healthStatuses: Map<string, AdapterHealthStatus>;
   }> {
@@ -702,16 +703,16 @@ export class AIServiceOrchestrator {
 
     // Preferred adapter
     if (context?.preferredAdapter && this.adapters.has(context.preferredAdapter)) {
-      const adapter = this.adapters.get(context.preferredAdapter)!;
-      if (await adapter.isAvailable()) {
+      const adapter = this.adapters.get(context.preferredAdapter);
+      if (adapter && await adapter.isAvailable()) {
         return adapter;
       }
     }
 
     // Primary adapter
     if (this.config.primaryAdapter && this.adapters.has(this.config.primaryAdapter)) {
-      const adapter = this.adapters.get(this.config.primaryAdapter)!;
-      if (await adapter.isAvailable()) {
+      const adapter = this.adapters.get(this.config.primaryAdapter);
+      if (adapter && await adapter.isAvailable()) {
         return adapter;
       }
     }
@@ -752,11 +753,11 @@ export class AIServiceOrchestrator {
 
   private async executeWithRetry<T>(
     operation: () => Promise<T>,
-    metadata?: any
+    metadata?: { retriesAttempted?: number }
   ): Promise<T> {
     let lastError: Error | null = null;
     
-    for (let attempt = 0; attempt <= this.config.maxRetries!; attempt++) {
+    for (let attempt = 0; attempt <= (this.config.maxRetries ?? 3); attempt++) {
       try {
         if (attempt > 0) {
           this.metrics.retryCount++;
@@ -765,7 +766,7 @@ export class AIServiceOrchestrator {
           }
           
           // Exponential backoff
-          const delay = this.config.retryDelay! * Math.pow(this.config.retryBackoffMultiplier!, attempt - 1);
+          const delay = (this.config.retryDelay ?? 1000) * Math.pow((this.config.retryBackoffMultiplier ?? 2), attempt - 1);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
@@ -843,7 +844,7 @@ export class AIServiceOrchestrator {
     const consensusStrength = maxCount / results.length;
 
     // Check if consensus meets threshold
-    if (consensusStrength < this.config.consensusThreshold!) {
+    if (consensusStrength < (this.config.consensusThreshold ?? 0.8)) {
       this.logger.warn(`Weak consensus: ${consensusStrength} < ${this.config.consensusThreshold}`);
     }
 

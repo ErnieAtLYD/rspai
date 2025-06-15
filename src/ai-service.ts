@@ -3,6 +3,7 @@ import { ErrorHandler } from './error-handler';
 import { AIServiceOrchestrator, OrchestratorConfig, RequestContext, RetrospectAnalysisOptions, EnhancedAnalysisResult } from './ai-service-orchestrator';
 import { AIModelConfig, AIModelType, PrivacyLevel, AICapability, DetectedPattern, CompletionOptions } from './ai-interfaces';
 import { UnifiedModelManager, UnifiedModelInfo, ModelDownloadProgress, ModelOperationResult, ModelSearchOptions, ModelRecommendation } from './unified-model-manager';
+import { getAIModelFactory } from './ai-model-factory';
 
 /**
  * AI model provider types
@@ -85,6 +86,7 @@ export const DEFAULT_AI_SETTINGS: AIServiceSettings = {
     model: 'gpt-3.5-turbo',
     maxTokens: 2000,
     temperature: 0.7,
+    endpoint: 'https://api.openai.com/v1',
   },
   
   ollamaConfig: {
@@ -173,6 +175,25 @@ export class AIService {
         return;
       }
 
+      // Validate OpenAI configuration if it's the primary provider
+      if (this.settings.primaryProvider === 'openai') {
+        if (!this.settings.openaiConfig.apiKey || this.settings.openaiConfig.apiKey.trim() === '') {
+          this.logger.error('OpenAI API key is required but not provided');
+          throw new Error('OpenAI API key is required. Please configure it in the plugin settings.');
+        }
+        
+        if (!this.settings.openaiConfig.endpoint) {
+          this.logger.warn('OpenAI endpoint not set, using default');
+          this.settings.openaiConfig.endpoint = 'https://api.openai.com/v1';
+        }
+        
+        this.logger.info('OpenAI configuration validated', {
+          model: this.settings.openaiConfig.model,
+          endpoint: this.settings.openaiConfig.endpoint,
+          hasApiKey: !!this.settings.openaiConfig.apiKey
+        });
+      }
+
       // Create orchestrator configuration
       const orchestratorConfig: OrchestratorConfig = {
         primaryAdapter: this.settings.primaryProvider,
@@ -194,32 +215,39 @@ export class AIService {
 
       // Add configured providers
       if (this.shouldIncludeProvider('openai')) {
-        adapterConfigs.set('openai', this.createOpenAIConfig());
+        const openaiConfig = this.createOpenAIConfig();
+        this.logger.debug('Adding OpenAI adapter configuration', {
+          name: openaiConfig.name,
+          model: openaiConfig.model,
+          endpoint: openaiConfig.endpoint,
+          hasApiKey: !!openaiConfig.apiKey
+        });
+        adapterConfigs.set('openai', openaiConfig);
       }
 
       if (this.shouldIncludeProvider('ollama')) {
         adapterConfigs.set('ollama', this.createOllamaConfig());
       }
 
-      if (this.shouldIncludeProvider('mock') || adapterConfigs.size === 0) {
+      if (this.shouldIncludeProvider('mock')) {
         adapterConfigs.set('mock', this.createMockConfig());
       }
 
-      // Initialize orchestrator with adapters
-      await this.orchestrator.initialize(adapterConfigs);
-
-      // Register adapters with model manager
-      const adapters = this.orchestrator.getAdapters();
-      for (const [name, adapter] of adapters) {
-        if (name === 'ollama' || name === 'llamacpp') {
-          this.modelManager.registerAdapter(adapter);
-        }
+      if (adapterConfigs.size === 0) {
+        this.logger.warn('No AI adapters configured, AI service will not be functional');
+        return;
       }
+
+      // Initialize orchestrator with adapters
+      this.logger.info(`Initializing orchestrator with ${adapterConfigs.size} adapter(s)`);
+      await this.orchestrator.initialize(adapterConfigs);
 
       this.isInitialized = true;
       this.logger.info('AI Service initialized successfully');
+
     } catch (error) {
-      this.logger.error('Failed to initialize AI Service:', error);
+      this.logger.error('Failed to initialize AI Service', error);
+      this.isInitialized = false;
       throw error;
     }
   }
@@ -386,12 +414,22 @@ export class AIService {
    */
   async testProvider(provider: AIProvider): Promise<{ success: boolean; error?: string }> {
     try {
+      this.logger.info(`Testing ${provider} provider...`);
+      
       // Create a temporary config for testing
       let testConfig: AIModelConfig;
       
       switch (provider) {
         case 'openai':
           testConfig = this.createOpenAIConfig();
+          this.logger.debug('Created OpenAI test config', {
+            name: testConfig.name,
+            type: testConfig.type,
+            endpoint: testConfig.endpoint,
+            model: testConfig.model,
+            hasApiKey: !!testConfig.apiKey,
+            apiKeyLength: testConfig.apiKey?.length || 0
+          });
           break;
         case 'ollama':
           testConfig = this.createOllamaConfig();
@@ -403,22 +441,77 @@ export class AIService {
           return { success: false, error: `Unknown provider: ${provider}` };
       }
 
+      // Validate the configuration using the same validation as the main service
+      const factory = getAIModelFactory(this.logger);
+      const validation = await factory.validateConfig(testConfig);
+      
+      if (!validation.valid) {
+        const errorMessage = `Configuration validation failed: ${validation.errors.join(', ')}`;
+        this.logger.error('Test provider configuration validation failed', {
+          provider,
+          errors: validation.errors,
+          config: {
+            name: testConfig.name,
+            type: testConfig.type,
+            endpoint: testConfig.endpoint,
+            hasApiKey: !!testConfig.apiKey
+          }
+        });
+        return { success: false, error: errorMessage };
+      }
+
       // Create a temporary orchestrator for testing
-      const testOrchestrator = new AIServiceOrchestrator(this.logger);
+      const testOrchestrator = new AIServiceOrchestrator(this.logger, {
+        primaryAdapter: provider,
+        fallbackAdapters: [],
+        maxRetries: 1,
+        requestTimeout: 10000,
+        parallelRequests: false,
+        privacyLevel: this.settings.privacyLevel,
+        preferLocalModels: this.settings.preferLocalModels,
+        minimumConfidence: this.settings.minimumConfidence,
+        requireConsensus: false,
+      });
+      
       const testConfigs = new Map([[provider, testConfig]]);
       
+      this.logger.debug(`Initializing test orchestrator for ${provider}...`);
       await testOrchestrator.initialize(testConfigs);
       
       // Test with a simple completion
-      await testOrchestrator.generateCompletion('Test', { maxTokens: 10 });
+      this.logger.debug(`Testing completion with ${provider}...`);
+      const testResult = await testOrchestrator.generateCompletion('Test', { maxTokens: 10 });
+      
+      this.logger.info(`${provider} test successful`, {
+        responseLength: testResult.length,
+        response: testResult.substring(0, 50) + (testResult.length > 50 ? '...' : '')
+      });
       
       await testOrchestrator.dispose();
       
       return { success: true };
     } catch (error) {
+      this.logger.error(`${provider} test failed`, error);
+      
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Provide more specific error messages
+        if (errorMessage.includes('401') || errorMessage.includes('Authentication failed')) {
+          errorMessage = 'Invalid API key. Please check your OpenAI API key in settings.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (errorMessage.includes('timeout')) {
+          errorMessage = 'Connection timeout. Please try again.';
+        } else if (errorMessage.includes('rate limit')) {
+          errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+        }
+      }
+      
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+        error: errorMessage
       };
     }
   }

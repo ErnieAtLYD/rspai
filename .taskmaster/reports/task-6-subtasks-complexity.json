@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "generatedAt": "2025-06-14T15:33:43.362Z",
+    "tasksAnalyzed": 1,
+    "totalTasks": 16,
+    "analysisCount": 1,
+    "thresholdScore": 3,
+    "projectName": "Taskmaster",
+    "usedResearch": true
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 6,
+      "taskTitle": "Implement Pattern Detection Engine",
+      "complexityScore": 9,
+      "recommendedSubtasks": 12,
+      "expansionPrompt": "Break down the implementation of the Pattern Detection Engine into granular subtasks covering: advanced NLP preprocessing, modular theme/blocker/sentiment/habit detection, scalable data pipelines, context-aware pattern matching, confidence scoring, multi-label categorization, AI service integration, performance optimization, comprehensive testing, and documentation. Include subtasks for model selection, training, evaluation, and user feedback integration.",
+      "reasoning": "This task involves building a sophisticated NLP system with multiple interdependent components: theme detection, productivity blocker identification, sentiment analysis, frequency/context analysis, confidence scoring, and categorization. Each component requires specialized algorithms, integration with AI services, and robust performance optimization for large datasets. The need for comprehensive testing and validation further increases complexity. The breadth and depth of required functionality, along with the integration of advanced AI models and scalable infrastructure, justify a high complexity score and a recommendation to expand beyond the current subtasks for better manageability and clarity."
+    }
+  ]
+}
