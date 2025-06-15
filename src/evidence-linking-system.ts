@@ -560,7 +560,6 @@ export class EvidenceLinkingSystem {
       return originalText;
     }
 
-    const linkedText = originalText;
     const sentences = this.splitIntoSentences(originalText);
     
     // Group links by sentence
@@ -574,11 +573,11 @@ export class EvidenceLinkingSystem {
     }
 
     // Add citations to sentences
-    for (const [sentenceIndex, links] of linksBySentence) {
+    for (const [sentenceIndex, links] of Array.from(linksBySentence.entries())) {
       if (sentenceIndex < sentences.length) {
         const citationTexts = links
           .slice(0, this.config.citationStyle.maxInlineCitations)
-          .map(link => {
+          .map((link: EvidenceLink) => {
             const citation = citations.find(c => c.evidenceId === link.evidenceId);
             return citation ? citation.shortForm : '';
           })
@@ -722,8 +721,8 @@ export class EvidenceLinkingSystem {
     insights: Insight[],
     evidence: InsightEvidence[]
   ): EvidenceVisualizationData {
-    const categories = [...new Set(insights.map(i => i.category))];
-    const evidenceTypes = [...new Set(evidence.map(e => e.type))];
+    const categories = Array.from(new Set(insights.map(i => i.category)));
+    const evidenceTypes = Array.from(new Set(evidence.map(e => e.type)));
     
     const matrix: MatrixCell[][] = [];
 
@@ -777,7 +776,7 @@ export class EvidenceLinkingSystem {
     evidence: InsightEvidence[]
   ): EvidenceVisualizationData {
     const hierarchy: HierarchyNode[] = [];
-    const categories = [...new Set(insights.map(i => i.category))];
+    const categories = Array.from(new Set(insights.map(i => i.category)));
 
     for (const category of categories) {
       const categoryInsights = insights.filter(i => i.category === category);
@@ -921,7 +920,7 @@ export class EvidenceLinkingSystem {
   }
 
   private extractCategories(insights: Insight[]): string[] {
-    return [...new Set(insights.map(i => i.category))];
+    return Array.from(new Set(insights.map(i => i.category)));
   }
 
   private extractKeyFindings(
@@ -952,7 +951,7 @@ export class EvidenceLinkingSystem {
 
   private generateComprehensiveSummary(evidence: InsightEvidence[], insights: Insight[]): string {
     const detailed = this.generateDetailedSummary(evidence, insights);
-    const sourceTypes = [...new Set(evidence.map(e => e.type))];
+    const sourceTypes = Array.from(new Set(evidence.map(e => e.type)));
     const documentCount = new Set(evidence.map(e => e.documentPath)).size;
     
     return `${detailed} Evidence sources include ${sourceTypes.join(', ')} from ${documentCount} documents. Insights demonstrate strong correlation patterns with confidence levels ranging from ${Math.min(...insights.map(i => i.confidence))} to ${Math.max(...insights.map(i => i.confidence))}.`;

@@ -346,7 +346,8 @@ export class CoreThemeDetectionEngine implements ThemeDetectionEngine {
         if (!termScores.has(term)) {
           termScores.set(term, { tfIdf: 0, frequency: 0, contexts: [] });
         }
-        const current = termScores.get(term)!;
+        const current = termScores.get(term);
+        if (!current) continue;
         current.tfIdf += score;
         current.frequency += doc.features.termFrequency.get(term) || 0;
         
