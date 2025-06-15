@@ -1,6 +1,15 @@
+// /src/ai-interfaces.ts
+
 /**
  * AI Model Abstraction Layer - Core Interfaces
  * Provides a unified interface for different AI backends
+ * @module AI Interfaces
+ * @description Provides a unified interface for different AI backends
+ * @author Taskmaster AI
+ * @version 1.0.0
+ * @license MIT
+ * @copyright Taskmaster AI
+ * @since 1.0.0
  */
 
 /**

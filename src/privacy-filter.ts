@@ -992,7 +992,7 @@ export class PrivacyFilter {
       start: string;
       end: string;
     };
-    actions?: PrivacyActionLog[];
+    actions?: Array<Omit<PrivacyActionLog, 'timestamp'> & { timestamp: string }>;
     affectedFiles?: string[];
   } {
     let actionsToAnalyze = this.actionLog;
@@ -1005,7 +1005,7 @@ export class PrivacyFilter {
     // Apply action type filter if specified
     if (options.actionTypes && options.actionTypes.length > 0) {
       actionsToAnalyze = actionsToAnalyze.filter(action => 
-        options.actionTypes!.includes(action.type)
+        options.actionTypes?.includes(action.type) ?? false
       );
     }
 
@@ -1017,7 +1017,20 @@ export class PrivacyFilter {
     
     const uniqueFilesAffected = new Set(actionsToAnalyze.map(a => a.filePath)).size;
 
-    const report: any = {
+    const report: {
+      summary: {
+        totalActions: number;
+        fileExclusions: number;
+        folderExclusions: number;
+        sectionRedactions: number;
+        contentRedactions: number;
+        uniqueFilesAffected: number;
+        reportGeneratedAt: string;
+      };
+      timeRange?: { start: string; end: string; };
+      actions?: Array<Omit<PrivacyActionLog, 'timestamp'> & { timestamp: string }>;
+      affectedFiles?: string[];
+    } = {
       summary: {
         totalActions: actionsToAnalyze.length,
         fileExclusions,
