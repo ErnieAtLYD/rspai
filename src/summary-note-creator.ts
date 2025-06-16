@@ -3,12 +3,23 @@
 import { App, TFile } from "obsidian";
 import { Logger } from "./logger";
 import { ProcessingResult } from "./markdown-processing-service";
+import { AIService } from "./ai-service";
+import { NaturalLanguageGenerator, NLGFactory } from "./natural-language-generator";
+import { PrivacyFilter } from "./privacy-filter";
 
 export interface SummaryNoteOptions {
 	folderPath: string;
 	filenameTemplate: string;
 	createBacklinks: boolean;
 	overwriteExisting: boolean;
+	// Enhanced options for AI-powered insights
+	enableAIInsights: boolean;
+	writingStyle: 'business' | 'personal' | 'academic';
+	includeRecommendations: boolean;
+	includePatternAnalysis: boolean;
+	includeTrendAnalysis: boolean;
+	// Privacy options
+	respectPrivacySettings: boolean;
 }
 
 export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
@@ -16,6 +27,12 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
 	filenameTemplate: "Summary - {{date}} - {{originalName}}",
 	createBacklinks: true,
 	overwriteExisting: false,
+	enableAIInsights: true,
+	writingStyle: 'personal',
+	includeRecommendations: true,
+	includePatternAnalysis: true,
+	includeTrendAnalysis: true,
+	respectPrivacySettings: true,
 };
 
 /**
@@ -23,11 +40,23 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
  * 
  * @param app - The Obsidian app instance.
  * @param logger - The logger instance.
+ * @param aiService - The AI service for generating insights.
+ * @param privacyFilter - The privacy filter for respecting privacy settings.
  * @param options - The options for the summary note.
  * @returns The path to the created summary note.
  */
 export class SummaryNoteCreator {
-	constructor(private app: App, private logger: Logger) {}
+	private nlgGenerator: NaturalLanguageGenerator;
+
+	constructor(
+		private app: App, 
+		private logger: Logger,
+		private aiService?: AIService,
+		private privacyFilter?: PrivacyFilter
+	) {
+		// Initialize with personal style by default - can be changed per summary
+		this.nlgGenerator = NLGFactory.createForPersonal();
+	}
 
 	async createSummaryNote(
 		originalFile: TFile,
@@ -37,6 +66,14 @@ export class SummaryNoteCreator {
 		const opts = { ...DEFAULT_SUMMARY_OPTIONS, ...options };
 
 		try {
+			// Privacy check: Determine if AI insights should be disabled for this file
+			const shouldUseAI = await this.shouldEnableAIForFile(originalFile, opts);
+			
+			if (opts.enableAIInsights && !shouldUseAI) {
+				this.logger.info(`Privacy protection: Disabling AI insights for file: ${originalFile.path}`);
+				opts.enableAIInsights = false;
+			}
+
 			// Generate filename
 			const filename = this.generateFilename(
 				originalFile,
@@ -47,6 +84,7 @@ export class SummaryNoteCreator {
 			this.logger.info(`Generated filename: ${filename}`);
 			this.logger.info(`Full path will be: ${fullPath}`);
 			this.logger.info(`Folder path: ${opts.folderPath}`);
+			this.logger.info(`AI insights enabled: ${opts.enableAIInsights}`);
 
 			// Ensure folder exists first
 			await this.ensureFolderExists(opts.folderPath);
@@ -58,8 +96,8 @@ export class SummaryNoteCreator {
 				throw new Error(`Summary note already exists: ${fullPath}`);
 			}
 
-			// Generate content
-			const content = this.generateSummaryContent(
+			// Generate enhanced content with AI insights
+			const content = await this.generateEnhancedSummaryContent(
 				originalFile,
 				analysisResult,
 				opts
@@ -109,6 +147,44 @@ export class SummaryNoteCreator {
 		}
 	}
 
+	/**
+	 * Determine if AI insights should be enabled for a specific file based on privacy settings
+	 */
+	private async shouldEnableAIForFile(
+		originalFile: TFile,
+		options: SummaryNoteOptions
+	): Promise<boolean> {
+		// If privacy settings should not be respected, allow AI
+		if (!options.respectPrivacySettings) {
+			return true;
+		}
+
+		// If no privacy filter is available, allow AI (fail open)
+		if (!this.privacyFilter) {
+			this.logger.debug("No privacy filter available, allowing AI insights");
+			return true;
+		}
+
+		try {
+			// Read the file content to check for privacy markers
+			const content = await this.app.vault.read(originalFile);
+			
+			// Check if the file should be excluded from AI processing
+			const shouldExclude = this.privacyFilter.shouldExcludeFile(originalFile.path, content);
+			
+			if (shouldExclude) {
+				this.logger.info(`Privacy filter: File ${originalFile.path} marked as private, disabling AI insights`);
+				return false;
+			}
+
+			return true;
+		} catch (error) {
+			this.logger.warn(`Error checking privacy settings for file ${originalFile.path}:`, error);
+			// Fail safe: if we can't check privacy, don't use AI
+			return false;
+		}
+	}
+
 	private generateFilename(originalFile: TFile, template: string): string {
 		const now = new Date();
 		const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
@@ -123,15 +199,18 @@ export class SummaryNoteCreator {
 			.replace(/[<>:"/\\|?*]/g, "-"); // Remove invalid filename characters
 	}
 
-	private generateSummaryContent(
+	private async generateEnhancedSummaryContent(
 		originalFile: TFile,
 		analysisResult: ProcessingResult,
 		options: SummaryNoteOptions
-	): string {
+	): Promise<string> {
 		const now = new Date();
 		const originalLink = options.createBacklinks
 			? `[[${originalFile.path}]]`
 			: originalFile.path;
+
+		// Set up NLG generator based on writing style preference
+		this.setupNLGGenerator(options.writingStyle);
 
 		// Generate frontmatter
 		const frontmatter = [
@@ -140,28 +219,278 @@ export class SummaryNoteCreator {
 			`original_file: "${originalFile.path}"`,
 			`created: ${now.toISOString()}`,
 			`type: "summary"`,
-			`tags: ["summary", "analysis"]`,
+			`writing_style: "${options.writingStyle}"`,
+			`ai_enhanced: ${options.enableAIInsights}`,
+			`tags: ["summary", "analysis", "retrospect-ai"]`,
 			"---",
 			"",
 		].join("\n");
 
-		// Generate main content
-		const content = [
-			`# Summary of ${originalFile.basename}`,
-			"",
-			`**Original Note:** ${originalLink}`,
-			`**Generated:** ${now.toLocaleString()}`,
-			"",
-			"## Analysis Results",
-			"",
-			this.formatAnalysisResults(analysisResult),
-			"",
-			"---",
-			"",
-			"*This summary was automatically generated by RetrospectAI*",
-		].join("\n");
+		// Generate main content sections
+		const contentSections: string[] = [];
 
+		// Header
+		contentSections.push(`# Summary of ${originalFile.basename}`);
+		contentSections.push("");
+		contentSections.push(`**Original Note:** ${originalLink}`);
+		contentSections.push(`**Generated:** ${now.toLocaleString()}`);
+		contentSections.push("");
+
+		// Executive Summary (AI-powered if available)
+		if (options.enableAIInsights && this.aiService) {
+			const executiveSummary = await this.generateExecutiveSummary(originalFile, analysisResult);
+			if (executiveSummary) {
+				contentSections.push("## 🎯 Executive Summary");
+				contentSections.push("");
+				contentSections.push(executiveSummary);
+				contentSections.push("");
+			}
+		}
+
+		// Key Insights (AI-powered)
+		if (options.enableAIInsights && this.aiService) {
+			const insights = await this.generateKeyInsights(originalFile, analysisResult);
+			if (insights.length > 0) {
+				contentSections.push("## 💡 Key Insights");
+				contentSections.push("");
+				insights.forEach((insight, index) => {
+					contentSections.push(`### ${index + 1}. ${insight.title}`);
+					contentSections.push(insight.description);
+					if (insight.evidence && insight.evidence.length > 0) {
+						contentSections.push("**Evidence:**");
+						insight.evidence.forEach(evidence => {
+							contentSections.push(`- ${evidence}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		}
+
+		// Content Analysis
+		contentSections.push("## 📊 Content Analysis");
+		contentSections.push("");
+		contentSections.push(this.formatAnalysisResults(analysisResult));
+		contentSections.push("");
+
+		// Pattern Analysis (AI-powered)
+		if (options.includePatternAnalysis && options.enableAIInsights && this.aiService) {
+			const patterns = await this.generatePatternAnalysis(originalFile, analysisResult);
+			if (patterns.length > 0) {
+				contentSections.push("## 🔍 Pattern Analysis");
+				contentSections.push("");
+				patterns.forEach(pattern => {
+					contentSections.push(`### ${pattern.title}`);
+					contentSections.push(pattern.description);
+					contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
+					if (pattern.evidence && pattern.evidence.length > 0) {
+						contentSections.push("**Supporting Evidence:**");
+						pattern.evidence.forEach(evidence => {
+							contentSections.push(`- ${evidence}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		}
+
+		// Recommendations (AI-powered)
+		if (options.includeRecommendations && options.enableAIInsights && this.aiService) {
+			const recommendations = await this.generateRecommendations(originalFile, analysisResult);
+			if (recommendations.length > 0) {
+				contentSections.push("## 🚀 Recommendations");
+				contentSections.push("");
+				recommendations.forEach((rec, index) => {
+					contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
+					contentSections.push(rec.description);
+					if (rec.actionSteps && rec.actionSteps.length > 0) {
+						contentSections.push("**Action Steps:**");
+						rec.actionSteps.forEach((step, stepIndex) => {
+							contentSections.push(`${stepIndex + 1}. ${step.description}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		}
+
+		// Connection Opportunities
+		const connections = this.generateConnectionOpportunities(analysisResult);
+		if (connections.length > 0) {
+			contentSections.push("## 🔗 Connection Opportunities");
+			contentSections.push("");
+			contentSections.push("Based on the content analysis, consider connecting this note with:");
+			contentSections.push("");
+			connections.forEach(connection => {
+				contentSections.push(`- **${connection.type}**: ${connection.description}`);
+			});
+			contentSections.push("");
+		}
+
+		// Footer
+		contentSections.push("---");
+		contentSections.push("");
+		contentSections.push("*This summary was automatically generated by RetrospectAI*");
+		if (options.enableAIInsights) {
+			contentSections.push(`*Writing style: ${options.writingStyle} | AI insights: enabled*`);
+		}
+
+		const content = contentSections.join("\n");
 		return frontmatter + content;
+	}
+
+	private setupNLGGenerator(style: 'business' | 'personal' | 'academic'): void {
+		switch (style) {
+			case 'business':
+				this.nlgGenerator = NLGFactory.createForBusiness(this.aiService?.getSettings().openaiConfig ? undefined : undefined);
+				break;
+			case 'academic':
+				this.nlgGenerator = NLGFactory.createForAcademic(this.aiService?.getSettings().openaiConfig ? undefined : undefined);
+				break;
+			case 'personal':
+			default:
+				this.nlgGenerator = NLGFactory.createForPersonal(this.aiService?.getSettings().openaiConfig ? undefined : undefined);
+				break;
+		}
+	}
+
+	private async generateExecutiveSummary(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<string | null> {
+		if (!this.aiService) return null;
+
+		try {
+			const content = await this.app.vault.read(originalFile);
+			const aiAnalysis = await this.aiService.analyzePersonalContent(content, {
+				generateSummary: true,
+				analysisDepth: 'standard'
+			});
+
+			if (aiAnalysis.success && aiAnalysis.summary) {
+				return aiAnalysis.summary;
+			}
+		} catch (error) {
+			this.logger.warn("Failed to generate executive summary:", error);
+		}
+
+		return null;
+	}
+
+	private async generateKeyInsights(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<Array<{ title: string; description: string; evidence?: string[] }>> {
+		if (!this.aiService) return [];
+
+		try {
+			const content = await this.app.vault.read(originalFile);
+			const aiAnalysis = await this.aiService.analyzePersonalContent(content, {
+				extractPatterns: true,
+				analysisDepth: 'comprehensive'
+			});
+
+			if (aiAnalysis.success && aiAnalysis.insights) {
+				return aiAnalysis.insights.map((insight, index) => ({
+					title: `Insight ${index + 1}`,
+					description: insight,
+					evidence: []
+				}));
+			}
+		} catch (error) {
+			this.logger.warn("Failed to generate key insights:", error);
+		}
+
+		return [];
+	}
+
+	private async generatePatternAnalysis(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<Array<{ title: string; description: string; confidence: number; evidence?: string[] }>> {
+		if (!this.aiService) return [];
+
+		try {
+			const content = await this.app.vault.read(originalFile);
+			const patterns = await this.aiService.extractPatterns(content);
+
+			return patterns.map(pattern => ({
+				title: pattern.title,
+				description: pattern.description,
+				confidence: pattern.confidence,
+				evidence: pattern.evidence
+			}));
+		} catch (error) {
+			this.logger.warn("Failed to generate pattern analysis:", error);
+		}
+
+		return [];
+	}
+
+	private async generateRecommendations(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<Array<{ title?: string; description: string; actionSteps?: Array<{ description: string }> }>> {
+		if (!this.aiService) return [];
+
+		try {
+			const content = await this.app.vault.read(originalFile);
+			const aiAnalysis = await this.aiService.analyzePersonalContent(content, {
+				suggestActions: true,
+				analysisDepth: 'comprehensive'
+			});
+
+			if (aiAnalysis.success && aiAnalysis.recommendations) {
+				return aiAnalysis.recommendations.map(rec => ({
+					description: rec,
+					actionSteps: []
+				}));
+			}
+		} catch (error) {
+			this.logger.warn("Failed to generate recommendations:", error);
+		}
+
+		return [];
+	}
+
+	private generateConnectionOpportunities(analysisResult: ProcessingResult): Array<{ type: string; description: string }> {
+		const connections: Array<{ type: string; description: string }> = [];
+
+		// Analyze content for connection opportunities
+		if (analysisResult.metadata?.tags && analysisResult.metadata.tags.length > 0) {
+			const tagStrings = analysisResult.metadata.tags.slice(0, 3).map(tag => 
+				typeof tag === 'string' ? tag : tag.normalized
+			);
+			connections.push({
+				type: "Tag-based connections",
+				description: `Notes with similar tags: ${tagStrings.join(", ")}`
+			});
+		}
+
+		if (analysisResult.sections && analysisResult.sections.length > 0) {
+			const categories = [...new Set(analysisResult.sections.map(s => s.category).filter(c => c !== 'other'))];
+			if (categories.length > 0) {
+				connections.push({
+					type: "Content category connections",
+					description: `Notes in categories: ${categories.slice(0, 3).join(", ")}`
+				});
+			}
+		}
+
+		if (analysisResult.metadata?.links && analysisResult.metadata.links.length > 0) {
+			connections.push({
+				type: "Linked notes",
+				description: `Explore connections through ${analysisResult.metadata.links.length} internal links`
+			});
+		}
+
+		// Add temporal connections
+		connections.push({
+			type: "Temporal connections",
+			description: "Notes created around the same time period for context"
+		});
+
+		return connections;
 	}
 
 	private formatAnalysisResults(result: ProcessingResult): string {
@@ -234,9 +563,13 @@ export class SummaryNoteCreator {
 		if (result.metadata) {
 			sections.push("### 🔍 Content Insights");
 
-			if (result.metadata.tags && result.metadata.tags.length > 0) {
-				sections.push(`- **Tags:** ${result.metadata.tags.join(", ")}`);
-			}
+					if (result.metadata.tags && result.metadata.tags.length > 0) {
+			// Handle both string arrays and NormalizedTag objects
+			const tagStrings = result.metadata.tags.map(tag => 
+				typeof tag === 'string' ? tag : tag.normalized
+			);
+			sections.push(`- **Tags:** ${tagStrings.join(", ")}`);
+		}
 
 			if (result.metadata.links && result.metadata.links.length > 0) {
 				sections.push(

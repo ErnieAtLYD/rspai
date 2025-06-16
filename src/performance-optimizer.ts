@@ -123,7 +123,10 @@ export class RequestQueue implements RequestQueueManager {
 
     // Finally, fill remaining space with any pending requests
     while (batchRequests.length < maxBatchSize && this.pendingRequests.length > 0) {
-      batchRequests.push(this.pendingRequests.shift()!);
+      const request = this.pendingRequests.shift();
+      if (request) {
+        batchRequests.push(request);
+      }
     }
 
     return {
@@ -393,12 +396,17 @@ export class PerformanceOptimizer {
   private startTime = Date.now();
   private requestCount = 0;
   private totalLatency = 0;
+  private processingBatches: Map<string, RequestBatch> = new Map();
+  private objectProcessingCache: WeakMap<object, unknown> = new WeakMap();
+  private processedObjects: WeakSet<object> = new WeakSet();
+  private logger: Logger;
 
   constructor(
-    private logger: Logger,
+    logger: Logger,
     private config: PerformanceConfig,
     private processBatch: (batch: RequestBatch) => Promise<string[]>
   ) {
+    this.logger = logger;
     this.requestQueue = new RequestQueue(logger, config.batching, processBatch);
     this.memoryPool = new MemoryPool(logger, config.memory);
     this.responseCache = new ResponseCache(logger, config.caching);
@@ -418,6 +426,13 @@ export class PerformanceOptimizer {
 
   async processRequest(prompt: string, options?: CompletionOptions): Promise<string> {
     const startTime = Date.now();
+    const profileKey = `processRequest:${prompt.substring(0, 20)}...`;
+    
+    // Start performance profiling
+    if (this.config.enableProfiling) {
+      console.time(profileKey);
+      console.time(`${profileKey}:cacheCheck`);
+    }
     
     // Check cache first
     if (this.config.caching.enabled) {
@@ -425,6 +440,10 @@ export class PerformanceOptimizer {
       const cachedResult = this.responseCache.get(cacheKey);
       
       if (cachedResult) {
+        if (this.config.enableProfiling) {
+          console.timeEnd(`${profileKey}:cacheCheck`);
+          console.timeEnd(profileKey);
+        }
         this.updateMetrics(Date.now() - startTime, true);
         return cachedResult.response;
       }
@@ -432,9 +451,18 @@ export class PerformanceOptimizer {
       // Check for similar cached responses
       const similarResult = this.responseCache.findSimilar(prompt);
       if (similarResult) {
+        if (this.config.enableProfiling) {
+          console.timeEnd(`${profileKey}:cacheCheck`);
+          console.timeEnd(profileKey);
+        }
         this.updateMetrics(Date.now() - startTime, true);
         return similarResult.response;
       }
+    }
+
+    if (this.config.enableProfiling) {
+      console.timeEnd(`${profileKey}:cacheCheck`);
+      console.time(`${profileKey}:queueProcessing`);
     }
 
     // Create batched request
@@ -450,10 +478,18 @@ export class PerformanceOptimizer {
             this.responseCache.set(cacheKey, result, 'local');
           }
           
+          if (this.config.enableProfiling) {
+            console.timeEnd(`${profileKey}:queueProcessing`);
+            console.timeEnd(profileKey);
+          }
           this.updateMetrics(Date.now() - startTime, false);
           resolve(result);
         },
         reject: (error: Error) => {
+          if (this.config.enableProfiling) {
+            console.timeEnd(`${profileKey}:queueProcessing`);
+            console.timeEnd(profileKey);
+          }
           this.updateMetrics(Date.now() - startTime, false, true);
           reject(error);
         },
@@ -525,5 +561,33 @@ export class PerformanceOptimizer {
     if (error) {
       this.metrics.errorRate = (this.metrics.errorRate * (this.requestCount - 1) + 1) / this.requestCount;
     }
+  }
+
+  /**
+   * Check if an object has been processed before using WeakSet
+   */
+  hasBeenProcessed(obj: object): boolean {
+    return this.processedObjects.has(obj);
+  }
+
+  /**
+   * Mark an object as processed using WeakSet
+   */
+  markAsProcessed(obj: object): void {
+    this.processedObjects.add(obj);
+  }
+
+  /**
+   * Get cached processing result for an object using WeakMap
+   */
+  getCachedResult(obj: object): unknown {
+    return this.objectProcessingCache.get(obj);
+  }
+
+  /**
+   * Cache processing result for an object using WeakMap
+   */
+  cacheResult(obj: object, result: unknown): void {
+    this.objectProcessingCache.set(obj, result);
   }
 } 

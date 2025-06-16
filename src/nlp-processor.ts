@@ -1,3 +1,5 @@
+// src/nlp-processor.ts
+
 /**
  * Core NLP Processor Implementation
  * Provides text preprocessing, tokenization, feature extraction, and analysis
@@ -474,10 +476,10 @@ export class CoreNLPProcessor implements NLPProcessor {
     // Extract text from ParsedMarkdown
     let text = '';
     for (const element of content.elements) {
-      if (element.type === 'paragraph') {
-        text += (element as any).text + '\n';
-      } else if (element.type === 'heading') {
-        text += (element as any).text + '\n';
+      if (element.type === 'paragraph' && 'text' in element) {
+        text += element.text + '\n';
+      } else if (element.type === 'heading' && 'text' in element) {
+        text += element.text + '\n';
       }
       // Add more element types as needed
     }

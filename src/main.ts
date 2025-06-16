@@ -22,7 +22,7 @@ import {
 	DEFAULT_AI_SETTINGS,
 	AIProvider,
 } from "./ai-service";
-import { PrivacyLevel, DetectedPattern } from "./ai-interfaces";
+import { PrivacyLevel } from "./ai-interfaces";
 import { SummaryNoteCreator } from "./summary-note-creator";
 import { EnhancedAnalysisResult } from "./ai-service-orchestrator";
 
@@ -42,6 +42,11 @@ interface RetrospectiveAISettings {
 	debugMode: boolean;
 	logLevel: LogLevel;
 
+	// Summary settings
+	summaryWritingStyle: "business" | "personal" | "academic";
+	enableAISummaryInsights: boolean;
+	respectPrivacyInSummaries: boolean;
+
 	// AI settings
 	aiSettings: AIServiceSettings;
 }
@@ -56,6 +61,9 @@ const DEFAULT_SETTINGS: RetrospectiveAISettings = {
 	enableCaching: true,
 	debugMode: false,
 	logLevel: LogLevel.INFO,
+	summaryWritingStyle: "personal",
+	enableAISummaryInsights: true,
+	respectPrivacyInSummaries: true,
 	aiSettings: DEFAULT_AI_SETTINGS,
 };
 
@@ -66,6 +74,7 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	markdownProcessor: MarkdownProcessingService;
 	aiService: AIService;
 	summaryNoteCreator: SummaryNoteCreator;
+	private cleanupTasks: (() => Promise<void> | void)[] = [];
 
 	async onload() {
 		// Initialize logger and error handler
@@ -116,7 +125,14 @@ export default class RetrospectiveAIPlugin extends Plugin {
 		);
 
 		// Initialize summary note creator
-		this.summaryNoteCreator = new SummaryNoteCreator(this.app, this.logger);
+		this.summaryNoteCreator = new SummaryNoteCreator(
+			this.app,
+			this.logger,
+			this.aiService,
+			this.settings.enablePrivacyFilter
+				? this.markdownProcessor.getPrivacyFilter()
+				: undefined
+		);
 
 		// Initialize AI service if enabled
 		if (this.settings.aiSettings.enableAI) {
@@ -595,11 +611,17 @@ export default class RetrospectiveAIPlugin extends Plugin {
 				return;
 			}
 
-			// Create the summary note
+			// Create the summary note with user preferences
 			const summaryPath = await this.summaryNoteCreator.createSummaryNote(
 				activeFile,
 				analysisResult,
-				{ overwriteExisting: true }
+				{
+					overwriteExisting: true,
+					enableAIInsights: this.settings.enableAISummaryInsights,
+					writingStyle: this.settings.summaryWritingStyle,
+					respectPrivacySettings:
+						this.settings.respectPrivacyInSummaries,
+				}
 			);
 
 			new Notice(`✅ Summary note created: ${summaryPath}`);
@@ -639,12 +661,35 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	async onunload() {
 		this.logger.info("RetrospectAI plugin unloading");
 
-		// Dispose of AI service
-		if (this.aiService) {
-			await this.aiService.dispose();
+		// Run all registered cleanup tasks
+		for (const cleanup of this.cleanupTasks) {
+			try {
+				await cleanup();
+			} catch (error) {
+				this.logger.error("Error during cleanup:", error);
+			}
 		}
 
+		// Dispose of AI service
+		if (this.aiService) {
+			try {
+				await this.aiService.dispose();
+			} catch (error) {
+				this.logger.error("Error disposing AI service:", error);
+			}
+		}
+
+		// Clear any remaining references
+		this.cleanupTasks = [];
+
 		this.logger.info("RetrospectAI plugin unloaded");
+	}
+
+	/**
+	 * Register a cleanup task to be run during plugin unload
+	 */
+	private registerCleanup(cleanup: () => Promise<void> | void): void {
+		this.cleanupTasks.push(cleanup);
 	}
 
 	private async loadSettings() {
@@ -789,7 +834,9 @@ export default class RetrospectiveAIPlugin extends Plugin {
 			) {
 				result.defaultAnalysisOptions = {
 					...defaults.defaultAnalysisOptions,
-					...(savedValue as Partial<typeof defaults.defaultAnalysisOptions>),
+					...(savedValue as Partial<
+						typeof defaults.defaultAnalysisOptions
+					>),
 				};
 			} else {
 				// For primitive values and arrays, use saved value
@@ -950,6 +997,9 @@ class DetailedAnalysisModal extends Modal {
 }
 
 class AIAnalysisModal extends Modal {
+	private copyButtonHandler?: () => void;
+	private timeouts: number[] = [];
+
 	constructor(app: App, private result: EnhancedAnalysisResult) {
 		super(app);
 	}
@@ -962,10 +1012,8 @@ class AIAnalysisModal extends Modal {
 
 		if (!this.result.success) {
 			contentEl.createEl("p", {
-				text: `Analysis failed: ${
-					this.result.error || "Unknown error"
-				}`,
-				cls: "mod-error",
+				text: `Analysis failed: ${this.result.error}`,
+				cls: "mod-warning",
 			});
 			return;
 		}
@@ -981,16 +1029,15 @@ class AIAnalysisModal extends Modal {
 		if (this.result.patterns && this.result.patterns.length > 0) {
 			const patternsDiv = contentEl.createDiv();
 			patternsDiv.createEl("h3", { text: "Detected Patterns" });
-
-			const patternsList = patternsDiv.createEl("ul");
-			this.result.patterns.forEach((pattern: DetectedPattern) => {
-				const item = patternsList.createEl("li");
-				item.createEl("strong", { text: pattern.title });
-				item.createEl("p", { text: pattern.description });
-				item.createEl("small", {
+			this.result.patterns.forEach((pattern) => {
+				const patternDiv = patternsDiv.createDiv();
+				patternDiv.createEl("h4", { text: pattern.title });
+				patternDiv.createEl("p", { text: pattern.description });
+				patternDiv.createEl("p", {
 					text: `Confidence: ${(pattern.confidence * 100).toFixed(
 						1
 					)}%`,
+					cls: "mod-muted",
 				});
 			});
 		}
@@ -999,9 +1046,8 @@ class AIAnalysisModal extends Modal {
 		if (this.result.insights && this.result.insights.length > 0) {
 			const insightsDiv = contentEl.createDiv();
 			insightsDiv.createEl("h3", { text: "Insights" });
-
 			const insightsList = insightsDiv.createEl("ul");
-			this.result.insights.forEach((insight: string) => {
+			this.result.insights.forEach((insight) => {
 				insightsList.createEl("li", { text: insight });
 			});
 		}
@@ -1013,42 +1059,40 @@ class AIAnalysisModal extends Modal {
 		) {
 			const recommendationsDiv = contentEl.createDiv();
 			recommendationsDiv.createEl("h3", { text: "Recommendations" });
-
 			const recommendationsList = recommendationsDiv.createEl("ul");
-			this.result.recommendations.forEach((recommendation: string) => {
+			this.result.recommendations.forEach((recommendation) => {
 				recommendationsList.createEl("li", { text: recommendation });
 			});
 		}
 
-		// Copy to Clipboard button
-		const buttonDiv = contentEl.createDiv({
-			cls: "modal-button-container",
-		});
-		buttonDiv.style.marginTop = "20px";
-		buttonDiv.style.textAlign = "center";
-
-		const copyButton = buttonDiv.createEl("button", {
+		// Copy button
+		const copyButton = contentEl.createEl("button", {
 			text: "Copy Analysis to Clipboard",
 			cls: "mod-cta",
 		});
 
-		copyButton.addEventListener("click", () => {
+		// Store the handler reference for cleanup
+		this.copyButtonHandler = () => {
 			const analysisText = this.formatAnalysisForClipboard();
 			navigator.clipboard
 				.writeText(analysisText)
 				.then(() => {
 					copyButton.textContent = "Copied!";
-					setTimeout(() => {
+					const timeoutId = window.setTimeout(() => {
 						copyButton.textContent = "Copy Analysis to Clipboard";
 					}, 2000);
+					this.timeouts.push(timeoutId);
 				})
 				.catch(() => {
 					copyButton.textContent = "Copy failed";
-					setTimeout(() => {
+					const timeoutId = window.setTimeout(() => {
 						copyButton.textContent = "Copy Analysis to Clipboard";
 					}, 2000);
+					this.timeouts.push(timeoutId);
 				});
-		});
+		};
+
+		copyButton.addEventListener("click", this.copyButtonHandler);
 
 		// Metadata
 		if (this.result.orchestratorMetadata) {
@@ -1068,11 +1112,33 @@ class AIAnalysisModal extends Modal {
 		}
 	}
 
+	/**
+	 * Close the modal
+	 */
 	onClose() {
 		const { contentEl } = this;
+
+		// Clear all timeouts
+		this.timeouts.forEach((timeoutId) => {
+			clearTimeout(timeoutId);
+		});
+		this.timeouts = [];
+
+		// Remove event listener if it exists
+		if (this.copyButtonHandler) {
+			const copyButton = contentEl.querySelector("button");
+			if (copyButton) {
+				copyButton.removeEventListener("click", this.copyButtonHandler);
+			}
+			this.copyButtonHandler = undefined;
+		}
+
 		contentEl.empty();
 	}
 
+	/**
+	 * Format the analysis for clipboard
+	 */
 	private formatAnalysisForClipboard(): string {
 		let text = "# AI Analysis Results\n\n";
 

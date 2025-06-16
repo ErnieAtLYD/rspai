@@ -1,3 +1,7 @@
+// src/resilience-manager.ts
+// Resilience Manager Implementation
+// Manages circuit breakers, caches, and load balancers for AI operations
+
 import { Logger } from './logger';
 import { AIError, AIErrorType } from './ai-interfaces';
 import {
@@ -264,7 +268,7 @@ export class DefaultErrorClassifier implements ErrorClassifier {
 /**
  * Memory cache implementation
  */
-export class MemoryCache<T = any> implements Cache<T> {
+export class MemoryCache<T = unknown> implements Cache<T> {
   private cache = new Map<string, CacheEntry<T>>();
   private accessOrder: string[] = [];
   private stats: CacheStats = {
@@ -457,7 +461,7 @@ export class MemoryCache<T = any> implements Cache<T> {
  * Intelligent cache key generator
  */
 export class DefaultCacheKeyGenerator implements CacheKeyGenerator {
-  generateKey(content: string, options?: any): string {
+  generateKey(content: string, options?: Record<string, unknown>): string {
     const optionsStr = options ? JSON.stringify(options) : '';
     const combined = content + optionsStr;
     return crypto.createHash('sha256').update(combined).digest('hex');
@@ -475,7 +479,7 @@ export class DefaultCacheKeyGenerator implements CacheKeyGenerator {
     return crypto.createHash('md5').update(normalized).digest('hex').substring(0, 16);
   }
 
-  extractTags(content: string, options?: any): string[] {
+  extractTags(content: string, options?: Record<string, unknown>): string[] {
     const tags: string[] = [];
     
     // Extract content type tags
@@ -520,11 +524,11 @@ export class RoundRobinLoadBalancer implements LoadBalancer {
     return selected;
   }
 
-  updateAdapterMetrics(adapterId: string, metrics: any): void {
+  updateAdapterMetrics(adapterId: string, metrics: Record<string, unknown>): void {
     this.adapterMetrics.set(adapterId, {
-      load: metrics.load || 0,
-      responseTime: metrics.responseTime || 0,
-      errorRate: metrics.errorRate || 0
+      load: typeof metrics.load === 'number' ? metrics.load : 0,
+      responseTime: typeof metrics.responseTime === 'number' ? metrics.responseTime : 0,
+      errorRate: typeof metrics.errorRate === 'number' ? metrics.errorRate : 0
     });
   }
 
@@ -578,7 +582,11 @@ export class DefaultResilienceManager implements ResilienceManager {
       );
       this.circuitBreakers.set(adapterId, circuitBreaker);
     }
-    return this.circuitBreakers.get(adapterId)!;
+    const circuitBreaker = this.circuitBreakers.get(adapterId);
+    if (!circuitBreaker) {
+      throw new Error(`Failed to get circuit breaker for adapter: ${adapterId}`);
+    }
+    return circuitBreaker;
   }
 
   getFallbackChain(context?: RequestContext): FallbackChain {

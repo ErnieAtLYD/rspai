@@ -1,3 +1,8 @@
+// src/llamacpp-adapter.ts
+/**
+ * Llama.cpp adapter for local AI models using node-llama-cpp
+ */
+
 import { Logger } from './logger';
 import { BaseAIAdapter } from './base-ai-adapter';
 import { PerformanceOptimizer } from './performance-optimizer';
@@ -571,15 +576,15 @@ Respond with only a JSON object:
 
   // Private helper methods
 
-     private async importLlamaCpp(): Promise<any> {
-     try {
-       // Dynamic import to handle optional dependency
-       // @ts-ignore - Optional dependency, may not be installed
-       return await import('node-llama-cpp');
-     } catch (error) {
-       throw new Error('node-llama-cpp is not installed. Please install it with: npm install node-llama-cpp');
-     }
-   }
+       private async importLlamaCpp(): Promise<{ getLlama: any; LlamaChatSession: any }> {
+    try {
+      // Dynamic import to handle optional dependency
+      // @ts-ignore - Optional dependency, may not be installed
+      return await import('node-llama-cpp');
+    } catch (error) {
+      throw new Error('node-llama-cpp is not installed. Please install it with: npm install node-llama-cpp');
+    }
+  }
 
   private extractModelName(modelPath: string): string {
     const fileName = modelPath.split('/').pop() || modelPath;

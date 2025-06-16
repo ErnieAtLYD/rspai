@@ -1,3 +1,9 @@
+// src/mock-ai-adapter.ts
+/**
+ * Mock AI Adapter for testing purposes
+ * Provides configurable responses and error simulation
+ */
+
 import { Logger } from './logger';
 import { BaseAIAdapter } from './base-ai-adapter';
 import {
@@ -62,8 +68,8 @@ export interface MockRequest {
   id: string;
   timestamp: Date;
   method: string;
-  input: any;
-  output?: any;
+  input: unknown;
+  output?: unknown;
   error?: AIError;
   duration: number;
 }
@@ -189,7 +195,7 @@ export class MockAIAdapter extends BaseAIAdapter {
   setEnabledCapabilities(capabilities: AICapability[]): void {
     this.mockConfig.enabledCapabilities = capabilities;
     // Update the capabilities property
-    (this as any).capabilities = capabilities;
+    (this as { capabilities: AICapability[] }).capabilities = capabilities;
   }
 
   // Protected abstract method implementations
@@ -256,7 +262,7 @@ export class MockAIAdapter extends BaseAIAdapter {
     }
   }
 
-  protected async doExtractPatterns(content: string, context?: any): Promise<DetectedPattern[]> {
+  protected async doExtractPatterns(content: string, context?: unknown): Promise<DetectedPattern[]> {
     const request = this.createRequest('extractPatterns', { content, context });
     
     try {
@@ -282,7 +288,7 @@ export class MockAIAdapter extends BaseAIAdapter {
     }
   }
 
-  protected async doGenerateSummary(patterns: DetectedPattern[], context?: any): Promise<string> {
+  protected async doGenerateSummary(patterns: DetectedPattern[], context?: unknown): Promise<string> {
     const request = this.createRequest('generateSummary', { patterns, context });
     
     try {
@@ -440,7 +446,7 @@ export class MockAIAdapter extends BaseAIAdapter {
     }
   }
 
-  private createRequest(method: string, input: any): MockRequest {
+  private createRequest(method: string, input: unknown): MockRequest {
     const request: MockRequest = {
       id: this.generateRequestId(),
       timestamp: new Date(),
@@ -462,7 +468,7 @@ export class MockAIAdapter extends BaseAIAdapter {
     return request;
   }
 
-  private completeRequest(request: MockRequest, output?: any, error?: AIError): void {
+  private completeRequest(request: MockRequest, output?: unknown, error?: AIError): void {
     request.duration = Date.now() - request.timestamp.getTime();
     request.output = output;
     request.error = error;
@@ -476,7 +482,7 @@ export class MockAIAdapter extends BaseAIAdapter {
     for (let i = 0; i < patternCount; i++) {
       patterns.push({
         id: `mock-pattern-${i + 1}`,
-        type: ['habit', 'goal', 'challenge', 'insight'][Math.floor(Math.random() * 4)] as any,
+        type: ['habit', 'goal', 'challenge', 'insight'][Math.floor(Math.random() * 4)] as DetectedPattern['type'],
         title: `Mock Pattern ${i + 1}`,
         description: `This is a mock pattern extracted from the content.`,
         confidence: 0.6 + Math.random() * 0.4,
@@ -484,8 +490,8 @@ export class MockAIAdapter extends BaseAIAdapter {
         metadata: {
           sourceFiles: ['mock-file.md'],
           keywords: words.slice(i * 5, (i + 1) * 5),
-          sentiment: ['positive', 'negative', 'neutral'][Math.floor(Math.random() * 3)] as any,
-          importance: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as any,
+          sentiment: ['positive', 'negative', 'neutral'][Math.floor(Math.random() * 3)] as 'positive' | 'negative' | 'neutral',
+          importance: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as 'low' | 'medium' | 'high',
           category: 'mock-category'
         }
       });

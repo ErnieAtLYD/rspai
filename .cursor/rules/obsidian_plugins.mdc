@@ -1,0 +1,424 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Obsidian Plugin Development - Cursor Rules
+
+## Project Context
+You are working on an Obsidian plugin. Obsidian is a knowledge management application that supports plugins built with TypeScript/JavaScript. Follow these guidelines for optimal plugin development.
+
+## Core Architecture Principles
+
+### Plugin Structure
+- Main plugin class extends `Plugin` from 'obsidian'
+- Use `onload()` for initialization and `onunload()` for cleanup
+- Always implement proper cleanup in `onunload()` to prevent memory leaks
+- Register all event listeners, intervals, and DOM modifications for cleanup
+
+```typescript
+export default class MyPlugin extends Plugin {
+    async onload() {
+        // Plugin initialization
+        this.registerEvent(this.app.workspace.on('file-open', this.handleFileOpen));
+    }
+    
+    onunload() {
+        // Cleanup happens automatically for registered events
+    }
+}
+```
+
+### File Organization
+```
+src/
+├── main.ts          # Main plugin class
+├── settings.ts      # Settings interface and tab
+├── modals/          # Modal dialogs
+├── views/           # Custom views
+├── commands/        # Command definitions
+├── utils/           # Utility functions
+└── types/           # Type definitions
+```
+
+## TypeScript Best Practices
+
+### Type Safety
+- Always use proper TypeScript types, avoid `any`
+- Create interfaces for all data structures
+- Use Obsidian's built-in types from 'obsidian' module
+- Define custom types in separate files when complex
+
+```typescript
+interface PluginSettings {
+    enableFeature: boolean;
+    customValue: string;
+    numericSetting: number;
+}
+
+const DEFAULT_SETTINGS: PluginSettings = {
+    enableFeature: true,
+    customValue: 'default',
+    numericSetting: 42
+};
+```
+
+### Async/Await Patterns
+- Use async/await for all asynchronous operations
+- Handle errors with try/catch blocks
+- Use `this.app.vault.adapter.exists()` before file operations
+
+```typescript
+async readFileContent(path: string): Promise<string | null> {
+    try {
+        if (await this.app.vault.adapter.exists(path)) {
+            return await this.app.vault.adapter.read(path);
+        }
+        return null;
+    } catch (error) {
+        console.error(`Failed to read file ${path}:`, error);
+        return null;
+    }
+}
+```
+
+## Obsidian API Usage Patterns
+
+### File and Vault Operations
+- Use `this.app.vault` for file operations
+- Use `this.app.metadataCache` for file metadata
+- Always check file existence before operations
+- Use `TFile` type for file references
+
+```typescript
+// Good: Check existence first
+if (await this.app.vault.adapter.exists(filePath)) {
+    const file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+    const content = await this.app.vault.read(file);
+}
+
+// Good: Create file safely
+if (!await this.app.vault.adapter.exists(filePath)) {
+    await this.app.vault.create(filePath, initialContent);
+}
+```
+
+### Event Handling
+- Always use `this.registerEvent()` for event listeners
+- Use specific event types instead of generic ones when possible
+- Implement debouncing for frequent events
+
+```typescript
+// Register events properly
+this.registerEvent(
+    this.app.workspace.on('active-leaf-change', this.handleLeafChange.bind(this))
+);
+
+// Debounce frequent events
+private debounceTimer: number = 0;
+private debouncedHandler = (callback: () => void, delay: number = 300) => {
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = window.setTimeout(callback, delay);
+};
+```
+
+### Commands and Hotkeys
+- Use descriptive command IDs with plugin prefix
+- Provide both callback and checkCallback when appropriate
+- Include proper error handling in command callbacks
+
+```typescript
+this.addCommand({
+    id: 'my-plugin-action',
+    name: 'Perform my plugin action',
+    callback: () => this.performAction(),
+    hotkeys: [{ modifiers: ['Mod'], key: 'p' }]
+});
+```
+
+## Settings Management
+
+### Settings Pattern
+- Create settings interface and default values
+- Use `PluginSettingTab` for settings UI
+- Save settings immediately on change
+- Validate settings before saving
+
+```typescript
+// Settings interface
+interface MyPluginSettings {
+    setting1: string;
+    setting2: boolean;
+    setting3: number;
+}
+
+// In main plugin class
+settings: MyPluginSettings;
+
+async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+}
+
+async saveSettings() {
+    await this.saveData(this.settings);
+}
+```
+
+### Settings Tab Implementation
+```typescript
+class MyPluginSettingTab extends PluginSettingTab {
+    constructor(app: App, plugin: MyPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+
+    display(): void {
+        const { containerEl } = this;
+        containerEl.empty();
+        
+        new Setting(containerEl)
+            .setName('Setting name')
+            .setDesc('Setting description')
+            .addText(text => text
+                .setPlaceholder('Enter value')
+                .setValue(this.plugin.settings.setting1)
+                .onChange(async (value) => {
+                    this.plugin.settings.setting1 = value;
+                    await this.plugin.saveSettings();
+                }));
+    }
+}
+```
+
+## UI Development Patterns
+
+### Modal Usage
+- Extend `Modal` class for custom dialogs
+- Always call `super(app)` in constructor
+- Implement `onOpen()` and `onClose()` methods
+- Clean up DOM elements in `onClose()`
+
+```typescript
+class MyModal extends Modal {
+    constructor(app: App, private plugin: MyPlugin) {
+        super(app);
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl('h2', { text: 'Modal Title' });
+        // Add modal content
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+```
+
+### Custom Views
+- Extend `ItemView` for workspace views
+- Implement required abstract methods
+- Use `this.registerView()` in plugin onload
+- Handle view lifecycle properly
+
+```typescript
+class MyCustomView extends ItemView {
+    getViewType(): string {
+        return 'my-custom-view';
+    }
+
+    getDisplayText(): string {
+        return 'My Custom View';
+    }
+
+    async onOpen() {
+        // Initialize view
+    }
+
+    async onClose() {
+        // Cleanup view
+    }
+}
+```
+
+## Performance Best Practices
+
+### Memory Management
+- Remove event listeners in `onunload()`
+- Clear intervals and timeouts
+- Avoid memory leaks with proper cleanup
+- Use WeakMap/WeakSet for temporary references
+
+### Efficient File Operations
+- Batch file operations when possible
+- Use `app.metadataCache` instead of reading files directly
+- Implement caching for frequently accessed data
+- Debounce file system events
+
+```typescript
+// Cache frequently used data
+private cache = new Map<string, any>();
+
+private getCachedData(key: string): any {
+    if (this.cache.has(key)) {
+        return this.cache.get(key);
+    }
+    
+    const data = this.computeExpensiveData(key);
+    this.cache.set(key, data);
+    return data;
+}
+```
+
+## Error Handling
+
+### Graceful Error Handling
+- Always wrap risky operations in try/catch
+- Provide user-friendly error messages
+- Log detailed errors to console
+- Don't let errors crash the plugin
+
+```typescript
+async performRiskyOperation(): Promise<boolean> {
+    try {
+        // Risky operation
+        return true;
+    } catch (error) {
+        console.error('MyPlugin: Operation failed:', error);
+        new Notice('Operation failed. Please check console for details.');
+        return false;
+    }
+}
+```
+
+### User Notifications
+- Use `Notice` for user feedback
+- Keep notices concise and actionable
+- Use different notice types appropriately
+
+```typescript
+// Success notification
+new Notice('Operation completed successfully!');
+
+// Error notification
+new Notice('Error: Operation failed. Please try again.', 5000);
+```
+
+## Testing Strategies
+
+### Unit Testing Setup
+- Use Jest or similar testing framework
+- Mock Obsidian API dependencies
+- Test business logic separately from UI
+- Create test fixtures for file operations
+
+### Integration Testing
+- Test with actual Obsidian environment when possible
+- Create sample vault for testing
+- Test plugin lifecycle events
+- Verify cleanup behavior
+
+## Security Considerations
+
+### Safe File Operations
+- Validate file paths to prevent directory traversal
+- Sanitize user input before file operations
+- Check file permissions before writing
+- Avoid executing user-provided code
+
+```typescript
+// Validate file path
+private isValidPath(path: string): boolean {
+    return !path.includes('..') && 
+           !path.startsWith('/') && 
+           path.length > 0 && 
+           path.length < 255;
+}
+```
+
+### Data Validation
+- Validate all user inputs
+- Sanitize data before storage
+- Use schema validation for complex data structures
+
+## Common Anti-Patterns to Avoid
+
+### Don't Do These
+```typescript
+// ❌ Don't use setTimeout without cleanup
+setTimeout(() => {}, 1000);
+
+// ❌ Don't modify DOM without registration
+document.body.appendChild(element);
+
+// ❌ Don't ignore async/await
+this.app.vault.read(file); // Missing await
+
+// ❌ Don't use any type
+function process(data: any) {}
+
+// ❌ Don't ignore error handling
+const content = await this.app.vault.read(file); // Could throw
+```
+
+### Do These Instead
+```typescript
+// ✅ Register intervals for cleanup
+this.registerInterval(window.setInterval(() => {}, 1000));
+
+// ✅ Use Obsidian's DOM registration
+this.addChild(new MyComponent());
+
+// ✅ Always await async operations
+const content = await this.app.vault.read(file);
+
+// ✅ Use proper types
+function process(data: ProcessedData): void {}
+
+// ✅ Handle errors gracefully
+try {
+    const content = await this.app.vault.read(file);
+} catch (error) {
+    console.error('Failed to read file:', error);
+}
+```
+
+## Performance Monitoring
+
+### Debugging
+- Use `console.time()` and `console.timeEnd()` for performance profiling
+- Monitor memory usage during development
+- Test with large vaults to identify bottlenecks
+
+### Optimization
+- Lazy load heavy components
+- Use virtual scrolling for large lists
+- Implement proper caching strategies
+- Minimize DOM manipulations
+
+## Plugin Distribution
+
+### Manifest Requirements
+- Keep `manifest.json` updated with correct versions
+- Include proper plugin description and author info
+- Specify minimum Obsidian version requirement
+- Follow semantic versioning
+
+### Release Preparation
+- Test plugin thoroughly before release
+- Update changelog with all changes
+- Ensure all dependencies are properly declared
+- Test installation and upgrade processes
+
+## Code Style Preferences
+
+- Use 4-space indentation
+- Prefer explicit return types for functions
+- Use meaningful variable and function names
+- Comment complex business logic
+- Group related functionality into classes
+- Use consistent naming conventions (camelCase for variables, PascalCase for classes)
+
+Remember: Always prioritize user experience, performance, and stability when developing Obsidian plugins. Follow these patterns to create maintainable and reliable plugins.

@@ -1,4 +1,6 @@
-import { App } from 'obsidian';
+// src/vault-scanner.ts
+
+import { App, TFile } from 'obsidian';
 import { FileMetadata } from './file-metadata';
 import { Logger } from './logger';
 
@@ -161,7 +163,7 @@ export class VaultScanner {
    * @param file Obsidian TFile object
    * @returns FileMetadata object
    */
-  private async createFileMetadata(file: any): Promise<FileMetadata> {
+  private async createFileMetadata(file: TFile): Promise<FileMetadata> {
     const stat = await this.app.vault.adapter.stat(file.path);
     
     return {
@@ -289,7 +291,7 @@ export class VaultScanner {
    * @param file The file to check
    * @returns True if file should be skipped (use cached version)
    */
-  private shouldSkipFile(file: any): boolean {
+  private shouldSkipFile(file: TFile): boolean {
     // If this is the first scan, don't skip anything
     if (this.lastScanTimestamp === 0) {
       return false;

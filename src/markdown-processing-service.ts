@@ -32,6 +32,9 @@ export interface MarkdownProcessingConfig {
 	// Content processing
 	enableSectionDetection: boolean;
 	enableContentNormalization: boolean;
+
+	// Profiling settings
+	enableProfiling: boolean;
 }
 
 /**
@@ -48,6 +51,7 @@ export const DEFAULT_PROCESSING_CONFIG: MarkdownProcessingConfig = {
 	batchSize: 50,
 	enableSectionDetection: true,
 	enableContentNormalization: true,
+	enableProfiling: false,
 };
 
 /**
@@ -98,7 +102,7 @@ export interface ProcessingError {
 		| "sections"
 		| "service";
 	severity: "error" | "warning" | "info";
-	details?: any;
+	details?: unknown;
 	timestamp: Date;
 }
 
@@ -159,6 +163,7 @@ export class MarkdownProcessingService {
 	private obsidianHandler: ObsidianFeaturesHandler;
 	private metadataExtractor: MetadataExtractor;
 	private processingCache: Map<string, ProcessingResult> = new Map();
+	private fileObjectCache: WeakMap<TFile, ProcessingResult> = new WeakMap();
 
 	constructor(
 		private app: App,
@@ -212,10 +217,17 @@ export class MarkdownProcessingService {
 	}
 
 	/**
-	 * Process a single file
+	 * Process a single markdown file
 	 */
 	async processFile(filePath: string): Promise<ProcessingResult> {
 		const startTime = Date.now();
+		const profileKey = `processFile:${filePath.split("/").pop()}`;
+
+		// Start performance profiling
+		if (this.config.enableProfiling) {
+			console.time(profileKey);
+		}
+
 		const result: ProcessingResult = {
 			success: false,
 			filePath,
@@ -226,62 +238,137 @@ export class MarkdownProcessingService {
 		};
 
 		try {
-			// Check cache first
-			if (this.config.enableCaching) {
+			// Check cache first (string-based cache for file paths)
+			if (
+				this.config.enableCaching &&
+				this.processingCache.has(filePath)
+			) {
 				const cached = this.processingCache.get(filePath);
 				if (cached) {
 					this.logger.debug(`Using cached result for ${filePath}`);
+					if (this.config.enableProfiling) {
+						console.timeEnd(profileKey);
+					}
 					return cached;
 				}
 			}
 
-			// Get file from Obsidian
-			const file = this.app.vault.getAbstractFileByPath(filePath);
-			if (!(file instanceof TFile)) {
-				result.skipped = true;
-				result.skipReason = "Not a valid file";
-				return result;
+			// Try WeakMap cache for TFile objects
+			const file = this.app.vault.getAbstractFileByPath(
+				filePath
+			) as TFile;
+			if (file && this.fileObjectCache.has(file)) {
+				const cached = this.fileObjectCache.get(file);
+				if (cached) {
+					this.logger.debug(
+						`Using WeakMap cached result for ${filePath}`
+					);
+					if (this.config.enableProfiling) {
+						console.timeEnd(profileKey);
+					}
+					return cached;
+				}
 			}
 
-			// Check file size
-			if (file.stat.size > this.config.maxFileSize) {
+			// Check file size limit
+			if (file?.stat.size && file.stat.size > this.config.maxFileSize) {
 				result.skipped = true;
-				result.skipReason = `File too large (${file.stat.size} bytes)`;
-				this.logger.warn(`Skipping large file: ${filePath}`);
+				result.skipReason = `File size (${file.stat.size} bytes) exceeds limit (${this.config.maxFileSize} bytes)`;
+				this.logger.debug(`Skipping ${filePath}: ${result.skipReason}`);
+				if (this.config.enableProfiling) {
+					console.timeEnd(profileKey);
+				}
 				return result;
 			}
 
 			// Read file content
-			const content = await this.app.vault.read(file);
-
-			// Check privacy filter
-			if (this.config.enablePrivacyFilter) {
-				if (this.privacyFilter.shouldExcludeFile(filePath, content)) {
-					result.skipped = true;
-					result.skipReason = "Privacy restrictions";
-					this.logger.debug(`Skipping private file: ${filePath}`);
-					return result;
+			let content: string;
+			try {
+				if (this.config.enableProfiling) {
+					console.time(`${profileKey}:fileRead`);
 				}
-			}
-
-			// Parse markdown content
-			const parseResult = await this.markdownParser.parseFile(file);
-			if (!parseResult.success || !parseResult.data) {
+				content = await this.app.vault.read(file);
+				if (this.config.enableProfiling) {
+					console.timeEnd(`${profileKey}:fileRead`);
+				}
+			} catch (error) {
 				result.errors.push({
-					code: "PARSE_FAILED",
-					message: "Failed to parse markdown content",
+					code: "FILE_READ_ERROR",
+					message: "Failed to read file",
 					filePath,
-					component: "parser",
+					component: "service",
 					severity: "error",
-					details: parseResult.error,
+					details: error,
 					timestamp: new Date(),
 				});
+				if (this.config.enableProfiling) {
+					console.timeEnd(profileKey);
+				}
 				return result;
 			}
 
-			result.parsedContent = parseResult.data;
+			// Apply privacy filter
+			if (this.config.enablePrivacyFilter) {
+				try {
+					const shouldExclude = this.privacyFilter.shouldExcludeFile(
+						filePath,
+						content
+					);
+					if (shouldExclude) {
+						result.skipped = true;
+						result.skipReason = "File excluded by privacy filter";
+						this.logger.debug(
+							`Skipping ${filePath}: ${result.skipReason}`
+						);
+						if (this.config.enableProfiling) {
+							console.timeEnd(profileKey);
+						}
+						return result;
+					}
 
-			// Extract metadata if enabled
+					// Filter content
+					content = this.privacyFilter.filterContent(content);
+				} catch (error) {
+					result.warnings.push(`Privacy filtering failed: ${error}`);
+				}
+			}
+
+			// Parse markdown
+			try {
+				const parseResult = await this.markdownParser.parseFile(file);
+				if (!parseResult.success || !parseResult.data) {
+					result.errors.push({
+						code: "PARSING_FAILED",
+						message: "Failed to parse markdown",
+						filePath,
+						component: "parser",
+						severity: "error",
+						details: parseResult.error,
+						timestamp: new Date(),
+					});
+					if (this.config.enableProfiling) {
+						console.timeEnd(profileKey);
+					}
+					return result;
+				}
+				result.parsedContent = parseResult.data;
+			} catch (error) {
+				result.errors.push({
+					code: "PARSING_FAILED",
+					message: "Failed to parse markdown",
+					filePath,
+					component: "parser",
+					severity: "error",
+					details: error,
+					timestamp: new Date(),
+				});
+				if (this.config.enableProfiling) {
+					console.timeEnd(profileKey);
+				}
+				return result;
+			}
+
+			// Extract metadata
 			if (this.config.enableMetadataExtraction) {
 				try {
 					result.metadata =
@@ -307,11 +394,11 @@ export class MarkdownProcessingService {
 				}
 			}
 
-			// Detect sections if enabled
-			if (this.config.enableSectionDetection) {
+			// Detect sections
+			if (this.config.enableSectionDetection && result.parsedContent) {
 				try {
 					result.sections = await this.detectSections(
-						parseResult.data,
+						result.parsedContent,
 						content
 					);
 				} catch (error) {
@@ -330,14 +417,20 @@ export class MarkdownProcessingService {
 			result.success = true;
 			result.processingTime = Date.now() - startTime;
 
-			// Cache result if enabled
+			// Cache result in both caches
 			if (this.config.enableCaching) {
 				this.processingCache.set(filePath, result);
+				if (file) {
+					this.fileObjectCache.set(file, result);
+				}
 			}
 
 			this.logger.debug(
 				`Successfully processed ${filePath} in ${result.processingTime}ms`
 			);
+			if (this.config.enableProfiling) {
+				console.timeEnd(profileKey);
+			}
 			return result;
 		} catch (error) {
 			result.errors.push({
@@ -351,6 +444,9 @@ export class MarkdownProcessingService {
 			});
 			result.processingTime = Date.now() - startTime;
 			this.logger.error(`Failed to process ${filePath}`, error);
+			if (this.config.enableProfiling) {
+				console.timeEnd(profileKey);
+			}
 			return result;
 		}
 	}
@@ -421,7 +517,7 @@ export class MarkdownProcessingService {
 			try {
 				const metadataList = results
 					.filter((r) => r.success && r.metadata)
-					.map((r) => r.metadata!);
+					.map((r) => r.metadata as NormalizedMetadata);
 
 				if (metadataList.length > 0) {
 					const batchResult =
@@ -509,7 +605,7 @@ export class MarkdownProcessingService {
 			const section: DocumentSection = {
 				id: `section-${i}`,
 				title: this.extractHeadingText(heading),
-				level: (heading as any).level || 1,
+				level: (heading as unknown as { level: number }).level || 1,
 				content: sectionContent,
 				normalizedContent: this.normalizeContent(sectionContent),
 				category: this.categorizeSection(heading, sectionContent),
@@ -547,7 +643,7 @@ export class MarkdownProcessingService {
 	/**
 	 * Extract heading text from heading element
 	 */
-	private extractHeadingText(heading: any): string {
+	private extractHeadingText(heading: { content?: string }): string {
 		if (heading.content && typeof heading.content === "string") {
 			return heading.content.replace(/^#+\s*/, "").trim();
 		}
@@ -557,7 +653,10 @@ export class MarkdownProcessingService {
 	/**
 	 * Categorize a section based on its heading and content
 	 */
-	private categorizeSection(heading: any, content: string): SectionCategory {
+	private categorizeSection(
+		heading: { content?: string },
+		content: string
+	): SectionCategory {
 		const title = this.extractHeadingText(heading).toLowerCase();
 
 		// Check for common section patterns
@@ -732,5 +831,12 @@ export class MarkdownProcessingService {
 	 */
 	getReferenceGraph(): ReferenceGraph | null {
 		return this.metadataExtractor.getReferenceGraph();
+	}
+
+	/**
+	 * Get the privacy filter instance for external use
+	 */
+	getPrivacyFilter(): PrivacyFilter | undefined {
+		return this.config.enablePrivacyFilter ? this.privacyFilter : undefined;
 	}
 }

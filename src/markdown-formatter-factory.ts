@@ -1,5 +1,13 @@
-// Markdown Formatter Factory
-// Creates specialized markdown formatters for different domains and use cases
+// src/markdown-formatter-factory.ts
+/**
+ * Factory for creating specialized markdown formatters
+ * Provides different styles and formatting options for different use cases
+ * Includes specialized formatters for personal, business, academic, technical,
+ * minimal, report, blog, and notes use cases
+ * Supports template library management and customization
+ * Provides validation and import/export functionality
+ */
+
 
 import {
 	MarkdownFormatter,

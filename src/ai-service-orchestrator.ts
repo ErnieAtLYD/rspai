@@ -1,3 +1,12 @@
+// src/ai-service-orchestrator.ts
+
+/**
+ * AI Service Orchestrator
+ * 
+ * Manages multiple AI adapters with intelligent routing, fallback handling,
+ * and RetrospectAI-specific analysis workflows.
+ */
+
 import { Logger } from './logger';
 import { DefaultAIModelFactory } from './ai-model-factory';
 import * as crypto from 'crypto';
@@ -182,6 +191,11 @@ export class AIServiceOrchestrator {
     }
   }
 
+  /**
+   * Initialize the resilience manager
+   * 
+   * @private
+   */
   private initializeResilienceManager(): void {
     const defaultResilienceConfig: ResilienceConfig = {
       circuitBreaker: {
@@ -289,6 +303,11 @@ export class AIServiceOrchestrator {
 
   /**
    * Analyze personal content with RetrospectAI-specific intelligence
+   * 
+   * @param content - The content to analyze
+   * @param options - The analysis options
+   * @param context - The request context
+   * @returns The enhanced analysis result
    */
   async analyzePersonalContent(
     content: string,
@@ -354,6 +373,14 @@ export class AIServiceOrchestrator {
     }
   }
 
+  /**
+   * Execute with resilience
+   * 
+   * @param content - The content to analyze
+   * @param options - The analysis options
+   * @param context - The request context
+   * @returns The analysis result
+   */
   private async executeWithResilience(
     content: string,
     options: RetrospectAnalysisOptions,
@@ -369,6 +396,14 @@ export class AIServiceOrchestrator {
     }, context);
   }
 
+  /**
+   * Execute with basic retry
+   * 
+   * @param content - The content to analyze
+   * @param options - The analysis options
+   * @param context - The request context
+   * @returns The analysis result
+   */
   private async executeWithBasicRetry(
     content: string,
     options: RetrospectAnalysisOptions,

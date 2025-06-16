@@ -8,24 +8,24 @@ import { PrivacyFilter } from "./privacy-filter";
  * Configuration for metadata extraction
  */
 export interface MetadataExtractionConfig {
-	// Extraction settings
+	// Core extraction features
 	extractFrontmatter: boolean;
 	extractLinks: boolean;
 	extractTags: boolean;
 	extractReferences: boolean;
 	extractFileMetadata: boolean;
 
-	// Normalization settings
+	// Normalization options
 	normalizeDates: boolean;
 	normalizeLinks: boolean;
 	normalizeTags: boolean;
-	validateReferences: boolean;
 
-	// Privacy settings
+	// Validation and filtering
+	validateReferences: boolean;
 	respectPrivacyFilters: boolean;
 	excludePrivateMetadata: boolean;
 
-	// Performance settings
+	// Performance options
 	enableCaching: boolean;
 	maxReferenceDepth: number;
 	batchProcessing: boolean;
@@ -324,7 +324,10 @@ export class MetadataExtractor {
 		// Check cache first
 		const cacheKey = this.generateCacheKey(filePath, content);
 		if (this.config.enableCaching && this.cache.has(cacheKey)) {
-			return this.cache.get(cacheKey)!;
+			const cached = this.cache.get(cacheKey);
+			if (cached) {
+				return cached;
+			}
 		}
 
 		this.logger.debug(`Extracting metadata for: ${filePath}`);
@@ -383,7 +386,8 @@ export class MetadataExtractor {
 				characterCount: content.length,
 				lineCount: content.split("\n").length,
 				headingCount: parsedDocument.elements.filter(
-					(e: any) => e.type === "heading"
+					(e: ParsedMarkdown["elements"][number]) =>
+						e.type === "heading"
 				).length,
 
 				// Obsidian-specific
@@ -478,7 +482,7 @@ export class MetadataExtractor {
 		document: ParsedMarkdown
 	): NormalizedFrontmatter {
 		const frontmatterElement = document.elements.find(
-			(e: any) => e.type === "frontmatter"
+			(e: ParsedMarkdown["elements"][number]) => e.type === "frontmatter"
 		);
 
 		if (!frontmatterElement) {
@@ -491,7 +495,7 @@ export class MetadataExtractor {
 		}
 
 		const raw = frontmatterElement.content || {};
-		const normalized: any = {};
+		const normalized: Record<string, unknown> = {};
 		const typeMap: Record<string, string> = {};
 		const validationErrors: string[] = [];
 
@@ -593,13 +597,26 @@ export class MetadataExtractor {
 
 		// Process regular markdown links from document
 		const markdownLinks = document.elements.filter(
-			(e: any) =>
+			(e: ParsedMarkdown["elements"][number]) =>
 				e.type === "paragraph" &&
-				(e as any).inlineElements?.some((ie: any) => ie.type === "link")
+				"inlineElements" in e &&
+				Array.isArray(
+					(e as { inlineElements?: unknown[] }).inlineElements
+				) &&
+				(
+					e as { inlineElements: { type: string }[] }
+				).inlineElements.some((ie) => ie.type === "link")
 		);
 
 		for (const element of markdownLinks) {
-			const paragraphElement = element as any;
+			const paragraphElement = element as {
+				inlineElements?: {
+					type: string;
+					url?: string;
+					href?: string;
+					text?: string;
+				}[];
+			};
 			for (const inline of paragraphElement.inlineElements || []) {
 				if (inline.type === "link") {
 					const link = this.normalizeMarkdownLink(inline, content);
@@ -703,7 +720,13 @@ export class MetadataExtractor {
 	 * Normalize a markdown link
 	 */
 	private normalizeMarkdownLink(
-		inline: any,
+		inline: {
+			url?: string;
+			href?: string;
+			text?: string;
+			startPos?: number;
+			endPos?: number;
+		},
 		content: string
 	): NormalizedLink | null {
 		const target = inline.url || inline.href;
@@ -761,7 +784,10 @@ export class MetadataExtractor {
 	/**
 	 * Extract context around a link
 	 */
-	private extractLinkContext(feature: ObsidianFeature, content: string): any {
+	private extractLinkContext(
+		feature: ObsidianFeature,
+		content: string
+	): { surroundingText: string; section?: string; heading?: string } {
 		const contextRadius = 50;
 		const start = Math.max(0, feature.startPos - contextRadius);
 		const end = Math.min(content.length, feature.endPos + contextRadius);
@@ -776,7 +802,10 @@ export class MetadataExtractor {
 	/**
 	 * Extract context for inline elements
 	 */
-	private extractInlineContext(inline: any, content: string): any {
+	private extractInlineContext(
+		inline: { startPos?: number; endPos?: number },
+		content: string
+	): { surroundingText: string; section?: string; heading?: string } {
 		return {
 			surroundingText: "", // Would need position information
 			section: undefined,
@@ -840,7 +869,7 @@ export class MetadataExtractor {
 						id: `${metadata.filePath}->${targetPath}`,
 						source: metadata.filePath,
 						target: targetPath,
-						type: link.type as any,
+						type: link.type as "link" | "embed" | "mention" | "tag",
 						weight: this.calculateLinkWeight(link),
 						metadata: {
 							context: link.context.surroundingText,
@@ -886,7 +915,10 @@ export class MetadataExtractor {
 				if (!tagGroups.has(tag.normalized)) {
 					tagGroups.set(tag.normalized, []);
 				}
-				tagGroups.get(tag.normalized)!.push(metadata.filePath);
+				const tagGroup = tagGroups.get(tag.normalized);
+				if (tagGroup) {
+					tagGroup.push(metadata.filePath);
+				}
 			}
 		}
 
@@ -957,8 +989,14 @@ export class MetadataExtractor {
 				edgesByTarget.set(edge.target, []);
 			}
 
-			edgesBySource.get(edge.source)!.push(edge);
-			edgesByTarget.get(edge.target)!.push(edge);
+			const sourceEdges = edgesBySource.get(edge.source);
+			const targetEdges = edgesByTarget.get(edge.target);
+			if (sourceEdges) {
+				sourceEdges.push(edge);
+			}
+			if (targetEdges) {
+				targetEdges.push(edge);
+			}
 		}
 
 		// Add references to metadata
@@ -1248,4 +1286,10 @@ export class MetadataExtractor {
 	getReferenceGraph(): ReferenceGraph | null {
 		return this.referenceGraph;
 	}
+
+	// TODO: Performance Optimization Opportunity
+	// Consider implementing app.metadataCache usage for better performance:
+	// - Use app.metadataCache.getFileCache(file) for frontmatter, links, tags, headings
+	// - Fall back to full parsing only when cache is unavailable
+	// - This could significantly improve performance by avoiding file reads
 }

@@ -21,6 +21,11 @@
     ]
   },
   "include": [
-    "src"
-  ]
+    "src",
+    "examples"
+  ],
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
 }
