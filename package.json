@@ -3,16 +3,25 @@
 	"version": "1.0.0",
 	"description": "Obsidian plugin for AI-powered retrospective analysis",
 	"main": "main.js",
+	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "node esbuild.config.mjs production",
 		"test": "node tests/integration/privacy-integration-simple.js",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
+		"run:example": "node --loader ts-node/esm examples/orchestrator-usage.ts",
 		"deploy:test": "npm run build && cp main.js manifest.json .obsidian-test/.obsidian/plugins/retrospectai/",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": ["obsidian", "plugin", "ai", "retrospective", "productivity", "analysis"],
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"ai",
+		"retrospective",
+		"productivity",
+		"analysis"
+	],
 	"author": "Your Name",
 	"license": "MIT",
 	"devDependencies": {
@@ -22,6 +31,7 @@
 		"builtin-modules": "3.3.0",
 		"esbuild": "0.17.3",
 		"obsidian": "latest",
+		"ts-node": "^10.9.2",
 		"tslib": "2.4.0",
 		"typescript": "^4.9.0"
 	},
