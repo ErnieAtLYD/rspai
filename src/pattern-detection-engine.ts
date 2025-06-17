@@ -78,6 +78,93 @@ interface ContentBatch {
 }
 
 /**
+ * Content chunk for large document processing
+ */
+interface ContentChunk {
+	/** Unique chunk identifier */
+	id: string;
+	/** Source file path */
+	filePath: string;
+	/** Chunk content */
+	content: string;
+	/** Chunk position in document */
+	position: {
+		/** Chunk index in document */
+		index: number;
+		/** Total chunks in document */
+		total: number;
+		/** Character start position */
+		startChar: number;
+		/** Character end position */
+		endChar: number;
+	};
+	/** Context from previous chunk for continuity */
+	previousContext?: string;
+	/** Context for next chunk */
+	nextContext?: string;
+	/** Chunk metadata */
+	metadata: {
+		/** Word count in chunk */
+		wordCount: number;
+		/** Estimated processing complexity */
+		complexity: 'low' | 'medium' | 'high';
+		/** Section boundaries within chunk */
+		sectionBoundaries: number[];
+		/** Whether chunk starts/ends mid-sentence */
+		boundaryInfo: {
+			startsComplete: boolean;
+			endsComplete: boolean;
+		};
+	};
+}
+
+/**
+ * Chunk processing result
+ */
+interface ChunkProcessingResult {
+	/** Source chunk ID */
+	chunkId: string;
+	/** Patterns detected in this chunk */
+	patterns: PatternDefinition[];
+	/** Chunk-specific analysis */
+	analysis: {
+		/** Processing time for this chunk */
+		processingTime: number;
+		/** Confidence in chunk boundaries */
+		boundaryConfidence: number;
+		/** Context preservation score */
+		contextScore: number;
+		/** Pattern continuity indicators */
+		continuityMarkers: string[];
+	};
+	/** Cross-chunk references */
+	crossChunkRefs: {
+		/** Patterns that may continue in next chunk */
+		continuingPatterns: string[];
+		/** References to patterns in previous chunks */
+		previousPatternRefs: string[];
+	};
+}
+
+/**
+ * Document chunking configuration
+ */
+interface ChunkingConfig {
+	/** Maximum chunk size in characters */
+	maxChunkSize: number;
+	/** Minimum chunk size in characters */
+	minChunkSize: number;
+	/** Overlap between chunks in characters */
+	overlapSize: number;
+	/** Chunking strategy */
+	strategy: 'paragraph' | 'sentence' | 'section' | 'adaptive';
+	/** Whether to respect section boundaries */
+	respectSections: boolean;
+	/** Maximum context size for continuity */
+	contextSize: number;
+}
+
+/**
  * Core Pattern Detection Engine
  * Implements comprehensive pattern detection across user's vault with AI integration
  */
@@ -88,11 +175,22 @@ export class PatternDetectionEngine {
 	private readonly CONTENT_CHUNK_SIZE = 4000;
 	private readonly MAX_MEMORY_USAGE = 100 * 1024 * 1024; // 100MB
 
+	// Chunk-based analysis configuration
+	private readonly chunkingConfig: ChunkingConfig = {
+		maxChunkSize: 3000, // Smaller than CONTENT_CHUNK_SIZE to allow for context
+		minChunkSize: 1000,
+		overlapSize: 300,
+		strategy: 'adaptive',
+		respectSections: true,
+		contextSize: 200,
+	};
+
 	// Multi-level caching system
 	private filePatternCache: Map<string, PatternCacheEntry> = new Map();
 	private sectionPatternCache: Map<string, PatternCacheEntry> = new Map();
 	private aggregatedPatternCache: Map<string, PatternCacheEntry> = new Map();
 	private batchCache: Map<string, PatternDefinition[]> = new Map();
+	private chunkCache: Map<string, ChunkProcessingResult> = new Map();
 
 	// Change tracking for incremental processing
 	private changeTracker: Map<
@@ -307,6 +405,9 @@ export class PatternDetectionEngine {
 
 	/**
 	 * Analyze a single file for patterns
+   * @param file - The file to analyze
+   * @param options - The pattern detection options
+   * @returns The analysis record
 	 */
 	async analyzeFilePatterns(
 		file: TFile,
@@ -403,6 +504,62 @@ export class PatternDetectionEngine {
 			return analysisRecord;
 		} catch (error) {
 			this.logger.error(`Failed to analyze file ${file.path}`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Analyze a large file using chunk-based processing for scalability
+   * @param file - The file to analyze
+   * @param options - The pattern detection options
+   * @returns The analysis record
+	 */
+	async analyzeFileWithChunking(
+		file: TFile,
+		options: PatternDetectionOptions
+	): Promise<NoteAnalysisRecord> {
+		const startTime = Date.now();
+		this.logger.debug(`Analyzing file with chunking: ${file.path}`);
+
+		try {
+			// Read and filter content
+			const fileContent = await this.app.vault.read(file);
+			const filteredContent = this.privacyFilter.filterContent(fileContent);
+
+			// Check if file should be excluded
+			if (this.privacyFilter.shouldExcludeFile(file.path, fileContent)) {
+				return this.buildExcludedNoteAnalysis(file, { excluded: true });
+			}
+
+			// Determine if chunking is needed
+			const needsChunking = this.shouldUseChunking(filteredContent);
+			
+			if (!needsChunking) {
+				// Use regular processing for small files
+				return this.analyzeFilePatterns(file, options);
+			}
+
+			// Split content into chunks
+			const chunks = await this.splitContentIntoChunks(filteredContent, file.path);
+			
+			// Process chunks in parallel
+			const chunkResults = await this.processContentChunks(chunks, options);
+			
+			// Aggregate results from all chunks
+			const aggregatedPatterns = this.aggregateChunkResults(chunkResults, file);
+			
+			// Build final analysis record
+			return this.buildChunkedAnalysisRecord(
+				file,
+				aggregatedPatterns,
+				chunkResults,
+				filteredContent,
+				startTime,
+				options
+			);
+
+		} catch (error) {
+			this.logger.error(`Failed to analyze file with chunking ${file.path}`, error);
 			throw error;
 		}
 	}
@@ -1243,5 +1400,594 @@ export class PatternDetectionEngine {
 
 	private getNewPatternIds(patterns: PatternDefinition[]): string[] {
 		return patterns.map((p) => p.id);
+	}
+
+	/**
+	 * Determine if content needs chunking based on size and complexity
+	 */
+	private shouldUseChunking(content: string): boolean {
+		// Use chunking for large content or complex documents
+		return (
+			content.length > this.chunkingConfig.maxChunkSize ||
+			this.estimateContentComplexity(content) === 'high'
+		);
+	}
+
+	/**
+	 * Split content into manageable chunks with overlap for context preservation
+	 */
+	private async splitContentIntoChunks(content: string, filePath: string): Promise<ContentChunk[]> {
+		const chunks: ContentChunk[] = [];
+		const strategy = this.chunkingConfig.strategy;
+		
+		let boundaries: number[];
+		
+		// Determine chunk boundaries based on strategy
+		switch (strategy) {
+			case 'paragraph':
+				boundaries = this.findParagraphBoundaries(content);
+				break;
+			case 'sentence':
+				boundaries = this.findSentenceBoundaries(content);
+				break;
+			case 'section':
+				boundaries = this.findSectionBoundaries(content);
+				break;
+			case 'adaptive':
+			default:
+				boundaries = this.findAdaptiveBoundaries(content);
+				break;
+		}
+
+		// Create chunks with overlap
+		for (let i = 0; i < boundaries.length - 1; i++) {
+			const startPos = boundaries[i];
+			const endPos = Math.min(boundaries[i + 1], content.length);
+			
+			// Add overlap from previous chunk
+			const overlapStart = Math.max(0, startPos - this.chunkingConfig.overlapSize);
+			const previousContext = startPos > 0 ? content.slice(overlapStart, startPos) : undefined;
+			
+			// Add overlap for next chunk
+			const overlapEnd = Math.min(content.length, endPos + this.chunkingConfig.overlapSize);
+			const nextContext = endPos < content.length ? content.slice(endPos, overlapEnd) : undefined;
+			
+			const chunkContent = content.slice(startPos, endPos);
+			
+			chunks.push({
+				id: `${filePath}_chunk_${i}`,
+				filePath,
+				content: chunkContent,
+				position: {
+					index: i,
+					total: boundaries.length - 1,
+					startChar: startPos,
+					endChar: endPos
+				},
+				previousContext,
+				nextContext,
+				metadata: {
+					wordCount: chunkContent.split(/\s+/).length,
+					complexity: this.estimateContentComplexity(chunkContent),
+					sectionBoundaries: this.findSectionBoundaries(chunkContent),
+					boundaryInfo: {
+						startsComplete: this.startsWithCompleteSentence(chunkContent),
+						endsComplete: this.endsWithCompleteSentence(chunkContent)
+					}
+				}
+			});
+		}
+
+		this.logger.debug(`Split content into ${chunks.length} chunks for ${filePath}`);
+		return chunks;
+	}
+
+	/**
+	 * Process multiple content chunks in parallel
+	 */
+	private async processContentChunks(
+		chunks: ContentChunk[],
+		options: PatternDetectionOptions
+	): Promise<ChunkProcessingResult[]> {
+		const semaphore = new Semaphore(this.MAX_CONCURRENT_AI_CALLS);
+		
+		const chunkPromises = chunks.map(async (chunk) => {
+			await semaphore.acquire();
+			try {
+				return await this.processIndividualChunk(chunk, options);
+			} finally {
+				semaphore.release();
+			}
+		});
+
+		return Promise.all(chunkPromises);
+	}
+
+	/**
+	 * Process a single content chunk
+	 */
+	private async processIndividualChunk(
+		chunk: ContentChunk,
+		options: PatternDetectionOptions
+	): Promise<ChunkProcessingResult> {
+		const startTime = Date.now();
+		
+		// Check chunk cache first
+		const cacheKey = this.generateChunkCacheKey(chunk);
+		if (options.caching.enabled && this.chunkCache.has(cacheKey)) {
+			const cached = this.chunkCache.get(cacheKey)!;
+			return cached;
+		}
+
+		try {
+			// Prepare content with context for AI analysis
+			const contextualContent = this.prepareChunkContentWithContext(chunk);
+			
+			// Call AI service for pattern detection
+			const aiResult = await this.aiOrchestrator.analyzePersonalContent(
+				contextualContent,
+				{
+					extractPatterns: true,
+					analysisDepth: 'comprehensive',
+					enableCaching: true,
+				} as RetrospectAnalysisOptions,
+				{
+					contentType: 'daily-reflection',
+					complexity: chunk.metadata.complexity,
+					urgency: 'medium',
+				} as RequestContext
+			);
+
+			// Convert AI results to patterns
+			const patterns = this.convertChunkAIResultsToPatterns(
+				aiResult.patterns || [],
+				chunk,
+				options
+			);
+
+			const result: ChunkProcessingResult = {
+				chunkId: chunk.id,
+				patterns,
+				analysis: {
+					processingTime: Date.now() - startTime,
+					boundaryConfidence: this.calculateBoundaryConfidence(chunk),
+					contextScore: this.calculateContextScore(chunk),
+					continuityMarkers: this.extractContinuityMarkers(chunk, patterns)
+				},
+				crossChunkRefs: {
+					continuingPatterns: this.identifyContinuingPatterns(patterns, chunk),
+					previousPatternRefs: this.findPreviousPatternReferences(patterns, chunk)
+				}
+			};
+
+			// Cache the result
+			if (options.caching.enabled) {
+				this.chunkCache.set(cacheKey, result);
+			}
+
+			return result;
+
+		} catch (error) {
+			this.logger.error(`Failed to process chunk ${chunk.id}`, error);
+			// Return empty result on error
+			return {
+				chunkId: chunk.id,
+				patterns: [],
+				analysis: {
+					processingTime: Date.now() - startTime,
+					boundaryConfidence: 0,
+					contextScore: 0,
+					continuityMarkers: []
+				},
+				crossChunkRefs: {
+					continuingPatterns: [],
+					previousPatternRefs: []
+				}
+			};
+		}
+	}
+
+	/**
+	 * Aggregate patterns from multiple chunks, handling overlaps and continuity
+	 */
+	private aggregateChunkResults(
+		chunkResults: ChunkProcessingResult[],
+		file: TFile
+	): PatternDefinition[] {
+		const allPatterns: PatternDefinition[] = [];
+
+		// First pass: collect all patterns
+		for (const chunkResult of chunkResults) {
+			for (const pattern of chunkResult.patterns) {
+				allPatterns.push(pattern);
+			}
+		}
+
+		// Second pass: merge similar patterns and resolve overlaps
+		const mergedPatterns = this.mergeOverlappingPatterns(allPatterns);
+		
+		// Third pass: resolve cross-chunk continuity
+		const continuityResolvedPatterns = this.resolveCrossChunkContinuity(
+			mergedPatterns,
+			chunkResults
+		);
+
+		this.logger.debug(
+			`Aggregated ${allPatterns.length} raw patterns into ${continuityResolvedPatterns.length} final patterns for ${file.path}`
+		);
+
+		return continuityResolvedPatterns;
+	}
+
+	/**
+	 * Build analysis record for chunked processing
+	 */
+	private buildChunkedAnalysisRecord(
+		file: TFile,
+		patterns: PatternDefinition[],
+		chunkResults: ChunkProcessingResult[],
+		content: string,
+		startTime: number,
+		options: PatternDetectionOptions
+	): NoteAnalysisRecord {
+		const processingResult = {
+			success: true,
+			filePath: file.path,
+			parsedContent: undefined,
+			metadata: undefined,
+			sections: undefined,
+			errors: [],
+			warnings: [],
+			processingTime: Date.now() - startTime,
+			skipped: false
+		};
+
+		const contentAnalysis = this.analyzeContentCharacteristics(content, processingResult);
+
+		return {
+			filePath: file.path,
+			fileInfo: {
+				name: file.name,
+				size: file.stat.size,
+				createdAt: new Date(file.stat.ctime),
+				modifiedAt: new Date(file.stat.mtime),
+				isDailyNote: this.isDailyNote(file.name),
+			},
+			analysis: {
+				patternsFound: patterns,
+				patternsExcluded: [],
+				privacyExclusions: {
+					fileExcluded: false,
+					sectionsRedacted: [],
+					privacyTags: [],
+				},
+				processingInfo: {
+					analyzedAt: new Date(),
+					processingTime: Date.now() - startTime,
+					contentHash: this.generateContentHash(content),
+					scope: options.scope,
+					fromCache: false,
+				},
+			},
+			content: {
+				...contentAnalysis,
+				// Add chunk-specific metadata
+				chunkInfo: {
+					totalChunks: chunkResults.length,
+					avgProcessingTime: chunkResults.reduce((sum, r) => sum + r.analysis.processingTime, 0) / chunkResults.length,
+					avgBoundaryConfidence: chunkResults.reduce((sum, r) => sum + r.analysis.boundaryConfidence, 0) / chunkResults.length,
+					avgContextScore: chunkResults.reduce((sum, r) => sum + r.analysis.contextScore, 0) / chunkResults.length
+				}
+			} as NoteAnalysisRecord["content"] & { chunkInfo: any }
+		};
+	}
+
+	// Helper methods for chunking
+
+	private estimateContentComplexity(content: string): 'low' | 'medium' | 'high' {
+		const wordCount = content.split(/\s+/).length;
+		const sectionCount = (content.match(/^#{1,6}\s/gm) || []).length;
+		const listCount = (content.match(/^[\s]*[-*+]\s/gm) || []).length;
+		
+		if (wordCount > 2000 || sectionCount > 10 || listCount > 20) {
+			return 'high';
+		} else if (wordCount > 800 || sectionCount > 5 || listCount > 10) {
+			return 'medium';
+		}
+		return 'low';
+	}
+
+	private findParagraphBoundaries(content: string): number[] {
+		const boundaries = [0];
+		const paragraphs = content.split(/\n\s*\n/);
+		let position = 0;
+		
+		for (const paragraph of paragraphs) {
+			position += paragraph.length;
+			boundaries.push(position);
+			position += 2; // Account for double newline
+		}
+		
+		return boundaries;
+	}
+
+	private findSentenceBoundaries(content: string): number[] {
+		const boundaries = [0];
+		const sentences = content.split(/[.!?]+\s+/);
+		let position = 0;
+		
+		for (const sentence of sentences) {
+			position += sentence.length + 2; // Account for punctuation and space
+			boundaries.push(Math.min(position, content.length));
+		}
+		
+		return boundaries;
+	}
+
+	private findSectionBoundaries(content: string): number[] {
+		const boundaries = [0];
+		const lines = content.split('\n');
+		let position = 0;
+		
+		for (const line of lines) {
+			if (line.match(/^#{1,6}\s/)) {
+				boundaries.push(position);
+			}
+			position += line.length + 1; // Account for newline
+		}
+		
+		boundaries.push(content.length);
+		return [...new Set(boundaries)].sort((a, b) => a - b);
+	}
+
+	private findAdaptiveBoundaries(content: string): number[] {
+		// Combine paragraph and section boundaries for adaptive chunking
+		const paragraphBoundaries = this.findParagraphBoundaries(content);
+		const sectionBoundaries = this.findSectionBoundaries(content);
+		
+		const allBoundaries = [...paragraphBoundaries, ...sectionBoundaries];
+		const uniqueBoundaries = [...new Set(allBoundaries)].sort((a, b) => a - b);
+		
+		// Filter boundaries to maintain chunk size constraints
+		const filteredBoundaries = [0];
+		let lastBoundary = 0;
+		
+		for (const boundary of uniqueBoundaries.slice(1)) {
+			if (boundary - lastBoundary >= this.chunkingConfig.minChunkSize) {
+				filteredBoundaries.push(boundary);
+				lastBoundary = boundary;
+			}
+		}
+		
+		if (filteredBoundaries[filteredBoundaries.length - 1] !== content.length) {
+			filteredBoundaries.push(content.length);
+		}
+		
+		return filteredBoundaries;
+	}
+
+	private startsWithCompleteSentence(content: string): boolean {
+		const trimmed = content.trim();
+		return /^[A-Z]/.test(trimmed);
+	}
+
+	private endsWithCompleteSentence(content: string): boolean {
+		const trimmed = content.trim();
+		return /[.!?]$/.test(trimmed);
+	}
+
+	private prepareChunkContentWithContext(chunk: ContentChunk): string {
+		let contextualContent = '';
+		
+		// Add previous context if available
+		if (chunk.previousContext) {
+			contextualContent += `[Previous context: ${chunk.previousContext}]\n\n`;
+		}
+		
+		// Add main chunk content
+		contextualContent += chunk.content;
+		
+		// Add next context if available
+		if (chunk.nextContext) {
+			contextualContent += `\n\n[Next context: ${chunk.nextContext}]`;
+		}
+		
+		return contextualContent;
+	}
+
+	private convertChunkAIResultsToPatterns(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		aiPatterns: any[],
+		chunk: ContentChunk,
+		options: PatternDetectionOptions
+	): PatternDefinition[] {
+		return aiPatterns
+			.filter(pattern => 
+				typeof pattern.confidence === 'number' && 
+				pattern.confidence >= options.minConfidence
+			)
+			.map((pattern, index) => ({
+				id: `${chunk.id}_pattern_${index}_${Date.now()}`,
+				type: this.mapToPatternType(String(pattern.type || '')),
+				name: String(pattern.name || 'Detected Pattern'),
+				description: String(pattern.description || ''),
+				classification: this.mapToClassification(Number(pattern.confidence)),
+				confidence: Number(pattern.confidence),
+				supportingEvidence: Array.isArray(pattern.evidence) ? pattern.evidence.map(String) : [],
+				frequency: {
+					count: 1,
+					period: 'daily',
+					rate: 1,
+					trend: 'stable'
+				},
+				temporal: {
+					firstSeen: new Date(),
+					lastSeen: new Date(),
+					peakPeriods: []
+				},
+				correlations: {
+					relatedPatterns: [],
+					strength: 0
+				},
+				metadata: {
+					detectedAt: new Date(),
+					sourceFiles: [chunk.filePath],
+					analysisScope: options.scope,
+					modelUsed: 'ai-orchestrator',
+					chunkInfo: {
+						chunkId: chunk.id,
+						chunkIndex: chunk.position.index,
+						totalChunks: chunk.position.total
+					}
+				}
+			}));
+	}
+
+	private generateChunkCacheKey(chunk: ContentChunk): string {
+		const contentHash = this.generateContentHash(chunk.content);
+		return `chunk_${chunk.filePath}_${chunk.position.index}_${contentHash}`;
+	}
+
+	private calculateBoundaryConfidence(chunk: ContentChunk): number {
+		let confidence = 0.5; // Base confidence
+		
+		// Higher confidence for complete sentences
+		if (chunk.metadata.boundaryInfo.startsComplete) confidence += 0.2;
+		if (chunk.metadata.boundaryInfo.endsComplete) confidence += 0.2;
+		
+		// Higher confidence for section boundaries
+		if (chunk.metadata.sectionBoundaries.length > 0) confidence += 0.1;
+		
+		return Math.min(1.0, confidence);
+	}
+
+	private calculateContextScore(chunk: ContentChunk): number {
+		let score = 0.5; // Base score
+		
+		// Higher score for available context
+		if (chunk.previousContext) score += 0.25;
+		if (chunk.nextContext) score += 0.25;
+		
+		return Math.min(1.0, score);
+	}
+
+	private extractContinuityMarkers(chunk: ContentChunk, patterns: PatternDefinition[]): string[] {
+		const markers: string[] = [];
+		
+		// Look for patterns that might continue across chunks
+		for (const pattern of patterns) {
+			if (pattern.type === 'productivity-theme' || pattern.type === 'sentiment-pattern') {
+				// Check if pattern appears near chunk boundaries
+				const evidence = pattern.supportingEvidence.join(' ');
+				if (chunk.content.indexOf(evidence) > chunk.content.length * 0.8) {
+					markers.push(`continuing_${pattern.type}`);
+				}
+			}
+		}
+		
+		return markers;
+	}
+
+	private identifyContinuingPatterns(patterns: PatternDefinition[], chunk: ContentChunk): string[] {
+		// Identify patterns that likely continue into the next chunk
+		return patterns
+			.filter(pattern => {
+				// Check if pattern evidence appears near the end of the chunk
+				const evidence = pattern.supportingEvidence.join(' ');
+				const lastOccurrence = chunk.content.lastIndexOf(evidence);
+				return lastOccurrence > chunk.content.length * 0.7;
+			})
+			.map(pattern => pattern.id);
+	}
+
+	private findPreviousPatternReferences(patterns: PatternDefinition[], chunk: ContentChunk): string[] {
+		// Look for references to patterns that might have started in previous chunks
+		const references: string[] = [];
+		
+		// Check if patterns appear near the beginning of the chunk
+		for (const pattern of patterns) {
+			const evidence = pattern.supportingEvidence.join(' ');
+			const firstOccurrence = chunk.content.indexOf(evidence);
+			if (firstOccurrence < chunk.content.length * 0.3) {
+				references.push(pattern.id);
+			}
+		}
+		
+		return references;
+	}
+
+	private mergeOverlappingPatterns(patterns: PatternDefinition[]): PatternDefinition[] {
+		const merged: PatternDefinition[] = [];
+		const processed = new Set<string>();
+		
+		for (const pattern of patterns) {
+			if (processed.has(pattern.id)) continue;
+			
+			// Find similar patterns to merge
+			const similar = patterns.filter(p => 
+				!processed.has(p.id) && 
+				p.type === pattern.type &&
+				this.calculatePatternSimilarity(pattern, p) > 0.7
+			);
+			
+			if (similar.length > 1) {
+				// Merge similar patterns
+				const mergedPattern = this.mergePatterns(similar);
+				merged.push(mergedPattern);
+				similar.forEach(p => processed.add(p.id));
+			} else {
+				merged.push(pattern);
+				processed.add(pattern.id);
+			}
+		}
+		
+		return merged;
+	}
+
+	private resolveCrossChunkContinuity(
+		patterns: PatternDefinition[],
+		chunkResults: ChunkProcessingResult[]
+	): PatternDefinition[] {
+		// For now, return patterns as-is
+		// In a more sophisticated implementation, this would:
+		// 1. Analyze continuity markers
+		// 2. Connect patterns across chunks
+		// 3. Adjust confidence scores based on cross-chunk evidence
+		
+		return patterns;
+	}
+
+	private calculatePatternSimilarity(pattern1: PatternDefinition, pattern2: PatternDefinition): number {
+		// Simple similarity based on type and evidence overlap
+		if (pattern1.type !== pattern2.type) return 0;
+		
+		const evidence1 = new Set(pattern1.supportingEvidence);
+		const evidence2 = new Set(pattern2.supportingEvidence);
+		const intersection = new Set([...evidence1].filter(x => evidence2.has(x)));
+		const union = new Set([...evidence1, ...evidence2]);
+		
+		return intersection.size / union.size;
+	}
+
+	private mergePatterns(patterns: PatternDefinition[]): PatternDefinition {
+		// Merge multiple similar patterns into one
+		const first = patterns[0];
+		const allEvidence = patterns.flatMap(p => p.supportingEvidence);
+		const uniqueEvidence = [...new Set(allEvidence)];
+		
+		return {
+			...first,
+			id: `merged_${first.id}`,
+			supportingEvidence: uniqueEvidence,
+			confidence: patterns.reduce((sum, p) => sum + p.confidence, 0) / patterns.length,
+			frequency: {
+				...first.frequency,
+				count: patterns.reduce((sum, p) => sum + p.frequency.count, 0)
+			},
+			metadata: {
+				...first.metadata,
+				sourceFiles: [...new Set(patterns.flatMap(p => p.metadata.sourceFiles))]
+			}
+		};
 	}
 }

@@ -6,6 +6,16 @@ import { ProcessingResult } from "./markdown-processing-service";
 import { AIService } from "./ai-service";
 import { NaturalLanguageGenerator, NLGFactory } from "./natural-language-generator";
 import { PrivacyFilter } from "./privacy-filter";
+import { PatternDetectionEngine } from "./pattern-detection-engine";
+import { 
+	PatternDefinition, 
+	VaultPatternResult, 
+	NoteAnalysisRecord, 
+	PatternDetectionOptions,
+	AnalysisScope,
+	PatternType,
+	PatternCorrelation 
+} from "./pattern-detection-interfaces";
 
 export interface SummaryNoteOptions {
 	folderPath: string;
@@ -20,6 +30,13 @@ export interface SummaryNoteOptions {
 	includeTrendAnalysis: boolean;
 	// Privacy options
 	respectPrivacySettings: boolean;
+	// NEW: Pattern Detection options
+	enablePatternDetection: boolean;
+	patternDetectionScope: AnalysisScope;
+	includeVaultPatterns: boolean;
+	includePatternCorrelations: boolean;
+	includeTemporalAnalysis: boolean;
+	patternConfidenceThreshold: number;
 }
 
 export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
@@ -33,6 +50,13 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
 	includePatternAnalysis: true,
 	includeTrendAnalysis: true,
 	respectPrivacySettings: true,
+	// NEW: Pattern Detection defaults
+	enablePatternDetection: true,
+	patternDetectionScope: 'whole-life',
+	includeVaultPatterns: false,
+	includePatternCorrelations: false,
+	includeTemporalAnalysis: true,
+	patternConfidenceThreshold: 0.6,
 };
 
 /**
@@ -42,6 +66,7 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
  * @param logger - The logger instance.
  * @param aiService - The AI service for generating insights.
  * @param privacyFilter - The privacy filter for respecting privacy settings.
+ * @param patternDetectionEngine - The pattern detection engine for advanced pattern analysis.
  * @param options - The options for the summary note.
  * @returns The path to the created summary note.
  */
@@ -52,7 +77,8 @@ export class SummaryNoteCreator {
 		private app: App, 
 		private logger: Logger,
 		private aiService?: AIService,
-		private privacyFilter?: PrivacyFilter
+		private privacyFilter?: PrivacyFilter,
+		private patternDetectionEngine?: PatternDetectionEngine
 	) {
 		// Initialize with personal style by default - can be changed per summary
 		this.nlgGenerator = NLGFactory.createForPersonal();
@@ -75,10 +101,7 @@ export class SummaryNoteCreator {
 			}
 
 			// Generate filename
-			const filename = this.generateFilename(
-				originalFile,
-				opts.filenameTemplate
-			);
+			const filename = this.generateFilename(originalFile, opts.filenameTemplate);
 			const fullPath = `${opts.folderPath}/${filename}.md`;
 
 			this.logger.info(`Generated filename: ${filename}`);
@@ -97,11 +120,7 @@ export class SummaryNoteCreator {
 			}
 
 			// Generate enhanced content with AI insights
-			const content = await this.generateEnhancedSummaryContent(
-				originalFile,
-				analysisResult,
-				opts
-			);
+			const content = await this.generateEnhancedSummaryContent(originalFile, analysisResult, opts);
 
 			// Create or update file using the vault API consistently
 			if (exists) {
@@ -142,9 +161,234 @@ export class SummaryNoteCreator {
 
 			return fullPath;
 		} catch (error) {
-			this.logger.error("Failed to create summary note", error);
+			this.logger.error("Failed to create summary note:", error);
 			throw error;
 		}
+	}
+
+	/**
+	 * Create a vault-wide pattern summary note
+	 */
+	async createVaultPatternSummary(
+		options: Partial<SummaryNoteOptions> = {}
+	): Promise<string> {
+		const opts = { ...DEFAULT_SUMMARY_OPTIONS, ...options };
+		
+		if (!this.patternDetectionEngine) {
+			throw new Error("Pattern Detection Engine is required for vault pattern summaries");
+		}
+
+		try {
+			const now = new Date();
+			const filename = `Vault Pattern Summary - ${now.toISOString().split("T")[0]}`;
+			const fullPath = `${opts.folderPath}/${filename}.md`;
+
+			// Ensure folder exists
+			await this.ensureFolderExists(opts.folderPath);
+
+			// Generate vault-wide pattern analysis
+			const patternOptions: PatternDetectionOptions = {
+				scope: opts.patternDetectionScope,
+				patternTypes: this.getEnabledPatternTypes(),
+				minConfidence: opts.patternConfidenceThreshold,
+				incremental: false,
+				performance: {
+					maxProcessingTime: 120000, // 2 minutes for comprehensive analysis
+					enableParallel: true,
+					batchSize: 20,
+				},
+				caching: {
+					enabled: true,
+					ttl: 3600000, // 1 hour
+					forceRefresh: false,
+				},
+			};
+
+			const vaultPatterns = await this.patternDetectionEngine.detectPatternsInVault(patternOptions);
+
+			// Generate content
+			const content = await this.generateVaultPatternSummaryContent(vaultPatterns, opts);
+
+			// Create the file
+			const exists = await this.fileExists(fullPath);
+			if (exists && !opts.overwriteExisting) {
+				throw new Error(`Vault pattern summary already exists: ${fullPath}`);
+			}
+
+			if (exists) {
+				const existingFile = this.app.vault.getAbstractFileByPath(fullPath);
+				if (existingFile instanceof TFile) {
+					await this.app.vault.modify(existingFile, content);
+				} else {
+					await this.app.vault.adapter.write(fullPath, content);
+				}
+			} else {
+				try {
+					await this.app.vault.create(fullPath, content);
+				} catch (createError) {
+					await this.app.vault.adapter.mkdir(opts.folderPath);
+					await this.app.vault.adapter.write(fullPath, content);
+				}
+			}
+
+			this.logger.info(`Created vault pattern summary: ${fullPath}`);
+			return fullPath;
+		} catch (error) {
+			this.logger.error("Failed to create vault pattern summary:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Generate content for vault-wide pattern summary
+	 */
+	private async generateVaultPatternSummaryContent(
+		vaultPatterns: VaultPatternResult,
+		options: SummaryNoteOptions
+	): Promise<string> {
+		const now = new Date();
+		
+		// Set up NLG generator
+		this.setupNLGGenerator(options.writingStyle);
+
+		// Generate frontmatter
+		const frontmatter = [
+			"---",
+			`title: "Vault Pattern Analysis - ${now.toISOString().split("T")[0]}"`,
+			`created: ${now.toISOString()}`,
+			`type: "vault-pattern-summary"`,
+			`writing_style: "${options.writingStyle}"`,
+			`analysis_scope: "${options.patternDetectionScope}"`,
+			`patterns_found: ${vaultPatterns.summary.patternsFound}`,
+			`files_analyzed: ${vaultPatterns.summary.filesAnalyzed}`,
+			`tags: ["vault-analysis", "patterns", "retrospect-ai"]`,
+			"---",
+			"",
+		].join("\n");
+
+		const contentSections: string[] = [];
+
+		// Header
+		contentSections.push(`# Vault Pattern Analysis`);
+		contentSections.push("");
+		contentSections.push(`**Analysis Date:** ${now.toLocaleString()}`);
+		contentSections.push(`**Scope:** ${options.patternDetectionScope}`);
+		contentSections.push(`**Files Analyzed:** ${vaultPatterns.summary.filesAnalyzed}`);
+		contentSections.push(`**Patterns Found:** ${vaultPatterns.summary.patternsFound}`);
+		contentSections.push(`**Processing Time:** ${Math.round(vaultPatterns.summary.processingTime / 1000)}s`);
+		contentSections.push("");
+
+		// Executive Summary
+		contentSections.push("## 🎯 Executive Summary");
+		contentSections.push("");
+		contentSections.push(this.generateVaultExecutiveSummary(vaultPatterns));
+		contentSections.push("");
+
+		// Top Patterns
+		if (vaultPatterns.insights.topPatterns.length > 0) {
+			contentSections.push("## 🏆 Top Patterns");
+			contentSections.push("");
+			vaultPatterns.insights.topPatterns.slice(0, 10).forEach((pattern, index) => {
+				contentSections.push(`### ${index + 1}. ${pattern.name}`);
+				contentSections.push(`**Type:** ${pattern.type} | **Confidence:** ${Math.round(pattern.confidence * 100)}%`);
+				contentSections.push(`**Frequency:** ${pattern.frequency.count} occurrences (${pattern.frequency.trend})`);
+				contentSections.push(pattern.description);
+				contentSections.push("");
+			});
+		}
+
+		// Emerging Patterns
+		if (vaultPatterns.insights.emergingPatterns.length > 0) {
+			contentSections.push("## 📈 Emerging Patterns");
+			contentSections.push("");
+			contentSections.push("New patterns that are gaining momentum:");
+			contentSections.push("");
+			vaultPatterns.insights.emergingPatterns.slice(0, 5).forEach(pattern => {
+				contentSections.push(`- **${pattern.name}**: ${pattern.description} (${pattern.frequency.count} occurrences)`);
+			});
+			contentSections.push("");
+		}
+
+		// Declining Patterns
+		if (vaultPatterns.insights.decliningPatterns.length > 0) {
+			contentSections.push("## 📉 Declining Patterns");
+			contentSections.push("");
+			contentSections.push("Patterns that are becoming less frequent:");
+			contentSections.push("");
+			vaultPatterns.insights.decliningPatterns.slice(0, 5).forEach(pattern => {
+				contentSections.push(`- **${pattern.name}**: ${pattern.description} (${pattern.frequency.count} occurrences)`);
+			});
+			contentSections.push("");
+		}
+
+		// Pattern Correlations
+		if (vaultPatterns.correlations.length > 0) {
+			contentSections.push("## 🔗 Pattern Correlations");
+			contentSections.push("");
+			contentSections.push("Patterns that frequently occur together:");
+			contentSections.push("");
+			vaultPatterns.correlations.slice(0, 10).forEach(correlation => {
+				const strength = Math.round(correlation.strength * 100);
+				contentSections.push(`- **${correlation.type}** correlation (${strength}% strength)`);
+				contentSections.push(`  Co-occurrences: ${correlation.evidence.coOccurrences}`);
+			});
+			contentSections.push("");
+		}
+
+		// Recommendations
+		if (vaultPatterns.insights.recommendations.length > 0) {
+			contentSections.push("## 🚀 Vault-Wide Recommendations");
+			contentSections.push("");
+			vaultPatterns.insights.recommendations.forEach((rec, index) => {
+				contentSections.push(`### ${index + 1}. ${rec}`);
+			});
+			contentSections.push("");
+		}
+
+		// Performance Metrics
+		contentSections.push("## 📊 Analysis Performance");
+		contentSections.push("");
+		contentSections.push(`- **Throughput:** ${vaultPatterns.performance.throughput.toFixed(1)} files/second`);
+		contentSections.push(`- **Memory Usage:** ${vaultPatterns.performance.memoryUsage.toFixed(1)} MB`);
+		contentSections.push(`- **AI Calls:** ${vaultPatterns.performance.aiCallsCount}`);
+		contentSections.push(`- **Cache Hit Rate:** ${Math.round(vaultPatterns.summary.cacheHitRate * 100)}%`);
+		contentSections.push("");
+
+		// Footer
+		contentSections.push("---");
+		contentSections.push("");
+		contentSections.push("*This vault analysis was automatically generated by RetrospectAI Pattern Detection Engine*");
+		contentSections.push(`*Analysis scope: ${options.patternDetectionScope} | Confidence threshold: ${Math.round(options.patternConfidenceThreshold * 100)}%*`);
+
+		return frontmatter + contentSections.join("\n");
+	}
+
+	/**
+	 * Generate executive summary for vault patterns
+	 */
+	private generateVaultExecutiveSummary(vaultPatterns: VaultPatternResult): string {
+		const summary = vaultPatterns.summary;
+		const insights = vaultPatterns.insights;
+		
+		let executiveSummary = `Analysis of ${summary.filesAnalyzed} files revealed ${summary.patternsFound} distinct patterns. `;
+		
+		if (insights.topPatterns.length > 0) {
+			const topPattern = insights.topPatterns[0];
+			executiveSummary += `The most prominent pattern is "${topPattern.name}" with ${topPattern.frequency.count} occurrences. `;
+		}
+		
+		if (insights.emergingPatterns.length > 0) {
+			executiveSummary += `${insights.emergingPatterns.length} emerging pattern${insights.emergingPatterns.length > 1 ? 's' : ''} suggest${insights.emergingPatterns.length === 1 ? 's' : ''} new trends developing. `;
+		}
+		
+		if (insights.decliningPatterns.length > 0) {
+			executiveSummary += `${insights.decliningPatterns.length} pattern${insights.decliningPatterns.length > 1 ? 's are' : ' is'} declining, indicating changing habits or priorities. `;
+		}
+		
+		const processingTime = Math.round(summary.processingTime / 1000);
+		executiveSummary += `Analysis completed efficiently in ${processingTime} second${processingTime !== 1 ? 's' : ''} with ${Math.round(summary.cacheHitRate * 100)}% cache utilization.`;
+		
+		return executiveSummary;
 	}
 
 	/**
@@ -273,44 +517,125 @@ export class SummaryNoteCreator {
 		contentSections.push(this.formatAnalysisResults(analysisResult));
 		contentSections.push("");
 
-		// Pattern Analysis (AI-powered)
-		if (options.includePatternAnalysis && options.enableAIInsights && this.aiService) {
-			const patterns = await this.generatePatternAnalysis(originalFile, analysisResult);
-			if (patterns.length > 0) {
-				contentSections.push("## 🔍 Pattern Analysis");
-				contentSections.push("");
-				patterns.forEach(pattern => {
-					contentSections.push(`### ${pattern.title}`);
-					contentSections.push(pattern.description);
-					contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
-					if (pattern.evidence && pattern.evidence.length > 0) {
-						contentSections.push("**Supporting Evidence:**");
-						pattern.evidence.forEach(evidence => {
-							contentSections.push(`- ${evidence}`);
-						});
-					}
+		// Pattern Analysis (Enhanced with Pattern Detection Engine)
+		if (options.includePatternAnalysis) {
+			if (options.enablePatternDetection && this.patternDetectionEngine) {
+				// Use Pattern Detection Engine for comprehensive analysis
+				const patternAnalysis = await this.generateAdvancedPatternAnalysis(originalFile, options);
+				if (patternAnalysis.patterns.length > 0) {
+					contentSections.push("## 🔍 Advanced Pattern Analysis");
 					contentSections.push("");
-				});
+					contentSections.push(patternAnalysis.summary);
+					contentSections.push("");
+					
+					// Individual patterns
+					patternAnalysis.patterns.forEach(pattern => {
+						contentSections.push(`### ${pattern.name} (${pattern.type})`);
+						contentSections.push(pattern.description);
+						contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}% | **Classification:** ${pattern.classification}`);
+						contentSections.push(`**Frequency:** ${pattern.frequency.count} occurrences (${pattern.frequency.trend})`);
+						
+						if (pattern.supportingEvidence.length > 0) {
+							contentSections.push("**Supporting Evidence:**");
+							pattern.supportingEvidence.slice(0, 3).forEach(evidence => {
+								contentSections.push(`- ${evidence}`);
+							});
+						}
+						contentSections.push("");
+					});
+					
+					// Pattern correlations
+					if (options.includePatternCorrelations && patternAnalysis.correlations.length > 0) {
+						contentSections.push("### 🔗 Pattern Correlations");
+						contentSections.push("");
+						patternAnalysis.correlations.forEach(correlation => {
+							const strength = Math.round(correlation.strength * 100);
+							contentSections.push(`- **${correlation.type}** correlation (${strength}% strength)`);
+						});
+						contentSections.push("");
+					}
+				}
+			} else if (options.enableAIInsights && this.aiService) {
+				// Fallback to basic pattern analysis
+				const patterns = await this.generatePatternAnalysis(originalFile, analysisResult);
+				if (patterns.length > 0) {
+					contentSections.push("## 🔍 Pattern Analysis");
+					contentSections.push("");
+					patterns.forEach(pattern => {
+						contentSections.push(`### ${pattern.title}`);
+						contentSections.push(pattern.description);
+						contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
+						if (pattern.evidence && pattern.evidence.length > 0) {
+							contentSections.push("**Supporting Evidence:**");
+							pattern.evidence.forEach(evidence => {
+								contentSections.push(`- ${evidence}`);
+							});
+						}
+						contentSections.push("");
+					});
+				}
 			}
 		}
 
-		// Recommendations (AI-powered)
-		if (options.includeRecommendations && options.enableAIInsights && this.aiService) {
-			const recommendations = await this.generateRecommendations(originalFile, analysisResult);
-			if (recommendations.length > 0) {
-				contentSections.push("## 🚀 Recommendations");
-				contentSections.push("");
-				recommendations.forEach((rec, index) => {
-					contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
-					contentSections.push(rec.description);
-					if (rec.actionSteps && rec.actionSteps.length > 0) {
-						contentSections.push("**Action Steps:**");
-						rec.actionSteps.forEach((step, stepIndex) => {
-							contentSections.push(`${stepIndex + 1}. ${step.description}`);
-						});
-					}
+		// Recommendations (Enhanced with Pattern-Driven Insights)
+		if (options.includeRecommendations) {
+			if (options.enablePatternDetection && this.patternDetectionEngine) {
+				// Generate pattern-driven recommendations
+				const patternRecommendations = await this.generatePatternDrivenRecommendations(originalFile, options);
+				if (patternRecommendations.length > 0) {
+					contentSections.push("## 🚀 Pattern-Driven Recommendations");
 					contentSections.push("");
+					patternRecommendations.forEach((rec, index) => {
+						contentSections.push(`### ${index + 1}. ${rec.title}`);
+						contentSections.push(rec.description);
+						if (rec.patternBasis && rec.patternBasis.length > 0) {
+							contentSections.push("**Based on patterns:**");
+							rec.patternBasis.forEach(pattern => {
+								contentSections.push(`- ${pattern} (${Math.round(rec.confidence * 100)}% confidence)`);
+							});
+						}
+						if (rec.actionSteps && rec.actionSteps.length > 0) {
+							contentSections.push("**Action Steps:**");
+							rec.actionSteps.forEach((step, stepIndex) => {
+								contentSections.push(`${stepIndex + 1}. ${step.description}`);
+							});
+						}
+						contentSections.push("");
+					});
+				}
+			} else if (options.enableAIInsights && this.aiService) {
+				// Fallback to basic recommendations
+				const recommendations = await this.generateRecommendations(originalFile, analysisResult);
+				if (recommendations.length > 0) {
+					contentSections.push("## 🚀 Recommendations");
+					contentSections.push("");
+					recommendations.forEach((rec, index) => {
+						contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
+						contentSections.push(rec.description);
+						if (rec.actionSteps && rec.actionSteps.length > 0) {
+							contentSections.push("**Action Steps:**");
+							rec.actionSteps.forEach((step, stepIndex) => {
+								contentSections.push(`${stepIndex + 1}. ${step.description}`);
+							});
+						}
+						contentSections.push("");
+					});
+				}
+			}
+		}
+
+		// Vault-Wide Pattern Context (if enabled)
+		if (options.includeVaultPatterns && options.enablePatternDetection && this.patternDetectionEngine) {
+			const vaultContext = await this.generateVaultPatternContext(options);
+			if (vaultContext.length > 0) {
+				contentSections.push("## 🌐 Vault-Wide Pattern Context");
+				contentSections.push("");
+				contentSections.push("This note in the context of your entire vault:");
+				contentSections.push("");
+				vaultContext.forEach(context => {
+					contentSections.push(`- ${context}`);
 				});
+				contentSections.push("");
 			}
 		}
 
@@ -402,6 +727,346 @@ export class SummaryNoteCreator {
 		}
 
 		return [];
+	}
+
+	/**
+	 * Generate advanced pattern analysis using the Pattern Detection Engine
+	 */
+	private async generateAdvancedPatternAnalysis(
+		originalFile: TFile,
+		options: SummaryNoteOptions
+	): Promise<{
+		patterns: PatternDefinition[];
+		correlations: PatternCorrelation[];
+		summary: string;
+		insights: string[];
+	}> {
+		if (!this.patternDetectionEngine) {
+			return { patterns: [], correlations: [], summary: "", insights: [] };
+		}
+
+		try {
+			// Analyze the specific file
+			const patternOptions: PatternDetectionOptions = {
+				scope: options.patternDetectionScope,
+				patternTypes: this.getEnabledPatternTypes(),
+				minConfidence: options.patternConfidenceThreshold,
+				incremental: false,
+				performance: {
+					maxProcessingTime: 30000, // 30 seconds
+					enableParallel: false,
+					batchSize: 1,
+				},
+				caching: {
+					enabled: true,
+					ttl: 3600000, // 1 hour
+					forceRefresh: false,
+				},
+			};
+
+			const analysisRecord = await this.patternDetectionEngine.analyzeFilePatterns(
+				originalFile,
+				patternOptions
+			);
+
+			// Get vault-wide patterns if requested
+			let vaultPatterns: VaultPatternResult | null = null;
+			if (options.includeVaultPatterns) {
+				vaultPatterns = await this.patternDetectionEngine.detectPatternsInVault(patternOptions);
+			}
+
+			// Generate summary
+			const summary = this.generatePatternSummary(analysisRecord, vaultPatterns);
+			
+			// Generate insights
+			const insights = this.generatePatternInsights(analysisRecord, vaultPatterns);
+
+			return {
+				patterns: analysisRecord.analysis.patternsFound,
+				correlations: vaultPatterns?.correlations || [],
+				summary,
+				insights,
+			};
+		} catch (error) {
+			this.logger.error("Failed to generate advanced pattern analysis:", error);
+			return { patterns: [], correlations: [], summary: "", insights: [] };
+		}
+	}
+
+	/**
+	 * Get enabled pattern types based on configuration
+	 */
+	private getEnabledPatternTypes(): PatternType[] {
+		return [
+			'productivity-theme',
+			'productivity-blocker',
+			'sentiment-pattern',
+			'sentiment-change',
+			'procrastination-language',
+			'distraction-language',
+			'positive-momentum',
+			'work-pattern',
+			'habit-pattern',
+			'mood-pattern',
+			'health-pattern',
+			'personal-activity',
+		];
+	}
+
+	/**
+	 * Generate a summary of pattern analysis results
+	 */
+	private generatePatternSummary(
+		analysisRecord: NoteAnalysisRecord,
+		vaultPatterns: VaultPatternResult | null
+	): string {
+		const patterns = analysisRecord.analysis.patternsFound;
+		if (patterns.length === 0) {
+			return "No significant patterns detected in this note.";
+		}
+
+		const patternTypes = [...new Set(patterns.map(p => p.type))];
+		const highConfidencePatterns = patterns.filter(p => p.confidence >= 0.8);
+		
+		let summary = `Found ${patterns.length} patterns across ${patternTypes.length} categories. `;
+		
+		if (highConfidencePatterns.length > 0) {
+			summary += `${highConfidencePatterns.length} patterns show high confidence (≥80%). `;
+		}
+
+		if (vaultPatterns) {
+			summary += `This note contains ${Math.round((patterns.length / vaultPatterns.summary.patternsFound) * 100)}% of your total detected patterns.`;
+		}
+
+		return summary;
+	}
+
+	/**
+	 * Generate insights from pattern analysis
+	 */
+	private generatePatternInsights(
+		analysisRecord: NoteAnalysisRecord,
+		vaultPatterns: VaultPatternResult | null
+	): string[] {
+		const insights: string[] = [];
+		const patterns = analysisRecord.analysis.patternsFound;
+
+		// Sentiment insights
+		const sentimentPatterns = patterns.filter(p => p.type.includes('sentiment'));
+		if (sentimentPatterns.length > 0) {
+			const avgSentiment = analysisRecord.content.sentimentScore;
+			if (avgSentiment > 0.3) {
+				insights.push("This note reflects a generally positive emotional state.");
+			} else if (avgSentiment < -0.3) {
+				insights.push("This note indicates some negative emotions or challenges.");
+			}
+		}
+
+		// Productivity insights
+		const productivityPatterns = patterns.filter(p => p.type.includes('productivity'));
+		if (productivityPatterns.length > 0) {
+			const blockers = productivityPatterns.filter(p => p.type === 'productivity-blocker');
+			if (blockers.length > 0) {
+				insights.push(`Identified ${blockers.length} productivity blockers that may need attention.`);
+			}
+		}
+
+		// Temporal insights
+		const now = new Date();
+		const recentPatterns = patterns.filter(p => 
+			(now.getTime() - p.temporal.lastSeen.getTime()) < 7 * 24 * 60 * 60 * 1000 // Last 7 days
+		);
+		if (recentPatterns.length > patterns.length * 0.7) {
+			insights.push("Most patterns in this note are recent, indicating active ongoing themes.");
+		}
+
+		return insights;
+	}
+
+	/**
+	 * Generate recommendations based on detected patterns
+	 */
+	private async generatePatternDrivenRecommendations(
+		originalFile: TFile,
+		options: SummaryNoteOptions
+	): Promise<Array<{
+		title: string;
+		description: string;
+		confidence: number;
+		patternBasis: string[];
+		actionSteps: Array<{ description: string }>;
+	}>> {
+		if (!this.patternDetectionEngine) {
+			return [];
+		}
+
+		try {
+			const patternOptions: PatternDetectionOptions = {
+				scope: options.patternDetectionScope,
+				patternTypes: this.getEnabledPatternTypes(),
+				minConfidence: options.patternConfidenceThreshold,
+				incremental: false,
+				performance: {
+					maxProcessingTime: 30000,
+					enableParallel: false,
+					batchSize: 1,
+				},
+				caching: {
+					enabled: true,
+					ttl: 3600000,
+					forceRefresh: false,
+				},
+			};
+
+			const analysisRecord = await this.patternDetectionEngine.analyzeFilePatterns(
+				originalFile,
+				patternOptions
+			);
+
+			const recommendations: Array<{
+				title: string;
+				description: string;
+				confidence: number;
+				patternBasis: string[];
+				actionSteps: Array<{ description: string }>;
+			}> = [];
+
+			const patterns = analysisRecord.analysis.patternsFound;
+
+			// Productivity blocker recommendations
+			const blockers = patterns.filter(p => p.type === 'productivity-blocker');
+			if (blockers.length > 0) {
+				recommendations.push({
+					title: "Address Productivity Blockers",
+					description: "Several productivity blockers were identified that may be hindering your progress. Consider implementing strategies to overcome these obstacles.",
+					confidence: Math.max(...blockers.map(b => b.confidence)),
+					patternBasis: blockers.map(b => b.name),
+					actionSteps: [
+						{ description: "Identify the root causes of these blockers" },
+						{ description: "Create specific action plans to address each blocker" },
+						{ description: "Set up accountability measures to track progress" },
+					],
+				});
+			}
+
+			// Procrastination pattern recommendations
+			const procrastination = patterns.filter(p => 
+				p.type === 'procrastination-language' || p.type === 'distraction-language'
+			);
+			if (procrastination.length > 0) {
+				recommendations.push({
+					title: "Implement Focus Strategies",
+					description: "Patterns suggest challenges with focus and task completion. Consider implementing structured approaches to improve concentration.",
+					confidence: Math.max(...procrastination.map(p => p.confidence)),
+					patternBasis: procrastination.map(p => p.name),
+					actionSteps: [
+						{ description: "Try the Pomodoro Technique for focused work sessions" },
+						{ description: "Identify and eliminate common distractions" },
+						{ description: "Break large tasks into smaller, manageable chunks" },
+					],
+				});
+			}
+
+			// Positive momentum recommendations
+			const momentum = patterns.filter(p => p.type === 'positive-momentum');
+			if (momentum.length > 0) {
+				recommendations.push({
+					title: "Leverage Positive Momentum",
+					description: "You have strong positive momentum patterns. Consider ways to amplify and sustain these positive trends.",
+					confidence: Math.max(...momentum.map(m => m.confidence)),
+					patternBasis: momentum.map(m => m.name),
+					actionSteps: [
+						{ description: "Document what's working well to replicate success" },
+						{ description: "Schedule regular reflection on positive achievements" },
+						{ description: "Share successes with others for accountability and motivation" },
+					],
+				});
+			}
+
+			// Sentiment-based recommendations
+			if (analysisRecord.content.sentimentScore < -0.3) {
+				const negativePatterns = patterns.filter(p => p.type.includes('sentiment'));
+				if (negativePatterns.length > 0) {
+					recommendations.push({
+						title: "Focus on Emotional Well-being",
+						description: "The analysis indicates some negative emotional patterns. Consider strategies to improve overall well-being and resilience.",
+						confidence: Math.max(...negativePatterns.map(p => p.confidence)),
+						patternBasis: negativePatterns.map(p => p.name),
+						actionSteps: [
+							{ description: "Practice daily gratitude or positive reflection" },
+							{ description: "Consider talking to a friend, mentor, or professional" },
+							{ description: "Engage in activities that typically boost your mood" },
+						],
+					});
+				}
+			}
+
+			return recommendations.slice(0, 5); // Limit to top 5 recommendations
+		} catch (error) {
+			this.logger.error("Failed to generate pattern-driven recommendations:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Generate vault-wide pattern context
+	 */
+	private async generateVaultPatternContext(options: SummaryNoteOptions): Promise<string[]> {
+		if (!this.patternDetectionEngine) {
+			return [];
+		}
+
+		try {
+			const patternOptions: PatternDetectionOptions = {
+				scope: options.patternDetectionScope,
+				patternTypes: this.getEnabledPatternTypes(),
+				minConfidence: options.patternConfidenceThreshold,
+				incremental: false,
+				performance: {
+					maxProcessingTime: 60000, // 60 seconds for vault analysis
+					enableParallel: true,
+					batchSize: 10,
+				},
+				caching: {
+					enabled: true,
+					ttl: 7200000, // 2 hours for vault-wide cache
+					forceRefresh: false,
+				},
+			};
+
+			const vaultPatterns = await this.patternDetectionEngine.detectPatternsInVault(patternOptions);
+			const context: string[] = [];
+
+			// Overall vault statistics
+			context.push(`Your vault contains ${vaultPatterns.summary.patternsFound} total patterns across ${vaultPatterns.summary.filesAnalyzed} files`);
+
+			// Top patterns
+			if (vaultPatterns.insights.topPatterns.length > 0) {
+				const topPattern = vaultPatterns.insights.topPatterns[0];
+				context.push(`Most common pattern: "${topPattern.name}" (${topPattern.frequency.count} occurrences)`);
+			}
+
+			// Emerging trends
+			if (vaultPatterns.insights.emergingPatterns.length > 0) {
+				const emerging = vaultPatterns.insights.emergingPatterns.length;
+				context.push(`${emerging} emerging pattern${emerging > 1 ? 's' : ''} detected, indicating new trends`);
+			}
+
+			// Declining patterns
+			if (vaultPatterns.insights.decliningPatterns.length > 0) {
+				const declining = vaultPatterns.insights.decliningPatterns.length;
+				context.push(`${declining} pattern${declining > 1 ? 's' : ''} showing decline, suggesting changing habits`);
+			}
+
+			// Performance metrics
+			const cacheHitRate = Math.round(vaultPatterns.summary.cacheHitRate * 100);
+			context.push(`Analysis completed in ${Math.round(vaultPatterns.summary.processingTime / 1000)}s with ${cacheHitRate}% cache efficiency`);
+
+			return context;
+		} catch (error) {
+			this.logger.error("Failed to generate vault pattern context:", error);
+			return ["Vault-wide pattern analysis temporarily unavailable"];
+		}
 	}
 
 	private async generatePatternAnalysis(

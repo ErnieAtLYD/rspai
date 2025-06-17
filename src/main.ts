@@ -25,6 +25,7 @@ import {
 import { PrivacyLevel } from "./ai-interfaces";
 import { SummaryNoteCreator } from "./summary-note-creator";
 import { EnhancedAnalysisResult } from "./ai-service-orchestrator";
+import { AnalysisScope } from "./pattern-detection-interfaces";
 
 interface RetrospectiveAISettings {
 	// Processing settings
@@ -47,6 +48,9 @@ interface RetrospectiveAISettings {
 	enableAISummaryInsights: boolean;
 	respectPrivacyInSummaries: boolean;
 
+	// Pattern Detection settings
+	analysisScope: AnalysisScope;
+
 	// AI settings
 	aiSettings: AIServiceSettings;
 }
@@ -64,6 +68,7 @@ const DEFAULT_SETTINGS: RetrospectiveAISettings = {
 	summaryWritingStyle: "personal",
 	enableAISummaryInsights: true,
 	respectPrivacyInSummaries: true,
+	analysisScope: "whole-life",
 	aiSettings: DEFAULT_AI_SETTINGS,
 };
 
@@ -336,6 +341,14 @@ export default class RetrospectiveAIPlugin extends Plugin {
 			name: "Create Summary Note",
 			callback: () => {
 				this.createSummaryNote();
+			},
+		});
+
+		this.addCommand({
+			id: "test-pattern-detection",
+			name: "Test Pattern Detection (Current Scope)",
+			callback: () => {
+				this.testPatternDetection();
 			},
 		});
 
@@ -638,6 +651,59 @@ export default class RetrospectiveAIPlugin extends Plugin {
 		}
 	}
 
+	private async testPatternDetection() {
+		try {
+			new Notice(
+				`Testing pattern detection with scope: ${this.settings.analysisScope}...`
+			);
+
+			// Create pattern detection options based on current settings
+			const options = this.createPatternDetectionOptions();
+
+			// Log the scope being used
+			this.logger.info("Testing pattern detection", {
+				scope: options.scope,
+				patternTypes: options.patternTypes.length,
+				minConfidence: options.minConfidence,
+			});
+
+			// Show a detailed notice about what will be analyzed
+			const scopeDescription = this.getScopeDescription(options.scope);
+			new Notice(
+				`Pattern Detection Test Started\n` +
+					`Scope: ${scopeDescription}\n` +
+					`Pattern Types: ${options.patternTypes.length}\n` +
+					`Min Confidence: ${options.minConfidence}`,
+				8000
+			);
+
+			// For now, just show the configuration - actual pattern detection engine integration
+			// will be completed in subsequent subtasks
+			this.logger.info(
+				"Pattern detection options created successfully",
+				options
+			);
+		} catch (error) {
+			this.logger.error("Failed to test pattern detection", error);
+			new Notice("Failed to test pattern detection - check console");
+		}
+	}
+
+	private getScopeDescription(scope: AnalysisScope): string {
+		switch (scope) {
+			case "whole-life":
+				return "Analyzing all notes in vault";
+			case "work-only":
+				return "Analyzing work-related content only";
+			case "personal-only":
+				return "Analyzing personal content only";
+			case "custom":
+				return "Using custom filtering rules";
+			default:
+				return "Unknown scope";
+		}
+	}
+
 	private formatBasicStats(result: ProcessingResult): string {
 		const parts: string[] = [];
 
@@ -690,6 +756,43 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	 */
 	private registerCleanup(cleanup: () => Promise<void> | void): void {
 		this.cleanupTasks.push(cleanup);
+	}
+
+	/**
+	 * Create pattern detection options based on current settings
+	 */
+	private createPatternDetectionOptions(): import("./pattern-detection-interfaces").PatternDetectionOptions {
+		return {
+			scope: this.settings.analysisScope,
+			patternTypes: [
+				"productivity-theme",
+				"productivity-blocker",
+				"sentiment-pattern",
+				"sentiment-change",
+				"procrastination-language",
+				"distraction-language",
+				"task-switching",
+				"positive-momentum",
+				"work-pattern",
+				"habit-pattern",
+				"mood-pattern",
+				"health-pattern",
+				"personal-activity",
+			],
+			minConfidence: 0.6,
+			incremental: false,
+			performance: {
+				maxProcessingTime: 30000, // 30 seconds
+				maxFiles: 1000,
+				enableParallel: true,
+				batchSize: this.settings.batchSize,
+			},
+			caching: {
+				enabled: this.settings.enableCaching,
+				ttl: 3600000, // 1 hour
+				forceRefresh: false,
+			},
+		};
 	}
 
 	private async loadSettings() {
@@ -1199,6 +1302,13 @@ interface AIStatus {
 	lastError?: string;
 }
 
+/**
+ * Modal to display the AI service status
+ *
+ * @param app - The application instance
+ * @param status - The AI service status
+ * @returns {void}
+ */
 class AIStatusModal extends Modal {
 	constructor(app: App, private status: AIStatus) {
 		super(app);
@@ -1348,6 +1458,48 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.enableSectionDetection = value;
 						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Analysis Scope")
+			.setDesc("Choose what content to analyze for pattern detection")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("whole-life", "Whole Life - Analyze all notes")
+					.addOption(
+						"work-only",
+						"Work Only - Focus on work-related content"
+					)
+					.addOption(
+						"personal-only",
+						"Personal Only - Focus on personal content"
+					)
+					.addOption(
+						"custom",
+						"Custom - Advanced filtering (coming soon)"
+					)
+					.setValue(this.plugin.settings.analysisScope)
+					.onChange(async (value) => {
+						this.plugin.settings.analysisScope =
+							value as AnalysisScope;
+						await this.plugin.saveSettings();
+
+						// Show notice about the scope change
+						if (value === "custom") {
+							new Notice(
+								"Custom scope configuration coming in a future update",
+								4000
+							);
+						} else {
+							new Notice(
+								`Analysis scope changed to: ${value.replace(
+									"-",
+									" "
+								)}`,
+								3000
+							);
+						}
 					})
 			);
 
