@@ -1,7 +1,7 @@
 {
 	"name": "retrospective-ai-plugin",
-	"version": "1.0.0",
-	"description": "Obsidian plugin for AI-powered retrospective analysis",
+	"version": "0.9.0",
+	"description": "AI-powered note analysis and reflection tool for Obsidian. Analyze your notes, generate insights, and create summaries with privacy protection.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
@@ -22,7 +22,7 @@
 		"productivity",
 		"analysis"
 	],
-	"author": "Your Name",
+	"author": "Ernie Hsiung",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/jest": "^30.0.0",
