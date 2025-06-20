@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "strictNullChecks": true,
     "downlevelIteration": true,
+    "skipLibCheck": true,
     "lib": [
       "DOM",
       "ES2018",
@@ -23,6 +24,10 @@
   "include": [
     "src",
     "examples"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
   ],
   "ts-node": {
     "esm": true,

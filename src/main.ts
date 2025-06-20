@@ -9,6 +9,10 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
+import {
+	TabbedSettingsContainer,
+	TabDefinition,
+} from "./tabbed-settings-container";
 import { ErrorHandler } from "./error-handler";
 import { Logger, LogLevel } from "./logger";
 import {
@@ -31,6 +35,11 @@ interface RetrospectiveAISettings {
 	// Processing settings
 	enablePrivacyFilter: boolean;
 	privacyTags: string[];
+	privacyFolders: string[];
+	redactionStrategy: "exclude" | "redact" | "summarize";
+	enableAuditLog: boolean;
+	auditLogPath: string;
+
 	enableMetadataExtraction: boolean;
 	enableSectionDetection: boolean;
 
@@ -58,6 +67,10 @@ interface RetrospectiveAISettings {
 const DEFAULT_SETTINGS: RetrospectiveAISettings = {
 	enablePrivacyFilter: true,
 	privacyTags: ["private-ai", "confidential-ai", "no-ai"],
+	privacyFolders: ["Private/", "Personal/", "Confidential/"],
+	redactionStrategy: "exclude",
+	enableAuditLog: false,
+	auditLogPath: "audit.log",
 	enableMetadataExtraction: true,
 	enableSectionDetection: true,
 	maxFileSize: 10 * 1024 * 1024, // 10MB
@@ -354,6 +367,9 @@ export default class RetrospectiveAIPlugin extends Plugin {
 
 		// Add settings tab
 		this.addSettingTab(new RetrospectiveAISettingTab(this.app, this));
+
+		// Add privacy visual indicators
+		this.setupPrivacyVisualIndicators();
 	}
 
 	private async handleRibbonClick() {
@@ -759,6 +775,102 @@ export default class RetrospectiveAIPlugin extends Plugin {
 	}
 
 	/**
+	 * Setup visual indicators for privacy-filtered content
+	 */
+	private setupPrivacyVisualIndicators(): void {
+		// Add markdown post processor for preview mode
+		this.registerMarkdownPostProcessor((element, context) => {
+			if (!this.settings.enablePrivacyFilter) return;
+
+			// Find privacy tags and add visual indicators
+			const privacyTags = element.querySelectorAll(
+				'a.tag[href*="#private-ai"], a.tag[href*="#confidential-ai"], a.tag[href*="#no-ai"]'
+			);
+			
+			privacyTags.forEach((tag) => {
+				tag.addClass('privacy-excluded');
+				tag.setAttribute('title', 'This content is excluded from AI analysis');
+			});
+
+			// Also check for custom privacy tags from settings
+			this.settings.privacyTags.forEach((tagName) => {
+				const customTags = element.querySelectorAll(`a.tag[href*="#${tagName}"]`);
+				customTags.forEach((tag) => {
+					tag.addClass('privacy-excluded');
+					tag.setAttribute('title', 'This content is excluded from AI analysis');
+				});
+			});
+		});
+
+		// Add file menu indicators for excluded files
+		this.registerEvent(
+			this.app.workspace.on('file-menu', (menu, file) => {
+				if (this.isFileExcluded(file as TFile)) {
+					menu.addItem((item) => {
+						item.setTitle('🔒 Privacy Protected')
+							.setIcon('shield')
+							.setDisabled(true);
+					});
+				}
+			})
+		);
+
+		// Add visual indicators to file explorer
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				this.updateFileExplorerIndicators();
+			})
+		);
+	}
+
+	/**
+	 * Check if a file should be excluded based on privacy settings
+	 */
+	private isFileExcluded(file: TFile): boolean {
+		if (!this.settings.enablePrivacyFilter || !file) return false;
+
+		// Check if file is in excluded folder
+		const filePath = file.path || '';
+		for (const folder of this.settings.privacyFolders) {
+			if (filePath.startsWith(folder)) {
+				return true;
+			}
+		}
+
+		// For more comprehensive checking, we'd need to read file content
+		// For now, just check folder-based exclusions
+		return false;
+	}
+
+	/**
+	 * Update visual indicators in file explorer
+	 */
+	private updateFileExplorerIndicators(): void {
+		if (!this.settings.enablePrivacyFilter) return;
+
+		// Find all file titles in the explorer
+		const fileElements = document.querySelectorAll('.nav-file-title');
+		
+		fileElements.forEach((element) => {
+			const titleEl = element as HTMLElement;
+			const filePath = titleEl.getAttribute('data-path') || '';
+			
+			// Check if file is in excluded folder
+			const isExcluded = this.settings.privacyFolders.some(folder => 
+				filePath.startsWith(folder)
+			);
+			
+			if (isExcluded) {
+				titleEl.addClass('privacy-excluded');
+				titleEl.setAttribute('title', 'This file is excluded from AI analysis');
+			} else {
+				titleEl.removeClass('privacy-excluded');
+				titleEl.removeAttribute('title');
+			}
+		});
+	}
+
+	/**
 	 * Create pattern detection options based on current settings
 	 */
 	private createPatternDetectionOptions(): import("./pattern-detection-interfaces").PatternDetectionOptions {
@@ -1107,6 +1219,10 @@ class AIAnalysisModal extends Modal {
 		super(app);
 	}
 
+	/**
+	 * Open the modal
+	 * @returns {void}
+	 */
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
@@ -1387,8 +1503,15 @@ class AIStatusModal extends Modal {
 	}
 }
 
+/**
+ * Setting tab for the RetrospectiveAI plugin
+ * @param app - The application instance
+ * @param plugin - The plugin instance
+ * @returns {void}
+ */
 class RetrospectiveAISettingTab extends PluginSettingTab {
 	plugin: RetrospectiveAIPlugin;
+	private tabbedContainer: TabbedSettingsContainer | null = null;
 
 	constructor(app: App, plugin: RetrospectiveAIPlugin) {
 		super(app, plugin);
@@ -1399,45 +1522,66 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "RetrospectAI Settings" });
+		// Add main title
+		containerEl.createEl("h2", { text: "RetrospectAI" });
 
-		// Privacy settings
-		containerEl.createEl("h3", { text: "Privacy Settings" });
+		// Debug: Log that we're creating tabbed container
+		console.log("🔧 RetrospectAI: Creating tabbed settings container");
 
-		new Setting(containerEl)
-			.setName("Enable Privacy Filter")
-			.setDesc("Filter out private content based on tags and folders")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enablePrivacyFilter)
-					.onChange(async (value) => {
-						this.plugin.settings.enablePrivacyFilter = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		// Initialize tabbed container
+		this.tabbedContainer = new TabbedSettingsContainer(
+			this.app,
+			containerEl,
+			{
+				defaultTabId: "general",
+				enableKeyboardNavigation: true,
+				enableTabIcons: false,
+			}
+		);
 
-		new Setting(containerEl)
-			.setName("Privacy Tags")
-			.setDesc(
-				"Comma-separated list of tags that mark content as private"
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("private, confidential, personal")
-					.setValue(this.plugin.settings.privacyTags.join(", "))
-					.onChange(async (value) => {
-						this.plugin.settings.privacyTags = value
-							.split(",")
-							.map((tag) => tag.trim())
-							.filter((tag) => tag);
-						await this.plugin.saveSettings();
-					})
-			);
+		console.log("🔧 RetrospectAI: Tabbed container created:", this.tabbedContainer);
 
+		// Define tabs with their content
+		const tabs: TabDefinition[] = [
+			{
+				id: "general",
+				label: "General",
+				contentRenderer: (container) =>
+					this.renderGeneralTab(container),
+			},
+			{
+				id: "ai-models",
+				label: "AI Models",
+				contentRenderer: (container) =>
+					this.renderAIModelsTab(container),
+			},
+			{
+				id: "privacy",
+				label: "Privacy",
+				contentRenderer: (container) =>
+					this.renderPrivacyTab(container),
+			},
+		];
+
+		// Initialize and render tabs
+		console.log("🔧 RetrospectAI: Initializing tabbed container");
+		this.tabbedContainer.initialize();
+		
+		console.log("🔧 RetrospectAI: Adding tabs:", tabs.length);
+		tabs.forEach((tab) => {
+			console.log("🔧 Adding tab:", tab.id, tab.label);
+			this.tabbedContainer?.addTab(tab);
+		});
+		
+		console.log("🔧 RetrospectAI: Rendering tabs");
+		this.tabbedContainer.render();
+	}
+
+	private renderGeneralTab(container: HTMLElement): void {
 		// Processing settings
-		containerEl.createEl("h3", { text: "Processing Settings" });
+		container.createEl("h3", { text: "Processing" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Enable Metadata Extraction")
 			.setDesc("Extract metadata, links, tags, and references from notes")
 			.addToggle((toggle) =>
@@ -1449,7 +1593,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Enable Section Detection")
 			.setDesc("Detect and categorize sections within notes")
 			.addToggle((toggle) =>
@@ -1461,7 +1605,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Analysis Scope")
 			.setDesc("Choose what content to analyze for pattern detection")
 			.addDropdown((dropdown) =>
@@ -1504,9 +1648,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			);
 
 		// Performance settings
-		containerEl.createEl("h3", { text: "Performance Settings" });
+		container.createEl("h3", { text: "Performance" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Max File Size")
 			.setDesc("Maximum file size to process (in MB)")
 			.addSlider((slider) =>
@@ -1520,7 +1664,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Enable Caching")
 			.setDesc("Cache processing results for better performance")
 			.addToggle((toggle) =>
@@ -1533,9 +1677,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			);
 
 		// Debug settings
-		containerEl.createEl("h3", { text: "Debug Settings" });
+		container.createEl("h3", { text: "Debug" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Debug Mode")
 			.setDesc("Enable debug logging and detailed error messages")
 			.addToggle((toggle) =>
@@ -1547,11 +1691,13 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+	}
 
-		// AI settings
-		containerEl.createEl("h3", { text: "AI Settings" });
+	private renderAIModelsTab(container: HTMLElement): void {
+		// Main AI settings
+		container.createEl("h3", { text: "AI Configuration" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Enable AI Analysis")
 			.setDesc("Enable AI-powered analysis features")
 			.addToggle((toggle) =>
@@ -1567,7 +1713,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Primary AI Provider")
 			.setDesc("Choose the primary AI provider for analysis")
 			.addDropdown((dropdown) =>
@@ -1586,7 +1732,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Privacy Level")
 			.setDesc("Control how your data is processed")
 			.addDropdown((dropdown) =>
@@ -1606,9 +1752,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			);
 
 		// OpenAI settings
-		containerEl.createEl("h4", { text: "OpenAI Configuration" });
+		container.createEl("h3", { text: "OpenAI Configuration" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("OpenAI API Key")
 			.setDesc("Your OpenAI API key for cloud-based analysis")
 			.addText((text) =>
@@ -1622,9 +1768,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 							value;
 						await this.plugin.saveSettings();
 
-						// Validate API key format
+						// Validate API key format                                    
 						if (value && !value.startsWith("sk-")) {
-							new Notice(
+							new Notice(                      
 								'Warning: OpenAI API key should start with "sk-"',
 								5000
 							);
@@ -1642,7 +1788,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("OpenAI Model")
 			.setDesc("Which OpenAI model to use")
 			.addDropdown((dropdown) =>
@@ -1661,9 +1807,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			);
 
 		// Ollama settings
-		containerEl.createEl("h4", { text: "Ollama Configuration" });
+		container.createEl("h3", { text: "Ollama Configuration" });
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Ollama Endpoint")
 			.setDesc("URL for your local Ollama instance")
 			.addText((text) =>
@@ -1679,7 +1825,7 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(container)
 			.setName("Ollama Model")
 			.setDesc("Which Ollama model to use")
 			.addText((text) =>
@@ -1696,7 +1842,9 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 			);
 
 		// Test connection button
-		new Setting(containerEl)
+		container.createEl("h3", { text: "Connection Testing" });
+
+		new Setting(container)
 			.setName("Test AI Connection")
 			.setDesc("Test connection to the selected AI provider")
 			.addButton((button) =>
@@ -1715,5 +1863,97 @@ class RetrospectiveAISettingTab extends PluginSettingTab {
 						}
 					})
 			);
+	}
+
+	private renderPrivacyTab(container: HTMLElement): void {
+		container.createEl("h3", { text: "Privacy Controls" });
+
+		new Setting(container)
+			.setName("Enable Privacy Filter")
+			.setDesc("Filter out private content based on tags and folders")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enablePrivacyFilter)
+					.onChange(async (value) => {
+						this.plugin.settings.enablePrivacyFilter = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(container)
+			.setName("Privacy Tags")
+			.setDesc(
+				"Comma-separated list of tags that mark content as private"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("private, confidential, personal")
+					.setValue(this.plugin.settings.privacyTags.join(", "))
+					.onChange(async (value) => {
+						this.plugin.settings.privacyTags = value
+							.split(",")
+							.map((tag) => tag.trim())
+							.filter((tag) => tag);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(container)
+			.setName("Privacy Folders")
+			.setDesc(
+				"Folders to exclude from analysis (e.g., Private/, Personal/)"
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Private/, Personal/, Confidential/")
+					.setValue(this.plugin.settings.privacyFolders.join(", "))
+					.onChange(async (value) => {
+						this.plugin.settings.privacyFolders = value
+							.split(",")
+							.map((folder) => folder.trim())
+							.filter((folder) => folder);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// NEW: Redaction strategy
+		new Setting(container)
+			.setName("Redaction Strategy")
+			.setDesc("How to handle files with mixed public/private content")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("exclude", "Exclude Entire File")
+					.addOption("redact", "Redact Private Sections")
+					.addOption("summarize", "Summarize Without Details")
+					.setValue(this.plugin.settings.redactionStrategy)
+					.onChange(async (value) => {
+						this.plugin.settings.redactionStrategy = value as
+							| "exclude"
+							| "redact"
+							| "summarize";
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// NEW: Audit logging
+		new Setting(container)
+			.setName("Enable Audit Log")
+			.setDesc("Track what content was filtered for privacy compliance")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableAuditLog)
+					.onChange(async (value) => {
+						this.plugin.settings.enableAuditLog = value;
+						await this.plugin.saveSettings();
+					})
+			);
+	}
+
+	// Clean up tabbed container when settings are closed
+	hide(): void {
+		if (this.tabbedContainer) {
+			this.tabbedContainer.destroy();
+			this.tabbedContainer = null;
+		}
 	}
 }

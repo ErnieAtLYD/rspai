@@ -1,7 +1,7 @@
 // src/mock-ai-adapter.ts
 /**
  * Mock AI Adapter for testing purposes
- * Provides configurable responses and error simulation
+ * Provides configurable responses and error simulation with unified interface support
  */
 
 import { Logger } from './logger';
@@ -17,6 +17,14 @@ import {
   AIError,
   AIErrorType
 } from './ai-interfaces';
+// Add unified interface imports
+import {
+  HealthCheckResponse,
+  AIPrivacyLevel,
+  AIModelResponse,
+  AIBatchResponse,
+  AIValidationResult
+} from './unified-ai-interfaces';
 
 /**
  * Mock response configuration for testing
@@ -29,7 +37,7 @@ export interface MockResponse {
 }
 
 /**
- * Mock adapter configuration for testing scenarios
+ * Enhanced mock adapter configuration for testing scenarios
  */
 export interface MockAdapterConfig {
   // Response configurations
@@ -39,6 +47,12 @@ export interface MockAdapterConfig {
   analysisResponses?: AIAnalysisResult[];
   classificationResponses?: Array<{ category: string; confidence: number }>;
   sentimentResponses?: Array<{ sentiment: 'positive' | 'negative' | 'neutral'; confidence: number }>;
+
+  // Unified interface response configurations
+  unifiedResponses?: AIModelResponse[];
+  batchResponses?: AIBatchResponse[];
+  validationResponses?: AIValidationResult[];
+  healthResponses?: HealthCheckResponse[];
 
   // Behavior configurations
   simulateLatency?: boolean;
@@ -52,6 +66,7 @@ export interface MockAdapterConfig {
   // Health simulation
   isHealthy?: boolean;
   healthCheckDelay?: number;
+  healthStatus?: 'healthy' | 'degraded' | 'unhealthy';
   
   // Capability simulation
   enabledCapabilities?: AICapability[];
@@ -59,6 +74,11 @@ export interface MockAdapterConfig {
   // State tracking
   trackRequests?: boolean;
   maxRequestHistory?: number;
+  
+  // Unified interface testing
+  enableUnifiedInterface?: boolean;
+  simulateStreamingChunks?: number; // Number of chunks for streaming simulation
+  streamingDelay?: number; // Delay between streaming chunks
 }
 
 /**
@@ -75,12 +95,12 @@ export interface MockRequest {
 }
 
 /**
- * Mock AI adapter for testing purposes
- * Provides configurable responses and error simulation
+ * Enhanced Mock AI adapter for testing purposes
+ * Provides configurable responses and error simulation with unified interface support
  */
 export class MockAIAdapter extends BaseAIAdapter {
   readonly name = 'Mock AI Adapter';
-  readonly description = 'Mock adapter for testing AI abstraction layer';
+  readonly description = 'Mock adapter for testing AI abstraction layer with unified interface support';
   readonly type: AIModelType = 'local';
   readonly privacyLevel: PrivacyLevel = 'local';
   readonly capabilities: AICapability[] = [
@@ -93,6 +113,11 @@ export class MockAIAdapter extends BaseAIAdapter {
     'classification'
   ];
 
+  // Enhanced unified privacy level
+  get unifiedPrivacyLevel(): AIPrivacyLevel {
+    return 'private'; // Mock adapter for testing
+  }
+
   private mockConfig: MockAdapterConfig;
   private requestHistory: MockRequest[] = [];
   private responseIndex = 0;
@@ -101,6 +126,10 @@ export class MockAIAdapter extends BaseAIAdapter {
   private analysisIndex = 0;
   private classificationIndex = 0;
   private sentimentIndex = 0;
+  private unifiedResponseIndex = 0;
+  private batchResponseIndex = 0;
+  private validationResponseIndex = 0;
+  private healthResponseIndex = 0;
 
   constructor(logger: Logger, config: AIModelConfig, mockConfig: MockAdapterConfig = {}) {
     super(logger, config);
@@ -111,10 +140,14 @@ export class MockAIAdapter extends BaseAIAdapter {
       errorRate: 0,
       errorTypes: [AIErrorType.REQUEST_FAILED],
       isHealthy: true,
+      healthStatus: 'healthy',
       healthCheckDelay: 10,
       enabledCapabilities: this.capabilities,
       trackRequests: true,
       maxRequestHistory: 100,
+      enableUnifiedInterface: true,
+      simulateStreamingChunks: 3,
+      streamingDelay: 100,
       ...mockConfig
     };
   }
@@ -152,6 +185,10 @@ export class MockAIAdapter extends BaseAIAdapter {
     this.analysisIndex = 0;
     this.classificationIndex = 0;
     this.sentimentIndex = 0;
+    this.unifiedResponseIndex = 0;
+    this.batchResponseIndex = 0;
+    this.validationResponseIndex = 0;
+    this.healthResponseIndex = 0;
     this.logger.debug('Reset mock adapter response indices');
   }
 
@@ -180,6 +217,38 @@ export class MockAIAdapter extends BaseAIAdapter {
   }
 
   /**
+   * Set predefined unified responses
+   */
+  setUnifiedResponses(responses: AIModelResponse[]): void {
+    this.mockConfig.unifiedResponses = responses;
+    this.unifiedResponseIndex = 0;
+  }
+
+  /**
+   * Set predefined batch responses
+   */
+  setBatchResponses(responses: AIBatchResponse[]): void {
+    this.mockConfig.batchResponses = responses;
+    this.batchResponseIndex = 0;
+  }
+
+  /**
+   * Set predefined validation responses
+   */
+  setValidationResponses(responses: AIValidationResult[]): void {
+    this.mockConfig.validationResponses = responses;
+    this.validationResponseIndex = 0;
+  }
+
+  /**
+   * Set predefined health responses
+   */
+  setHealthResponses(responses: HealthCheckResponse[]): void {
+    this.mockConfig.healthResponses = responses;
+    this.healthResponseIndex = 0;
+  }
+
+  /**
    * Simulate specific error for next request
    */
   simulateError(error: AIError): void {
@@ -196,6 +265,14 @@ export class MockAIAdapter extends BaseAIAdapter {
     this.mockConfig.enabledCapabilities = capabilities;
     // Update the capabilities property
     (this as { capabilities: AICapability[] }).capabilities = capabilities;
+  }
+
+  /**
+   * Set health status for testing
+   */
+  setHealthStatus(status: 'healthy' | 'degraded' | 'unhealthy', isHealthy = true): void {
+    this.mockConfig.healthStatus = status;
+    this.mockConfig.isHealthy = isHealthy;
   }
 
   // Protected abstract method implementations

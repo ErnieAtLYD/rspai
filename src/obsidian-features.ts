@@ -191,7 +191,10 @@ export class ObsidianFeaturesHandler {
       if (!this.knownPluginPatterns.has(pluginName)) {
         this.knownPluginPatterns.set(pluginName, []);
       }
-      this.knownPluginPatterns.get(pluginName)!.push(pattern);
+      const patterns = this.knownPluginPatterns.get(pluginName);
+      if (patterns) {
+        patterns.push(pattern);
+      }
     });
   }
 
@@ -667,7 +670,10 @@ export class ObsidianFeaturesHandler {
     if (!this.knownPluginPatterns.has(pluginName)) {
       this.knownPluginPatterns.set(pluginName, []);
     }
-    this.knownPluginPatterns.get(pluginName)!.push(pattern);
+    const patterns = this.knownPluginPatterns.get(pluginName);
+    if (patterns) {
+      patterns.push(pattern);
+    }
     
     // Clear cache since patterns changed
     this.patternCache.clear();

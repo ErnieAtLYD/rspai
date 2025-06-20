@@ -75,4 +75,4 @@ This proposal outlines our new initiative...
 ```
 
 ---
-📖 **[Full Privacy Guide](privacy-guide.md)** | 🔧 **[Plugin Settings](#)** | ❓ **[Troubleshooting](privacy-guide.md#troubleshooting)** 
+📖 **[Full Privacy Guide](privacy-guide.md)** | 🔧 **[Setup Guide](privacy-setup-guide.md)** | ❓ **[Troubleshooting & FAQ](privacy-troubleshooting-faq.md)** | 🛡️ **[Privacy Features](privacy-protection-features.md)**

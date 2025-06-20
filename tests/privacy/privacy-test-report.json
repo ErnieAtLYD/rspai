@@ -1,0 +1,141 @@
+{
+  "summary": {
+    "totalTests": 10,
+    "passed": 10,
+    "failed": 0,
+    "successRate": "100.0%"
+  },
+  "results": [
+    {
+      "name": "Sample Data - File Loading",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "fileCount": 9,
+        "totalSizeKB": "34.5"
+      }
+    },
+    {
+      "name": "Privacy Filter - Private Folder Detection",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "privateFiles": 2,
+        "publicFiles": 7
+      }
+    },
+    {
+      "name": "Privacy Filter - Privacy Tag Detection",
+      "status": "passed",
+      "duration": 1,
+      "details": {
+        "filesWithTags": 8,
+        "filesWithoutTags": 1,
+        "taggedFiles": [
+          "Confidential/salary-negotiation.md",
+          "Private/personal-finances.md",
+          "README.md",
+          "daily-notes/2024-01-15.md",
+          "daily-notes/2024-01-16.md",
+          "learning-notes/TypeScript Advanced Patterns.md",
+          "meeting-notes/Team Standup - 2024-01-17.md",
+          "project-logs/Mobile App Development.md"
+        ]
+      }
+    },
+    {
+      "name": "Privacy Filter - Comprehensive Classification",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "privateFolder": [],
+        "privacyTags": [
+          "README.md",
+          "daily-notes/2024-01-15.md",
+          "daily-notes/2024-01-16.md",
+          "learning-notes/TypeScript Advanced Patterns.md",
+          "meeting-notes/Team Standup - 2024-01-17.md",
+          "project-logs/Mobile App Development.md"
+        ],
+        "publicSafe": [
+          "weekly-reviews/2024-W03.md"
+        ],
+        "mixed": [
+          "Confidential/salary-negotiation.md",
+          "Private/personal-finances.md"
+        ]
+      }
+    },
+    {
+      "name": "Privacy Filter - Content Redaction",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "filesRedacted": 8,
+        "reductionPercentage": "2.5",
+        "originalLength": 35347,
+        "redactedLength": 34480
+      }
+    },
+    {
+      "name": "Privacy Filter - File Exclusion Logic",
+      "status": "passed",
+      "duration": 1,
+      "details": {
+        "excludedCount": 8,
+        "includedCount": 1,
+        "exclusionRate": "88.9",
+        "excludedFiles": [
+          "Confidential/salary-negotiation.md",
+          "Private/personal-finances.md",
+          "README.md",
+          "daily-notes/2024-01-15.md",
+          "daily-notes/2024-01-16.md",
+          "learning-notes/TypeScript Advanced Patterns.md",
+          "meeting-notes/Team Standup - 2024-01-17.md",
+          "project-logs/Mobile App Development.md"
+        ]
+      }
+    },
+    {
+      "name": "Privacy Filter - Enforcement Validation",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "violations": 0
+      }
+    },
+    {
+      "name": "Privacy Filter - Performance with Real Data",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "processingTimeMs": 0,
+        "filesPerSecond": null,
+        "totalFiles": 9
+      }
+    },
+    {
+      "name": "Privacy Filter - Memory Usage",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "memoryIncreaseMB": "0.45",
+        "memoryPerFileKB": "51.2",
+        "analysisCount": 9
+      }
+    },
+    {
+      "name": "Privacy Filter - Report Generation",
+      "status": "passed",
+      "duration": 0,
+      "details": {
+        "totalFiles": 9,
+        "excludedFiles": 8,
+        "privateFolder": 2,
+        "privacyTags": 8,
+        "reportGeneratedAt": "2025-06-18T03:22:02.933Z"
+      }
+    }
+  ]
+}
