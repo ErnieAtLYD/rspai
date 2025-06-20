@@ -7,7 +7,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "node esbuild.config.mjs production",
-		"test": "node tests/integration/privacy-integration-simple.js",
+		"test": "jest",
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
 		"run:example": "node --loader ts-node/esm examples/orchestrator-usage.ts",
@@ -25,12 +25,15 @@
 	"author": "Your Name",
 	"license": "MIT",
 	"devDependencies": {
+		"@types/jest": "^30.0.0",
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
 		"@typescript-eslint/parser": "5.29.0",
 		"builtin-modules": "3.3.0",
 		"esbuild": "0.17.3",
+		"jest": "^30.0.0",
 		"obsidian": "latest",
+		"ts-jest": "^29.4.0",
 		"ts-node": "^10.9.2",
 		"tslib": "2.4.0",
 		"typescript": "^4.9.0"
