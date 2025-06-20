@@ -37,6 +37,14 @@ export interface SummaryNoteOptions {
 	includePatternCorrelations: boolean;
 	includeTemporalAnalysis: boolean;
 	patternConfidenceThreshold: number;
+	// NEW: Performance optimization options
+	enablePerformanceOptimization: boolean;
+	maxProcessingTime: number;
+	enableParallelProcessing: boolean;
+	enableCaching: boolean;
+	cacheTTL: number;
+	sizeBasedOptimization: boolean;
+	maxDocumentSize: number;
 }
 
 export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
@@ -57,7 +65,31 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
 	includePatternCorrelations: false,
 	includeTemporalAnalysis: true,
 	patternConfidenceThreshold: 0.6,
+	// NEW: Performance optimization defaults
+	enablePerformanceOptimization: true,
+	maxProcessingTime: 60000, // 60 seconds
+	enableParallelProcessing: true,
+	enableCaching: true,
+	cacheTTL: 3600000, // 1 hour
+	sizeBasedOptimization: true,
+	maxDocumentSize: 50000, // 50KB
 };
+
+// Performance optimization interfaces
+interface CachedResult {
+	data: unknown;
+	timestamp: number;
+	ttl: number;
+}
+
+interface PerformanceMetrics {
+	startTime: number;
+	aiCallsCount: number;
+	patternAnalysisTime: number;
+	totalProcessingTime: number;
+	cacheHits: number;
+	cacheMisses: number;
+}
 
 /**
  * Creates a summary note for a given file.
@@ -72,6 +104,15 @@ export const DEFAULT_SUMMARY_OPTIONS: SummaryNoteOptions = {
  */
 export class SummaryNoteCreator {
 	private nlgGenerator: NaturalLanguageGenerator;
+	private cache: Map<string, CachedResult> = new Map();
+	private performanceMetrics: PerformanceMetrics = {
+		startTime: 0,
+		aiCallsCount: 0,
+		patternAnalysisTime: 0,
+		totalProcessingTime: 0,
+		cacheHits: 0,
+		cacheMisses: 0
+	};
 
 	constructor(
 		private app: App, 
@@ -90,6 +131,7 @@ export class SummaryNoteCreator {
 		options: Partial<SummaryNoteOptions> = {}
 	): Promise<string> {
 		const opts = { ...DEFAULT_SUMMARY_OPTIONS, ...options };
+		this.resetPerformanceMetrics();
 
 		try {
 			// Privacy check: Determine if AI insights should be disabled for this file
@@ -98,6 +140,17 @@ export class SummaryNoteCreator {
 			if (opts.enableAIInsights && !shouldUseAI) {
 				this.logger.info(`Privacy protection: Disabling AI insights for file: ${originalFile.path}`);
 				opts.enableAIInsights = false;
+			}
+
+			// Performance optimization: Check document size
+			if (opts.sizeBasedOptimization && opts.enableAIInsights) {
+				const fileSize = await this.getFileSize(originalFile);
+				if (fileSize > opts.maxDocumentSize) {
+					this.logger.info(`Large document detected (${fileSize} bytes), applying size-based optimizations`);
+					opts.enableAIInsights = this.shouldReduceAIProcessing(fileSize, opts.maxDocumentSize);
+					opts.includeVaultPatterns = false; // Disable expensive vault-wide analysis
+					opts.includePatternCorrelations = false;
+				}
 			}
 
 			// Generate filename
@@ -119,8 +172,8 @@ export class SummaryNoteCreator {
 				throw new Error(`Summary note already exists: ${fullPath}`);
 			}
 
-			// Generate enhanced content with AI insights
-			const content = await this.generateEnhancedSummaryContent(originalFile, analysisResult, opts);
+			// Generate enhanced content with performance optimizations
+			const content = await this.generateEnhancedSummaryContentOptimized(originalFile, analysisResult, opts);
 
 			// Create or update file using the vault API consistently
 			if (exists) {
@@ -159,11 +212,507 @@ export class SummaryNoteCreator {
 				}
 			}
 
+			// Log performance metrics
+			this.logPerformanceMetrics(opts);
+
 			return fullPath;
 		} catch (error) {
 			this.logger.error("Failed to create summary note:", error);
 			throw error;
 		}
+	}
+
+	/**
+	 * Performance-optimized content generation with parallel processing and caching
+	 */
+	private async generateEnhancedSummaryContentOptimized(
+		originalFile: TFile,
+		analysisResult: ProcessingResult,
+		options: SummaryNoteOptions
+	): Promise<string> {
+		const now = new Date();
+		const originalLink = options.createBacklinks
+			? `[[${originalFile.path}]]`
+			: originalFile.path;
+
+		// Set up NLG generator based on writing style preference
+		this.setupNLGGenerator(options.writingStyle);
+
+		// Generate frontmatter
+		const frontmatter = [
+			"---",
+			`title: "Summary of ${originalFile.basename}"`,
+			`original_file: "${originalFile.path}"`,
+			`created: ${now.toISOString()}`,
+			`type: "summary"`,
+			`writing_style: "${options.writingStyle}"`,
+			`ai_enhanced: ${options.enableAIInsights}`,
+			`performance_optimized: ${options.enablePerformanceOptimization}`,
+			`tags: ["summary", "analysis", "retrospect-ai"]`,
+			"---",
+			"",
+		].join("\n");
+
+		// Generate main content sections
+		const contentSections: string[] = [];
+
+		// Header
+		contentSections.push(`# Summary of ${originalFile.basename}`);
+		contentSections.push("");
+		contentSections.push(`**Original Note:** ${originalLink}`);
+		contentSections.push(`**Generated:** ${now.toLocaleString()}`);
+		contentSections.push("");
+
+		// Performance optimization: Parallel processing of AI-intensive operations
+		if (options.enableAIInsights && options.enableParallelProcessing && this.aiService) {
+			const parallelResults = await this.generateContentSectionsInParallel(originalFile, analysisResult, options);
+			
+			// Add Executive Summary
+			if (parallelResults.executiveSummary) {
+				contentSections.push("## 🎯 Executive Summary");
+				contentSections.push("");
+				contentSections.push(parallelResults.executiveSummary);
+				contentSections.push("");
+			}
+
+			// Add Key Insights
+			if (parallelResults.insights && parallelResults.insights.length > 0) {
+				contentSections.push("## 💡 Key Insights");
+				contentSections.push("");
+				parallelResults.insights.forEach((insight, index) => {
+					contentSections.push(`### ${index + 1}. ${insight.title}`);
+					contentSections.push(insight.description);
+					if (insight.evidence && insight.evidence.length > 0) {
+						contentSections.push("**Evidence:**");
+						insight.evidence.forEach(evidence => {
+							contentSections.push(`- ${evidence}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+
+			// Add Pattern Analysis
+			if (parallelResults.patternAnalysis && options.includePatternAnalysis) {
+				contentSections.push("## 🔍 Pattern Analysis");
+				contentSections.push("");
+				contentSections.push(parallelResults.patternAnalysis.summary);
+				contentSections.push("");
+				
+				parallelResults.patternAnalysis.patterns.forEach(pattern => {
+					contentSections.push(`### ${pattern.name} (${pattern.type})`);
+					contentSections.push(pattern.description);
+					contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
+					contentSections.push("");
+				});
+			}
+
+			// Add Recommendations
+			if (parallelResults.recommendations && parallelResults.recommendations.length > 0 && options.includeRecommendations) {
+				contentSections.push("## 🚀 Recommendations");
+				contentSections.push("");
+				parallelResults.recommendations.forEach((rec, index) => {
+					contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
+					contentSections.push(rec.description);
+					if (rec.actionSteps && rec.actionSteps.length > 0) {
+						contentSections.push("**Action Steps:**");
+						rec.actionSteps.forEach((step, stepIndex) => {
+							contentSections.push(`${stepIndex + 1}. ${step.description}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		} else {
+			// Fallback to sequential processing
+			await this.generateContentSectionsSequentially(originalFile, analysisResult, options, contentSections);
+		}
+
+		// Content Analysis (always included, not AI-dependent)
+		contentSections.push("## 📊 Content Analysis");
+		contentSections.push("");
+		contentSections.push(this.formatAnalysisResults(analysisResult));
+		contentSections.push("");
+
+		// Connection Opportunities
+		const connections = this.generateConnectionOpportunities(analysisResult);
+		if (connections.length > 0) {
+			contentSections.push("## 🔗 Connection Opportunities");
+			contentSections.push("");
+			connections.forEach(connection => {
+				contentSections.push(`- **${connection.type}**: ${connection.description}`);
+			});
+			contentSections.push("");
+		}
+
+		// Performance metrics (if enabled)
+		if (options.enablePerformanceOptimization) {
+			const metrics = this.getPerformanceMetrics();
+			contentSections.push("---");
+			contentSections.push("");
+			contentSections.push(`*Generated in ${metrics.totalProcessingTime}ms with ${metrics.aiCallsCount} AI calls (${metrics.cacheHits} cache hits)*`);
+		}
+
+		return frontmatter + contentSections.join("\n");
+	}
+
+	/**
+	 * Generate content sections in parallel for better performance
+	 */
+	private async generateContentSectionsInParallel(
+		originalFile: TFile,
+		analysisResult: ProcessingResult,
+		options: SummaryNoteOptions
+	): Promise<{
+		executiveSummary?: string;
+		insights?: Array<{ title: string; description: string; evidence?: string[] }>;
+		patternAnalysis?: { patterns: PatternDefinition[]; summary: string };
+		recommendations?: Array<{ title?: string; description: string; actionSteps?: Array<{ description: string }> }>;
+	}> {
+		const promises: Promise<any>[] = [];
+		const results: any = {};
+
+		// Create timeout wrapper for AI operations
+		const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+			return Promise.race([
+				promise,
+				new Promise<T>((_, reject) => 
+					setTimeout(() => reject(new Error('Operation timed out')), timeoutMs)
+				)
+			]);
+		};
+
+		// Executive Summary
+		if (this.aiService) {
+			promises.push(
+				withTimeout(this.generateExecutiveSummaryOptimized(originalFile, analysisResult), options.maxProcessingTime / 4)
+					.then(result => { results.executiveSummary = result; })
+					.catch(error => { 
+						this.logger.warn("Executive summary generation failed:", error);
+						results.executiveSummary = null;
+					})
+			);
+		}
+
+		// Key Insights
+		if (this.aiService) {
+			promises.push(
+				withTimeout(this.generateKeyInsightsOptimized(originalFile, analysisResult), options.maxProcessingTime / 4)
+					.then(result => { results.insights = result; })
+					.catch(error => { 
+						this.logger.warn("Key insights generation failed:", error);
+						results.insights = [];
+					})
+			);
+		}
+
+		// Pattern Analysis
+		if (options.includePatternAnalysis && this.patternDetectionEngine) {
+			promises.push(
+				withTimeout(this.generateAdvancedPatternAnalysisOptimized(originalFile, options), options.maxProcessingTime / 2)
+					.then(result => { results.patternAnalysis = result; })
+					.catch(error => { 
+						this.logger.warn("Pattern analysis generation failed:", error);
+						results.patternAnalysis = null;
+					})
+			);
+		}
+
+		// Recommendations
+		if (options.includeRecommendations && this.aiService) {
+			promises.push(
+				withTimeout(this.generateRecommendationsOptimized(originalFile, analysisResult), options.maxProcessingTime / 4)
+					.then(result => { results.recommendations = result; })
+					.catch(error => { 
+						this.logger.warn("Recommendations generation failed:", error);
+						results.recommendations = [];
+					})
+			);
+		}
+
+		// Wait for all operations to complete
+		await Promise.allSettled(promises);
+
+		return results;
+	}
+
+	/**
+	 * Optimized executive summary generation with caching
+	 */
+	private async generateExecutiveSummaryOptimized(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<string | null> {
+		const lastModified = analysisResult.metadata?.lastModified || Date.now();
+		const cacheKey = `exec_summary_${originalFile.path}_${lastModified}`;
+		
+		// Check cache first
+		const cached = this.getCachedResult(cacheKey);
+		if (cached) {
+			this.performanceMetrics.cacheHits++;
+			return cached as string;
+		}
+
+		this.performanceMetrics.cacheMisses++;
+		this.performanceMetrics.aiCallsCount++;
+
+		try {
+			const result = await this.generateExecutiveSummary(originalFile, analysisResult);
+			this.setCachedResult(cacheKey, result, DEFAULT_SUMMARY_OPTIONS.cacheTTL);
+			return result;
+		} catch (error) {
+			this.logger.error("Failed to generate executive summary:", error);
+			return null;
+		}
+	}
+
+	/**
+	 * Optimized key insights generation with caching
+	 */
+	private async generateKeyInsightsOptimized(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<Array<{ title: string; description: string; evidence?: string[] }>> {
+		const lastModified = analysisResult.metadata?.lastModified || Date.now();
+		const cacheKey = `key_insights_${originalFile.path}_${lastModified}`;
+		
+		// Check cache first
+		const cached = this.getCachedResult(cacheKey);
+		if (cached) {
+			this.performanceMetrics.cacheHits++;
+			return cached as Array<{ title: string; description: string; evidence?: string[] }>;
+		}
+
+		this.performanceMetrics.cacheMisses++;
+		this.performanceMetrics.aiCallsCount++;
+
+		try {
+			const result = await this.generateKeyInsights(originalFile, analysisResult);
+			this.setCachedResult(cacheKey, result, DEFAULT_SUMMARY_OPTIONS.cacheTTL);
+			return result;
+		} catch (error) {
+			this.logger.error("Failed to generate key insights:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Optimized pattern analysis with performance monitoring
+	 */
+	private async generateAdvancedPatternAnalysisOptimized(
+		originalFile: TFile,
+		options: SummaryNoteOptions
+	): Promise<{ patterns: PatternDefinition[]; summary: string }> {
+		const startTime = Date.now();
+		const cacheKey = `pattern_analysis_${originalFile.path}_${options.patternConfidenceThreshold}`;
+		
+		// Check cache first
+		const cached = this.getCachedResult(cacheKey);
+		if (cached) {
+			this.performanceMetrics.cacheHits++;
+			return cached as { patterns: PatternDefinition[]; summary: string };
+		}
+
+		this.performanceMetrics.cacheMisses++;
+
+		try {
+			const result = await this.generateAdvancedPatternAnalysis(originalFile, options);
+			const processingTime = Date.now() - startTime;
+			this.performanceMetrics.patternAnalysisTime += processingTime;
+			
+			const simplified = {
+				patterns: result.patterns,
+				summary: result.summary
+			};
+			
+			this.setCachedResult(cacheKey, simplified, DEFAULT_SUMMARY_OPTIONS.cacheTTL);
+			return simplified;
+		} catch (error) {
+			this.logger.error("Failed to generate pattern analysis:", error);
+			return { patterns: [], summary: "" };
+		}
+	}
+
+	/**
+	 * Optimized recommendations generation with caching
+	 */
+	private async generateRecommendationsOptimized(
+		originalFile: TFile,
+		analysisResult: ProcessingResult
+	): Promise<Array<{ title?: string; description: string; actionSteps?: Array<{ description: string }> }>> {
+		const lastModified = analysisResult.metadata?.lastModified || Date.now();
+		const cacheKey = `recommendations_${originalFile.path}_${lastModified}`;
+		
+		// Check cache first
+		const cached = this.getCachedResult(cacheKey);
+		if (cached) {
+			this.performanceMetrics.cacheHits++;
+			return cached as Array<{ title?: string; description: string; actionSteps?: Array<{ description: string }> }>;
+		}
+
+		this.performanceMetrics.cacheMisses++;
+		this.performanceMetrics.aiCallsCount++;
+
+		try {
+			const result = await this.generateRecommendations(originalFile, analysisResult);
+			this.setCachedResult(cacheKey, result, DEFAULT_SUMMARY_OPTIONS.cacheTTL);
+			return result;
+		} catch (error) {
+			this.logger.error("Failed to generate recommendations:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Fallback sequential content generation
+	 */
+	private async generateContentSectionsSequentially(
+		originalFile: TFile,
+		analysisResult: ProcessingResult,
+		options: SummaryNoteOptions,
+		contentSections: string[]
+	): Promise<void> {
+		// Executive Summary (AI-powered if available)
+		if (options.enableAIInsights && this.aiService) {
+			const executiveSummary = await this.generateExecutiveSummaryOptimized(originalFile, analysisResult);
+			if (executiveSummary) {
+				contentSections.push("## 🎯 Executive Summary");
+				contentSections.push("");
+				contentSections.push(executiveSummary);
+				contentSections.push("");
+			}
+		}
+
+		// Key Insights (AI-powered)
+		if (options.enableAIInsights && this.aiService) {
+			const insights = await this.generateKeyInsightsOptimized(originalFile, analysisResult);
+			if (insights.length > 0) {
+				contentSections.push("## 💡 Key Insights");
+				contentSections.push("");
+				insights.forEach((insight, index) => {
+					contentSections.push(`### ${index + 1}. ${insight.title}`);
+					contentSections.push(insight.description);
+					if (insight.evidence && insight.evidence.length > 0) {
+						contentSections.push("**Evidence:**");
+						insight.evidence.forEach(evidence => {
+							contentSections.push(`- ${evidence}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		}
+
+		// Pattern Analysis
+		if (options.includePatternAnalysis && this.patternDetectionEngine) {
+			const patternAnalysis = await this.generateAdvancedPatternAnalysisOptimized(originalFile, options);
+			if (patternAnalysis.patterns.length > 0) {
+				contentSections.push("## 🔍 Pattern Analysis");
+				contentSections.push("");
+				contentSections.push(patternAnalysis.summary);
+				contentSections.push("");
+				
+				patternAnalysis.patterns.forEach(pattern => {
+					contentSections.push(`### ${pattern.name} (${pattern.type})`);
+					contentSections.push(pattern.description);
+					contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
+					contentSections.push("");
+				});
+			}
+		}
+
+		// Recommendations
+		if (options.includeRecommendations && this.aiService) {
+			const recommendations = await this.generateRecommendationsOptimized(originalFile, analysisResult);
+			if (recommendations.length > 0) {
+				contentSections.push("## 🚀 Recommendations");
+				contentSections.push("");
+				recommendations.forEach((rec, index) => {
+					contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
+					contentSections.push(rec.description);
+					if (rec.actionSteps && rec.actionSteps.length > 0) {
+						contentSections.push("**Action Steps:**");
+						rec.actionSteps.forEach((step, stepIndex) => {
+							contentSections.push(`${stepIndex + 1}. ${step.description}`);
+						});
+					}
+					contentSections.push("");
+				});
+			}
+		}
+	}
+
+	/**
+	 * Caching utilities
+	 */
+	private getCachedResult(key: string): unknown {
+		const cached = this.cache.get(key);
+		if (!cached) return null;
+		
+		const now = Date.now();
+		if (now - cached.timestamp > cached.ttl) {
+			this.cache.delete(key);
+			return null;
+		}
+		
+		return cached.data;
+	}
+
+	private setCachedResult(key: string, data: unknown, ttl: number): void {
+		this.cache.set(key, {
+			data,
+			timestamp: Date.now(),
+			ttl
+		});
+	}
+
+	/**
+	 * Performance utilities
+	 */
+	private resetPerformanceMetrics(): void {
+		this.performanceMetrics = {
+			startTime: Date.now(),
+			aiCallsCount: 0,
+			patternAnalysisTime: 0,
+			totalProcessingTime: 0,
+			cacheHits: 0,
+			cacheMisses: 0
+		};
+	}
+
+	private getPerformanceMetrics(): PerformanceMetrics {
+		this.performanceMetrics.totalProcessingTime = Date.now() - this.performanceMetrics.startTime;
+		return { ...this.performanceMetrics };
+	}
+
+	private logPerformanceMetrics(options: SummaryNoteOptions): void {
+		if (options.enablePerformanceOptimization) {
+			const metrics = this.getPerformanceMetrics();
+			this.logger.info(`Summary generation performance:`, {
+				totalTime: `${metrics.totalProcessingTime}ms`,
+				aiCalls: metrics.aiCallsCount,
+				patternAnalysisTime: `${metrics.patternAnalysisTime}ms`,
+				cacheHitRate: `${Math.round((metrics.cacheHits / (metrics.cacheHits + metrics.cacheMisses)) * 100)}%`,
+				parallelProcessing: options.enableParallelProcessing
+			});
+		}
+	}
+
+	private async getFileSize(file: TFile): Promise<number> {
+		try {
+			const stat = await this.app.vault.adapter.stat(file.path);
+			return stat?.size || 0;
+		} catch {
+			return 0;
+		}
+	}
+
+	private shouldReduceAIProcessing(fileSize: number, maxSize: number): boolean {
+		const ratio = fileSize / maxSize;
+		if (ratio > 3) return false; // Disable AI for very large files
+		if (ratio > 2) return Math.random() < 0.3; // 30% chance for large files
+		if (ratio > 1.5) return Math.random() < 0.7; // 70% chance for medium-large files
+		return true; // Enable for normal-sized files
 	}
 
 	/**
@@ -443,227 +992,6 @@ export class SummaryNoteCreator {
 			.replace(/[<>:"/\\|?*]/g, "-"); // Remove invalid filename characters
 	}
 
-	private async generateEnhancedSummaryContent(
-		originalFile: TFile,
-		analysisResult: ProcessingResult,
-		options: SummaryNoteOptions
-	): Promise<string> {
-		const now = new Date();
-		const originalLink = options.createBacklinks
-			? `[[${originalFile.path}]]`
-			: originalFile.path;
-
-		// Set up NLG generator based on writing style preference
-		this.setupNLGGenerator(options.writingStyle);
-
-		// Generate frontmatter
-		const frontmatter = [
-			"---",
-			`title: "Summary of ${originalFile.basename}"`,
-			`original_file: "${originalFile.path}"`,
-			`created: ${now.toISOString()}`,
-			`type: "summary"`,
-			`writing_style: "${options.writingStyle}"`,
-			`ai_enhanced: ${options.enableAIInsights}`,
-			`tags: ["summary", "analysis", "retrospect-ai"]`,
-			"---",
-			"",
-		].join("\n");
-
-		// Generate main content sections
-		const contentSections: string[] = [];
-
-		// Header
-		contentSections.push(`# Summary of ${originalFile.basename}`);
-		contentSections.push("");
-		contentSections.push(`**Original Note:** ${originalLink}`);
-		contentSections.push(`**Generated:** ${now.toLocaleString()}`);
-		contentSections.push("");
-
-		// Executive Summary (AI-powered if available)
-		if (options.enableAIInsights && this.aiService) {
-			const executiveSummary = await this.generateExecutiveSummary(originalFile, analysisResult);
-			if (executiveSummary) {
-				contentSections.push("## 🎯 Executive Summary");
-				contentSections.push("");
-				contentSections.push(executiveSummary);
-				contentSections.push("");
-			}
-		}
-
-		// Key Insights (AI-powered)
-		if (options.enableAIInsights && this.aiService) {
-			const insights = await this.generateKeyInsights(originalFile, analysisResult);
-			if (insights.length > 0) {
-				contentSections.push("## 💡 Key Insights");
-				contentSections.push("");
-				insights.forEach((insight, index) => {
-					contentSections.push(`### ${index + 1}. ${insight.title}`);
-					contentSections.push(insight.description);
-					if (insight.evidence && insight.evidence.length > 0) {
-						contentSections.push("**Evidence:**");
-						insight.evidence.forEach(evidence => {
-							contentSections.push(`- ${evidence}`);
-						});
-					}
-					contentSections.push("");
-				});
-			}
-		}
-
-		// Content Analysis
-		contentSections.push("## 📊 Content Analysis");
-		contentSections.push("");
-		contentSections.push(this.formatAnalysisResults(analysisResult));
-		contentSections.push("");
-
-		// Pattern Analysis (Enhanced with Pattern Detection Engine)
-		if (options.includePatternAnalysis) {
-			if (options.enablePatternDetection && this.patternDetectionEngine) {
-				// Use Pattern Detection Engine for comprehensive analysis
-				const patternAnalysis = await this.generateAdvancedPatternAnalysis(originalFile, options);
-				if (patternAnalysis.patterns.length > 0) {
-					contentSections.push("## 🔍 Advanced Pattern Analysis");
-					contentSections.push("");
-					contentSections.push(patternAnalysis.summary);
-					contentSections.push("");
-					
-					// Individual patterns
-					patternAnalysis.patterns.forEach(pattern => {
-						contentSections.push(`### ${pattern.name} (${pattern.type})`);
-						contentSections.push(pattern.description);
-						contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}% | **Classification:** ${pattern.classification}`);
-						contentSections.push(`**Frequency:** ${pattern.frequency.count} occurrences (${pattern.frequency.trend})`);
-						
-						if (pattern.supportingEvidence.length > 0) {
-							contentSections.push("**Supporting Evidence:**");
-							pattern.supportingEvidence.slice(0, 3).forEach(evidence => {
-								contentSections.push(`- ${evidence}`);
-							});
-						}
-						contentSections.push("");
-					});
-					
-					// Pattern correlations
-					if (options.includePatternCorrelations && patternAnalysis.correlations.length > 0) {
-						contentSections.push("### 🔗 Pattern Correlations");
-						contentSections.push("");
-						patternAnalysis.correlations.forEach(correlation => {
-							const strength = Math.round(correlation.strength * 100);
-							contentSections.push(`- **${correlation.type}** correlation (${strength}% strength)`);
-						});
-						contentSections.push("");
-					}
-				}
-			} else if (options.enableAIInsights && this.aiService) {
-				// Fallback to basic pattern analysis
-				const patterns = await this.generatePatternAnalysis(originalFile, analysisResult);
-				if (patterns.length > 0) {
-					contentSections.push("## 🔍 Pattern Analysis");
-					contentSections.push("");
-					patterns.forEach(pattern => {
-						contentSections.push(`### ${pattern.title}`);
-						contentSections.push(pattern.description);
-						contentSections.push(`**Confidence:** ${Math.round(pattern.confidence * 100)}%`);
-						if (pattern.evidence && pattern.evidence.length > 0) {
-							contentSections.push("**Supporting Evidence:**");
-							pattern.evidence.forEach(evidence => {
-								contentSections.push(`- ${evidence}`);
-							});
-						}
-						contentSections.push("");
-					});
-				}
-			}
-		}
-
-		// Recommendations (Enhanced with Pattern-Driven Insights)
-		if (options.includeRecommendations) {
-			if (options.enablePatternDetection && this.patternDetectionEngine) {
-				// Generate pattern-driven recommendations
-				const patternRecommendations = await this.generatePatternDrivenRecommendations(originalFile, options);
-				if (patternRecommendations.length > 0) {
-					contentSections.push("## 🚀 Pattern-Driven Recommendations");
-					contentSections.push("");
-					patternRecommendations.forEach((rec, index) => {
-						contentSections.push(`### ${index + 1}. ${rec.title}`);
-						contentSections.push(rec.description);
-						if (rec.patternBasis && rec.patternBasis.length > 0) {
-							contentSections.push("**Based on patterns:**");
-							rec.patternBasis.forEach(pattern => {
-								contentSections.push(`- ${pattern} (${Math.round(rec.confidence * 100)}% confidence)`);
-							});
-						}
-						if (rec.actionSteps && rec.actionSteps.length > 0) {
-							contentSections.push("**Action Steps:**");
-							rec.actionSteps.forEach((step, stepIndex) => {
-								contentSections.push(`${stepIndex + 1}. ${step.description}`);
-							});
-						}
-						contentSections.push("");
-					});
-				}
-			} else if (options.enableAIInsights && this.aiService) {
-				// Fallback to basic recommendations
-				const recommendations = await this.generateRecommendations(originalFile, analysisResult);
-				if (recommendations.length > 0) {
-					contentSections.push("## 🚀 Recommendations");
-					contentSections.push("");
-					recommendations.forEach((rec, index) => {
-						contentSections.push(`### ${index + 1}. ${rec.title || 'Recommendation'}`);
-						contentSections.push(rec.description);
-						if (rec.actionSteps && rec.actionSteps.length > 0) {
-							contentSections.push("**Action Steps:**");
-							rec.actionSteps.forEach((step, stepIndex) => {
-								contentSections.push(`${stepIndex + 1}. ${step.description}`);
-							});
-						}
-						contentSections.push("");
-					});
-				}
-			}
-		}
-
-		// Vault-Wide Pattern Context (if enabled)
-		if (options.includeVaultPatterns && options.enablePatternDetection && this.patternDetectionEngine) {
-			const vaultContext = await this.generateVaultPatternContext(options);
-			if (vaultContext.length > 0) {
-				contentSections.push("## 🌐 Vault-Wide Pattern Context");
-				contentSections.push("");
-				contentSections.push("This note in the context of your entire vault:");
-				contentSections.push("");
-				vaultContext.forEach(context => {
-					contentSections.push(`- ${context}`);
-				});
-				contentSections.push("");
-			}
-		}
-
-		// Connection Opportunities
-		const connections = this.generateConnectionOpportunities(analysisResult);
-		if (connections.length > 0) {
-			contentSections.push("## 🔗 Connection Opportunities");
-			contentSections.push("");
-			contentSections.push("Based on the content analysis, consider connecting this note with:");
-			contentSections.push("");
-			connections.forEach(connection => {
-				contentSections.push(`- **${connection.type}**: ${connection.description}`);
-			});
-			contentSections.push("");
-		}
-
-		// Footer
-		contentSections.push("---");
-		contentSections.push("");
-		contentSections.push("*This summary was automatically generated by RetrospectAI*");
-		if (options.enableAIInsights) {
-			contentSections.push(`*Writing style: ${options.writingStyle} | AI insights: enabled*`);
-		}
-
-		const content = contentSections.join("\n");
-		return frontmatter + content;
-	}
-
 	private setupNLGGenerator(style: 'business' | 'personal' | 'academic'): void {
 		switch (style) {
 			case 'business':
@@ -886,212 +1214,6 @@ export class SummaryNoteCreator {
 	/**
 	 * Generate recommendations based on detected patterns
 	 */
-	private async generatePatternDrivenRecommendations(
-		originalFile: TFile,
-		options: SummaryNoteOptions
-	): Promise<Array<{
-		title: string;
-		description: string;
-		confidence: number;
-		patternBasis: string[];
-		actionSteps: Array<{ description: string }>;
-	}>> {
-		if (!this.patternDetectionEngine) {
-			return [];
-		}
-
-		try {
-			const patternOptions: PatternDetectionOptions = {
-				scope: options.patternDetectionScope,
-				patternTypes: this.getEnabledPatternTypes(),
-				minConfidence: options.patternConfidenceThreshold,
-				incremental: false,
-				performance: {
-					maxProcessingTime: 30000,
-					enableParallel: false,
-					batchSize: 1,
-				},
-				caching: {
-					enabled: true,
-					ttl: 3600000,
-					forceRefresh: false,
-				},
-			};
-
-			const analysisRecord = await this.patternDetectionEngine.analyzeFilePatterns(
-				originalFile,
-				patternOptions
-			);
-
-			const recommendations: Array<{
-				title: string;
-				description: string;
-				confidence: number;
-				patternBasis: string[];
-				actionSteps: Array<{ description: string }>;
-			}> = [];
-
-			const patterns = analysisRecord.analysis.patternsFound;
-
-			// Productivity blocker recommendations
-			const blockers = patterns.filter(p => p.type === 'productivity-blocker');
-			if (blockers.length > 0) {
-				recommendations.push({
-					title: "Address Productivity Blockers",
-					description: "Several productivity blockers were identified that may be hindering your progress. Consider implementing strategies to overcome these obstacles.",
-					confidence: Math.max(...blockers.map(b => b.confidence)),
-					patternBasis: blockers.map(b => b.name),
-					actionSteps: [
-						{ description: "Identify the root causes of these blockers" },
-						{ description: "Create specific action plans to address each blocker" },
-						{ description: "Set up accountability measures to track progress" },
-					],
-				});
-			}
-
-			// Procrastination pattern recommendations
-			const procrastination = patterns.filter(p => 
-				p.type === 'procrastination-language' || p.type === 'distraction-language'
-			);
-			if (procrastination.length > 0) {
-				recommendations.push({
-					title: "Implement Focus Strategies",
-					description: "Patterns suggest challenges with focus and task completion. Consider implementing structured approaches to improve concentration.",
-					confidence: Math.max(...procrastination.map(p => p.confidence)),
-					patternBasis: procrastination.map(p => p.name),
-					actionSteps: [
-						{ description: "Try the Pomodoro Technique for focused work sessions" },
-						{ description: "Identify and eliminate common distractions" },
-						{ description: "Break large tasks into smaller, manageable chunks" },
-					],
-				});
-			}
-
-			// Positive momentum recommendations
-			const momentum = patterns.filter(p => p.type === 'positive-momentum');
-			if (momentum.length > 0) {
-				recommendations.push({
-					title: "Leverage Positive Momentum",
-					description: "You have strong positive momentum patterns. Consider ways to amplify and sustain these positive trends.",
-					confidence: Math.max(...momentum.map(m => m.confidence)),
-					patternBasis: momentum.map(m => m.name),
-					actionSteps: [
-						{ description: "Document what's working well to replicate success" },
-						{ description: "Schedule regular reflection on positive achievements" },
-						{ description: "Share successes with others for accountability and motivation" },
-					],
-				});
-			}
-
-			// Sentiment-based recommendations
-			if (analysisRecord.content.sentimentScore < -0.3) {
-				const negativePatterns = patterns.filter(p => p.type.includes('sentiment'));
-				if (negativePatterns.length > 0) {
-					recommendations.push({
-						title: "Focus on Emotional Well-being",
-						description: "The analysis indicates some negative emotional patterns. Consider strategies to improve overall well-being and resilience.",
-						confidence: Math.max(...negativePatterns.map(p => p.confidence)),
-						patternBasis: negativePatterns.map(p => p.name),
-						actionSteps: [
-							{ description: "Practice daily gratitude or positive reflection" },
-							{ description: "Consider talking to a friend, mentor, or professional" },
-							{ description: "Engage in activities that typically boost your mood" },
-						],
-					});
-				}
-			}
-
-			return recommendations.slice(0, 5); // Limit to top 5 recommendations
-		} catch (error) {
-			this.logger.error("Failed to generate pattern-driven recommendations:", error);
-			return [];
-		}
-	}
-
-	/**
-	 * Generate vault-wide pattern context
-	 */
-	private async generateVaultPatternContext(options: SummaryNoteOptions): Promise<string[]> {
-		if (!this.patternDetectionEngine) {
-			return [];
-		}
-
-		try {
-			const patternOptions: PatternDetectionOptions = {
-				scope: options.patternDetectionScope,
-				patternTypes: this.getEnabledPatternTypes(),
-				minConfidence: options.patternConfidenceThreshold,
-				incremental: false,
-				performance: {
-					maxProcessingTime: 60000, // 60 seconds for vault analysis
-					enableParallel: true,
-					batchSize: 10,
-				},
-				caching: {
-					enabled: true,
-					ttl: 7200000, // 2 hours for vault-wide cache
-					forceRefresh: false,
-				},
-			};
-
-			const vaultPatterns = await this.patternDetectionEngine.detectPatternsInVault(patternOptions);
-			const context: string[] = [];
-
-			// Overall vault statistics
-			context.push(`Your vault contains ${vaultPatterns.summary.patternsFound} total patterns across ${vaultPatterns.summary.filesAnalyzed} files`);
-
-			// Top patterns
-			if (vaultPatterns.insights.topPatterns.length > 0) {
-				const topPattern = vaultPatterns.insights.topPatterns[0];
-				context.push(`Most common pattern: "${topPattern.name}" (${topPattern.frequency.count} occurrences)`);
-			}
-
-			// Emerging trends
-			if (vaultPatterns.insights.emergingPatterns.length > 0) {
-				const emerging = vaultPatterns.insights.emergingPatterns.length;
-				context.push(`${emerging} emerging pattern${emerging > 1 ? 's' : ''} detected, indicating new trends`);
-			}
-
-			// Declining patterns
-			if (vaultPatterns.insights.decliningPatterns.length > 0) {
-				const declining = vaultPatterns.insights.decliningPatterns.length;
-				context.push(`${declining} pattern${declining > 1 ? 's' : ''} showing decline, suggesting changing habits`);
-			}
-
-			// Performance metrics
-			const cacheHitRate = Math.round(vaultPatterns.summary.cacheHitRate * 100);
-			context.push(`Analysis completed in ${Math.round(vaultPatterns.summary.processingTime / 1000)}s with ${cacheHitRate}% cache efficiency`);
-
-			return context;
-		} catch (error) {
-			this.logger.error("Failed to generate vault pattern context:", error);
-			return ["Vault-wide pattern analysis temporarily unavailable"];
-		}
-	}
-
-	private async generatePatternAnalysis(
-		originalFile: TFile,
-		analysisResult: ProcessingResult
-	): Promise<Array<{ title: string; description: string; confidence: number; evidence?: string[] }>> {
-		if (!this.aiService) return [];
-
-		try {
-			const content = await this.app.vault.read(originalFile);
-			const patterns = await this.aiService.extractPatterns(content);
-
-			return patterns.map(pattern => ({
-				title: pattern.title,
-				description: pattern.description,
-				confidence: pattern.confidence,
-				evidence: pattern.evidence
-			}));
-		} catch (error) {
-			this.logger.warn("Failed to generate pattern analysis:", error);
-		}
-
-		return [];
-	}
-
 	private async generateRecommendations(
 		originalFile: TFile,
 		analysisResult: ProcessingResult

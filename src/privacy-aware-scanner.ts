@@ -359,14 +359,95 @@ export class PrivacyAwareScanner {
   private getMatchingExcludedFolder(filePath: string): string | undefined {
     const settings = this.privacyFilter.getSettings();
     
+    if (!filePath || filePath.trim().length === 0) {
+      return undefined;
+    }
+
+    const normalizedPath = this.normalizePath(filePath);
+
     for (const excludedFolder of settings.excludedFolders) {
-      // Use the same logic as PrivacyFilter
-      if (filePath.toLowerCase().includes(excludedFolder.toLowerCase())) {
+      const normalizedExcludedFolder = this.normalizePath(excludedFolder);
+      
+      if (this.isPathInFolder(normalizedPath, normalizedExcludedFolder, settings.caseSensitiveFolders)) {
         return excludedFolder;
       }
     }
-    
+
     return undefined;
+  }
+
+  /**
+   * Normalize a file path for consistent comparison
+   * @param path Path to normalize
+   * @returns Normalized path
+   */
+  private normalizePath(path: string): string {
+    if (!path) {
+      return '';
+    }
+    
+    // Convert backslashes to forward slashes for consistent comparison
+    let normalized = path.replace(/\\/g, '/');
+    
+    // Remove leading slash if present
+    if (normalized.startsWith('/')) {
+      normalized = normalized.substring(1);
+    }
+    
+    // Remove trailing slash if present
+    if (normalized.endsWith('/')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    
+    return normalized;
+  }
+
+  /**
+   * Check if a file path is within a specific folder
+   * @param filePath Normalized file path
+   * @param folderPath Normalized folder path
+   * @param caseSensitive Whether comparison should be case sensitive
+   * @returns True if file is in the folder
+   */
+  private isPathInFolder(filePath: string, folderPath: string, caseSensitive: boolean): boolean {
+    if (!folderPath) {
+      return false;
+    }
+
+    // Apply case sensitivity based on settings
+    const compareFilePath = caseSensitive ? filePath : filePath.toLowerCase();
+    const compareFolderPath = caseSensitive ? folderPath : folderPath.toLowerCase();
+
+    // Exact folder match (file directly in the folder)
+    if (compareFilePath.startsWith(compareFolderPath + '/')) {
+      return true;
+    }
+
+    // Check if the file path starts with the folder name
+    // Handle case where folder path is the entire path
+    if (compareFilePath === compareFolderPath) {
+      return true;
+    }
+
+    // Check if any part of the path matches the excluded folder
+    const pathParts = compareFilePath.split('/');
+    const folderParts = compareFolderPath.split('/');
+
+    // Check if folder path appears anywhere in the file path
+    for (let i = 0; i <= pathParts.length - folderParts.length; i++) {
+      let match = true;
+      for (let j = 0; j < folderParts.length; j++) {
+        if (pathParts[i + j] !== folderParts[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -490,5 +571,253 @@ export class PrivacyAwareScanner {
    */
   getPrivacyFilter(): PrivacyFilter {
     return this.privacyFilter;
+  }
+
+  // ========================================
+  // PERFORMANCE OPTIMIZATION METHODS
+  // ========================================
+
+  /**
+   * Batch process multiple files with privacy analysis for better performance
+   * @param files Array of file metadata to process
+   * @param forceRescan If true, ignores cache and rescans all files
+   * @returns Privacy-aware scan results
+   */
+  async scanVaultWithPrivacyBatch(files: FileMetadata[], forceRescan = false): Promise<{
+    files: FileMetadata[];
+    results: PrivacyScanResults;
+  }> {
+    const startTime = Date.now();
+    this.logger.info(`Starting batch privacy-aware scan for ${files.length} files`);
+
+    try {
+      // Initialize results tracking
+      const results: PrivacyScanResults = {
+        totalFiles: files.length,
+        excludedFiles: 0,
+        filteredFiles: 0,
+        verifiedFiles: 0,
+        failedVerification: 0,
+        skippedFiles: 0,
+        scanDuration: 0,
+        privacyActions: {
+          fileExclusions: 0,
+          folderExclusions: 0,
+          sectionRedactions: 0,
+          contentRedactions: 0
+        },
+        verificationFailures: []
+      };
+
+      // Optimize privacy filter for batch processing
+      this.privacyFilter.optimizeForLargeVault();
+
+      // Process files in batches for better performance
+      const batchSize = this.config.privacySettings?.batchSize || 50;
+      const processedFiles: FileMetadata[] = [];
+      
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        const batchResults = await this.processBatchWithPrivacy(batch, results, forceRescan);
+        processedFiles.push(...batchResults);
+      }
+
+      // Get privacy action summary from PrivacyFilter
+      const privacyReport = this.privacyFilter.generateAuditReport();
+      results.privacyActions = {
+        fileExclusions: privacyReport.summary.fileExclusions,
+        folderExclusions: privacyReport.summary.folderExclusions,
+        sectionRedactions: privacyReport.summary.sectionRedactions,
+        contentRedactions: privacyReport.summary.contentRedactions
+      };
+
+      results.scanDuration = Date.now() - startTime;
+      
+      this.logger.info('Batch privacy-aware scan completed', {
+        totalFiles: results.totalFiles,
+        excludedFiles: results.excludedFiles,
+        filteredFiles: results.filteredFiles,
+        duration: results.scanDuration,
+        cacheStats: this.privacyFilter.getCacheStats()
+      });
+
+      return {
+        files: processedFiles,
+        results
+      };
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.error(`Batch privacy-aware scan failed after ${duration}ms`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process a batch of files with privacy analysis
+   * @param batch Array of files to process
+   * @param results Results object to update
+   * @param forceRescan Whether to force rescan
+   * @returns Processed file metadata
+   */
+  private async processBatchWithPrivacy(
+    batch: FileMetadata[], 
+    results: PrivacyScanResults,
+    forceRescan: boolean
+  ): Promise<FileMetadata[]> {
+    const processedFiles: FileMetadata[] = [];
+    
+    // Prepare batch requests for privacy filter
+    const batchRequests: Array<{
+      filePath: string;
+      content: string;
+      operation: 'shouldExclude' | 'filterContent';
+      fileHash?: string;
+    }> = [];
+
+    // Read file contents and prepare batch requests
+    for (const file of batch) {
+      try {
+        // Check if we should skip this file
+        if (this.shouldSkipPrivacyAnalysis(file)) {
+          processedFiles.push(file);
+          continue;
+        }
+
+        // Read file content
+        const content = await this.readFileContent(file.path);
+        if (!content) {
+          processedFiles.push(file);
+          continue;
+        }
+
+        // Generate file hash for caching
+        const fileHash = this.generateFileHash(file);
+
+        // Add to batch requests
+        batchRequests.push({
+          filePath: file.path,
+          content,
+          operation: 'shouldExclude',
+          fileHash
+        });
+
+      } catch (error) {
+        this.logger.error(`Error preparing file ${file.path} for batch processing`, error);
+        processedFiles.push(file);
+      }
+    }
+
+    // Process batch with privacy filter
+    if (batchRequests.length > 0) {
+      try {
+        const batchResults = await this.privacyFilter.processBatch(batchRequests);
+        
+        // Process results
+        for (let i = 0; i < batchRequests.length; i++) {
+          const request = batchRequests[i];
+          const shouldExclude = batchResults[i] as boolean;
+          
+          // Find corresponding file
+          const file = batch.find(f => f.path === request.filePath);
+          if (!file) continue;
+
+          // Update file with privacy information
+          const updatedFile = { ...file };
+          
+          if (shouldExclude) {
+            updatedFile.privacy = {
+              isExcluded: true,
+              exclusionReason: 'privacy_tags',
+              isFiltered: false,
+              privacyTagsFound: this.findPrivacyTagsInContent(request.content),
+              excludedFolder: this.getMatchingExcludedFolder(file.path),
+              privacyAnalyzedAt: Date.now()
+            };
+            results.excludedFiles++;
+          } else {
+            // Filter content if not excluded
+            const filteredContent = this.privacyFilter.filterContentOptimized(
+              request.content, 
+              request.fileHash
+            );
+            
+            updatedFile.privacy = {
+              isExcluded: false,
+              exclusionReason: undefined,
+              isFiltered: filteredContent !== request.content,
+              originalLength: request.content.length,
+              filteredLength: filteredContent.length,
+              privacyTagsFound: this.findPrivacyTagsInContent(request.content),
+              privacyAnalyzedAt: Date.now()
+            };
+            
+            if (filteredContent !== request.content) {
+              results.filteredFiles++;
+            }
+          }
+
+          processedFiles.push(updatedFile);
+        }
+      } catch (error) {
+        this.logger.error('Batch privacy processing failed', error);
+        // Fallback to individual processing
+        for (const file of batch) {
+          const processedFile = await this.processFileWithPrivacy(file, results);
+          processedFiles.push(processedFile);
+        }
+      }
+    }
+
+    return processedFiles;
+  }
+
+  /**
+   * Generate a hash for file metadata for caching purposes
+   */
+  private generateFileHash(file: FileMetadata): string {
+    const hashData = `${file.path}_${file.size}_${file.modifiedAt}`;
+    let hash = 0;
+    for (let i = 0; i < hashData.length; i++) {
+      const char = hashData.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(36);
+  }
+
+  /**
+   * Get performance metrics from privacy filter
+   */
+  getPerformanceMetrics(): any {
+    return this.privacyFilter.getPerformanceMetrics();
+  }
+
+  /**
+   * Get cache statistics from privacy filter
+   */
+  getCacheStats(): any {
+    return this.privacyFilter.getCacheStats();
+  }
+
+  /**
+   * Clear privacy filter cache
+   */
+  clearCache(): void {
+    this.privacyFilter.clearCache();
+  }
+
+  /**
+   * Optimize scanner for large vault processing
+   */
+  optimizeForLargeVault(): void {
+    this.privacyFilter.optimizeForLargeVault();
+    this.config.maxFileSize = Math.max(this.config.maxFileSize || 0, 50 * 1024 * 1024); // 50MB
+    this.config.usePrivacyCache = true;
+    
+    this.logger.info("Privacy-aware scanner optimized for large vault", {
+      maxFileSize: this.config.maxFileSize,
+      cacheEnabled: this.config.usePrivacyCache
+    });
   }
 } 
