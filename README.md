@@ -1,213 +1,163 @@
-# RetrospectAI - Obsidian Plugin
+# RetrospectAI - MVP Release
 
-RetrospectAI is an Obsidian plugin that provides AI-powered retrospective analysis of your notes while respecting your privacy.
+> **AI-powered note analysis and reflection tool for Obsidian**
 
-## Features
+Transform your daily notes into actionable insights with privacy-first AI analysis.
 
-- **AI-Powered Analysis**: Extract patterns, insights, and summaries from your personal notes
-- **Multiple AI Providers**: Choose between cloud-based (OpenAI) or local (Ollama) AI processing
-- **Privacy-First Design**: Comprehensive privacy protection with local processing options
-- **Smart Content Processing**: Advanced markdown parsing with metadata extraction
-- **Flexible Configuration**: Extensive settings for customizing analysis behavior
+## ✨ Core Features
 
-## Privacy First
+### 📝 **Smart Note Analysis**
+- Analyze current note structure, sections, and metadata
+- Extract word counts, links, tags, and key elements
+- Fast processing with intelligent caching
 
-RetrospectAI includes comprehensive privacy protection to ensure sensitive content never reaches AI services:
+### 🤖 **AI-Powered Insights** 
+- Generate personalized insights from your notes
+- Support for OpenAI (GPT-4, GPT-3.5) and local Ollama models
+- Configurable analysis depth and writing styles
 
-- **File-level exclusion** using privacy tags (`#private`, `#noai`, `#confidential`)
-- **Folder-based exclusion** for organizing private content
-- **Section-level redaction** for mixed public/private documents
-- **Local processing** - privacy filtering happens before any external API calls
-- **Privacy levels**: Choose between local-only, hybrid, or cloud processing
+### 📋 **Simple Summary Creation**
+- Create structured summaries of your notes
+- Automatic backlink generation
+- Organized in dedicated Summaries folder
 
-📖 **[Read the complete Privacy Guide](docs/privacy-guide.md)** to learn how to protect your sensitive content.
+### 🔒 **Privacy Protection**
+- Configurable privacy tags (`#private`, `#noai`, `#confidential`)
+- Exclude specific folders from AI analysis
+- Local processing option with Ollama
 
-## AI Setup & Configuration
+## 🚀 Quick Start
 
-RetrospectAI supports multiple AI providers. **You only need to set up ONE provider** based on your preferences:
+### Installation
+1. Download the latest release
+2. Extract to your `.obsidian/plugins/` folder
+3. Enable "RetrospectAI" in Obsidian's Community Plugins settings
 
-### Option 1: OpenAI (Cloud-based) 🌐
+### Setup
+1. Open plugin settings
+2. Configure your AI provider:
+   - **OpenAI**: Add your API key and select model
+   - **Ollama**: Set endpoint (default: `http://localhost:11434`) and model
+3. Customize privacy settings if needed
 
-**Best for**: Users who want the most advanced AI capabilities and don't mind cloud processing.
+### Usage
 
-#### Setup Steps:
-1. **Get an OpenAI API Key**:
-   - Visit [OpenAI API](https://platform.openai.com/api-keys)
-   - Create an account and generate an API key
-   - Note: This requires a paid OpenAI account with credits
+#### Analyze Your Current Note
+- **Ribbon Icon**: Click the brain icon in the left sidebar
+- **Command**: `Ctrl/Cmd + P` → "Analyze Current Note"
+- **Result**: View note structure, metadata, and basic stats
 
-2. **Configure in Obsidian**:
-   - Open Settings → RetrospectAI → AI Settings
-   - Toggle "Enable AI Analysis" to ON
-   - Set "Primary AI Provider" to "OpenAI"
-   - Set "Privacy Level" to "Cloud Services" or "Hybrid"
-   - Enter your API key in "OpenAI API Key"
-   - Choose your preferred model (GPT-3.5 Turbo, GPT-4, etc.)
-   - Click "Test Connection" to verify setup
+#### Get AI Insights
+- **Command**: `Ctrl/Cmd + P` → "Analyze Current Note with AI"
+- **Result**: AI-generated insights and patterns from your note
+- **Privacy**: Automatically excludes private content
 
-#### Supported Models:
-- **GPT-3.5 Turbo**: Fast and cost-effective
-- **GPT-4**: Most capable, higher cost
-- **GPT-4 Turbo**: Latest model with improved performance
+#### Create Simple Summaries
+- **Command**: `Ctrl/Cmd + P` → "Create Simple Summary"
+- **Result**: Structured summary note with analysis results
+- **Location**: Saved in `Summaries/` folder with backlinks
 
-### Option 2: Ollama (Local) 🏠
+## ⚙️ Configuration
 
-**Best for**: Users who prioritize privacy and want completely local AI processing.
+### AI Providers
 
-#### Setup Steps:
-1. **Install Ollama**:
-   ```bash
-   # macOS
-   brew install ollama
-   
-   # Or download from https://ollama.ai
-   ```
+**OpenAI (Recommended)**
+- Models: GPT-4o Mini, GPT-4o, GPT-3.5 Turbo
+- Best for: Comprehensive analysis and insights
+- Setup: Requires API key from OpenAI
 
-2. **Start Ollama Service**:
-   ```bash
-   ollama serve
-   ```
+**Ollama (Privacy-First)**
+- Models: Llama 2, Mistral, CodeLlama, etc.
+- Best for: Local processing, privacy-sensitive content
+- Setup: Install Ollama locally, no API key needed
 
-3. **Pull a Model**:
-   ```bash
-   # Recommended models:
-   ollama pull llama2          # General purpose, 7B parameters
-   ollama pull mistral         # Fast and efficient
-   ollama pull codellama       # Good for code analysis
-   ollama pull neural-chat     # Optimized for conversations
-   ```
+### Privacy Settings
 
-4. **Configure in Obsidian**:
-   - Open Settings → RetrospectAI → AI Settings
-   - Toggle "Enable AI Analysis" to ON
-   - Set "Primary AI Provider" to "Ollama (Local)"
-   - Set "Privacy Level" to "Local Only"
-   - Set "Ollama Endpoint" to `http://localhost:11434` (default)
-   - Set "Ollama Model" to your chosen model (e.g., `llama2`)
-   - Click "Test Connection" to verify setup
+**Privacy Tags** (Default: `private, noai, confidential`)
+- Add tags to any note to exclude from AI analysis
+- Example: `#private` or `#noai`
 
-#### Recommended Models:
-- **llama2**: Best overall performance for personal analysis
-- **mistral**: Faster processing, good for quick insights
-- **neural-chat**: Optimized for conversational analysis
+**Private Folders** (Default: `Private/, Personal/, Confidential/`)
+- Entire folders excluded from AI processing
+- Supports nested folder patterns
 
-### Option 3: Mock Provider (Testing) 🧪
+**Writing Styles**
+- **Personal**: Encouraging and supportive tone
+- **Business**: Analytical and action-oriented
+- **Academic**: Neutral and research-focused
 
-**Best for**: Testing the plugin functionality without setting up real AI services.
+## 🎯 Use Cases
 
-#### Setup Steps:
-1. **Configure in Obsidian**:
-   - Open Settings → RetrospectAI → AI Settings
-   - Toggle "Enable AI Analysis" to ON
-   - Set "Primary AI Provider" to "Mock (Testing)"
-   - Click "Test Connection" to verify setup
+### Daily Reflection
+1. Write your daily notes as usual
+2. Use "Analyze with AI" to get insights
+3. Create summaries for weekly/monthly review
 
-The mock provider generates realistic-looking but fake AI responses for testing purposes.
+### Meeting Notes
+1. Take meeting notes in Obsidian
+2. Generate AI analysis for action items
+3. Create structured summaries for follow-up
 
-## Usage
+### Research Notes
+1. Collect research in notes
+2. Analyze for patterns and connections
+3. Generate summaries for synthesis
 
-### Basic Analysis
-1. **Open a note** you want to analyze
-2. **Click the brain icon** in the ribbon, or
-3. **Use Command Palette** (Ctrl/Cmd + P):
-   - "RetrospectAI: Analyze Current Note" (basic analysis)
-   - "RetrospectAI: Analyze Current Note with AI" (AI-powered analysis)
+### Journal Analysis
+1. Keep personal journal entries
+2. Use privacy tags for sensitive content
+3. Get insights on patterns and growth
 
-### AI-Powered Features
-- **Pattern Detection**: Identifies habits, goals, and behavioral patterns
-- **Sentiment Analysis**: Analyzes emotional tone and mood trends
-- **Content Summarization**: Generates concise summaries of your reflections
-- **Insight Generation**: Provides personalized insights and recommendations
-- **Goal Tracking**: Identifies and tracks progress toward personal goals
+## 🛠️ Troubleshooting
 
-### Commands Available
-- `Analyze Current Note`: Basic markdown and metadata analysis
-- `Analyze Current Note with AI`: Full AI-powered analysis with insights
-- `Show AI Service Status`: Check AI provider status and metrics
-- `Test AI Connection`: Verify your AI provider is working
-- `Show Processing Statistics`: View plugin performance metrics
-- `Clear Processing Cache`: Reset cached analysis results
+### AI Connection Issues
+- **OpenAI**: Verify API key is correct and has credits
+- **Ollama**: Ensure Ollama is running (`ollama serve`)
+- **Test**: Use "Test AI Connection" command
 
-## Privacy Levels Explained
+### Privacy Concerns
+- **Local Processing**: Use Ollama for complete privacy
+- **Content Filtering**: Configure privacy tags and folders
+- **Debug Mode**: Enable in settings to see what's being processed
 
-- **Local Only**: All processing happens on your machine (requires Ollama)
-- **Hybrid**: Sensitive content stays local, general content may use cloud AI
-- **Cloud Services**: Allows cloud-based AI processing for all content
+### Performance
+- **Caching**: Enable caching for faster repeated analysis
+- **File Size**: Large files (>5MB) may process slowly
+- **Batch Processing**: Plugin processes one note at a time
 
-## Troubleshooting
+## 📋 Commands Reference
 
-### AI Not Working?
-1. **Check AI is enabled**: Settings → RetrospectAI → AI Settings → "Enable AI Analysis"
-2. **Verify provider setup**:
-   - OpenAI: Valid API key with credits
-   - Ollama: Service running and model downloaded
-3. **Test connection**: Use "Test AI Connection" command
-4. **Check console**: Open Developer Tools (Ctrl/Cmd + Shift + I) for error messages
+| Command | Description | Shortcut |
+|---------|-------------|----------|
+| Analyze Current Note | Basic note structure analysis | Ribbon icon |
+| Analyze Current Note with AI | AI-powered insights generation | None |
+| Create Simple Summary | Generate structured summary note | None |
+| Test AI Connection | Verify AI provider connectivity | None |
+| Clear Processing Cache | Reset analysis cache | None |
 
-### Common Issues
-- **"AI is disabled"**: Enable AI in settings and configure a provider
-- **OpenAI API errors**: Check API key and account credits
-- **Ollama connection failed**: Ensure Ollama service is running (`ollama serve`)
-- **Model not found**: Pull the model with `ollama pull <model-name>`
+## 🔄 What's Next?
 
-## Development & Testing
+This MVP focuses on core functionality that works reliably. Future versions may include:
+- Vault-wide pattern detection
+- Advanced correlation analysis
+- Batch processing capabilities
+- Custom prompt templates
+- Integration with other plugins
 
-### Manual Testing Procedures
+## 📄 License
 
-#### Setup Test Environment
-1. **Build the plugin**: `npm run build`
-2. **Deploy to test vault**: `npm run deploy:test`
-3. **Open test vault** in Obsidian
-4. **Enable the plugin** in Settings > Community Plugins
+MIT License - feel free to modify and distribute.
 
-#### Basic Functionality Tests
-- [ ] **Plugin loads without errors** (check console)
-- [ ] **Ribbon icon appears** in left sidebar with "brain" icon
-- [ ] **Clicking ribbon icon** triggers handler (check console logs)
-- [ ] **Plugin unloads cleanly** when disabled
-- [ ] **No memory leaks** after multiple load/unload cycles
+## 🤝 Contributing
 
-#### AI Integration Tests
-- [ ] **AI settings appear** in plugin settings
-- [ ] **Provider selection works** (OpenAI, Ollama, Mock)
-- [ ] **Connection testing works** for configured provider
-- [ ] **AI analysis commands** execute without errors
-- [ ] **Error handling** shows helpful messages for misconfiguration
+This is a focused MVP release. For bug reports or feature requests, please create an issue with:
+- Clear description of the problem
+- Steps to reproduce
+- Expected vs actual behavior
+- Your Obsidian and plugin versions
 
-#### Error Handling Tests
-- [ ] **Logger outputs** appear in console with proper formatting
-- [ ] **Error scenarios** are caught and logged appropriately
-- [ ] **User notifications** appear for user-facing errors
+---
 
-#### Development Workflow
-1. **Hot reloading**: Changes auto-rebuild and reload in test vault
-2. **Console monitoring**: Watch for errors during development
-3. **Settings validation**: Verify plugin settings save/load correctly
+**Made with ❤️ for the Obsidian community**
 
-### Test Vault Structure
-```
-.obsidian-test/
-├── .obsidian/
-│   └── plugins/
-│   └── retrospectai/
-│   ├── main.js
-│   └── manifest.json
-├── Daily Notes/
-│   ├── 2024-01-01.md
-│   └── 2024-01-02.md
-└── Sample Notes/
-    ├── Meeting Notes.md
-    └── Project Ideas.md
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
+*Transform your notes into insights, one analysis at a time.*

@@ -1,11 +1,11 @@
 {
 	"id": "retrospective-ai",
-	"name": "resprocetive-ai",
-	"version": "1.0.0",
+	"name": "RetrospectAI",
+	"version": "0.9.0",
 	"minAppVersion": "0.15.0",
-	"description": "Plugin for Obsidian",
+	"description": "AI-powered note analysis and reflection tool for Obsidian. Analyze your notes, generate insights, and create summaries with privacy protection.",
 	"author": "Ernie Hsiung",
-	"authorUrl": "https://obsidian.md",
+	"authorUrl": "https://github.com/erniehsiung",
 	"fundingUrl": "https://obsidian.md/pricing",
 	"isDesktopOnly": false
 }
