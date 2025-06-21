@@ -1,1 +1,120 @@
-# Changelog\n\nAll notable changes to RetrospectAI will be documented in this file.\n\n## [0.9.0] - 2024-12-XX - MVP Release 🎯\n\n### 🎉 **MVP Launch - Focused & Functional**\n\nThis release represents a strategic pivot from enterprise-grade complexity to a focused, user-friendly MVP that delivers core value immediately.\n\n### ✨ **New Features**\n- **Smart Note Analysis**: Analyze current note structure, metadata, and content\n- **AI-Powered Insights**: Generate personalized insights using OpenAI or local Ollama models\n- **Simple Summary Creation**: Create structured summary notes with automatic backlinking\n- **Privacy Protection**: Configurable privacy tags and folder exclusions\n- **Multi-Provider AI Support**: Choose between OpenAI (cloud) or Ollama (local)\n- **Intelligent Caching**: Fast repeat analysis with smart caching system\n- **User-Friendly Interface**: Simplified settings with clear configuration options\n\n### 🔧 **Core Commands**\n- `Analyze Current Note`: Basic structure and metadata analysis\n- `Analyze Current Note with AI`: AI-powered insight generation\n- `Create Simple Summary`: Generate structured summary notes\n- `Test AI Connection`: Verify AI provider connectivity\n- `Clear Processing Cache`: Reset analysis cache\n\n### 🛡️ **Privacy Features**\n- **Privacy Tags**: `#private`, `#noai`, `#confidential` automatically excluded\n- **Private Folders**: Configurable folder-based exclusions\n- **Local Processing**: Complete privacy with Ollama local models\n- **Content Filtering**: Pre-processing privacy filter before AI analysis\n\n### ⚙️ **Configuration**\n- **AI Providers**: OpenAI (GPT-4o Mini, GPT-4o, GPT-3.5) and Ollama support\n- **Writing Styles**: Personal, Business, and Academic tone options\n- **Performance Settings**: Caching, file size limits, debug mode\n- **Privacy Controls**: Comprehensive privacy tag and folder management\n\n### 📋 **Technical Details**\n- **File Size Limit**: 5MB per note (optimized for performance)\n- **Processing Speed**: Sub-10 second analysis for typical notes\n- **Memory Usage**: Optimized caching and cleanup\n- **Error Handling**: Comprehensive error handling with user-friendly messages\n\n### 🎯 **Scope Reduction**\n\nThis MVP release intentionally removes complex enterprise features to focus on core functionality:\n\n#### ✅ **Kept (Core MVP)**\n- Note analysis and AI insights\n- Summary note creation\n- Privacy protection\n- Multi-provider AI support\n- Basic caching and performance optimization\n\n#### ⏸️ **Deferred (Future Versions)**\n- Advanced pattern detection engine\n- Vault-wide correlation analysis\n- Multi-stage AI orchestration\n- Complex prompt engineering\n- Enterprise-grade performance optimization\n- Advanced temporal analysis\n- Batch processing workflows\n\n### 🚀 **Installation & Usage**\n1. Download release files\n2. Extract to `.obsidian/plugins/retrospective-ai/`\n3. Enable plugin in Obsidian settings\n4. Configure AI provider (OpenAI API key or Ollama setup)\n5. Start analyzing your notes!\n\n### 🔄 **Migration from Previous Versions**\n\nIf upgrading from development versions:\n- Settings will be automatically migrated to simplified format\n- Existing analysis cache will be cleared\n- Previous complex configurations will be reset to MVP defaults\n\n### 📖 **Documentation**\n- **README**: Comprehensive setup and usage guide\n- **Project Overview**: High-level project assessment and roadmap\n- **Technical Specifications**: Detailed architecture documentation (for future development)\n\n### 🐛 **Known Limitations**\n- Single note processing only (no batch operations)\n- Basic summary templates (no advanced customization)\n- Limited pattern detection (simple keyword-based)\n- No vault-wide analysis capabilities\n\n### 🎉 **Why This Release Matters**\n\nThis MVP represents a successful pivot from scope creep to focused delivery:\n- **2-week timeline**: Achievable publication target\n- **Core value**: Immediate user benefit\n- **Solid foundation**: 80% of complex features already built for future use\n- **User feedback**: Ready for community testing and iteration\n\n---\n\n## Development History\n\n### [Pre-MVP] - Enterprise Development Phase\n- Comprehensive AI model abstraction layer (✅ Complete)\n- Advanced pattern detection engine (🚧 80% complete)\n- Multi-stage AI orchestration (🚧 Framework ready)\n- Complex dependency management (✅ Complete)\n- Enterprise-grade testing suite (✅ Complete)\n\n**Total effort**: 6x original scope, 3+ months development\n**Result**: High-quality foundation, but too complex for initial release\n\n### [MVP Decision] - Strategic Pivot\n- **Problem**: Scope creep from 2-week personal tool to enterprise platform\n- **Solution**: Extract working core functionality into focused MVP\n- **Timeline**: 1 week to publication-ready state\n- **Strategy**: Leverage existing 80% complete foundation\n\n---\n\n*This changelog follows [Keep a Changelog](https://keepachangelog.com/) format.*" 
+# Changelog
+
+All notable changes to RetrospectAI will be documented in this file.
+
+## [0.9.0] - 2024-12-XX - MVP Release 🎯
+
+### 🎉 **MVP Launch - Focused & Functional**
+
+This release represents a strategic pivot from enterprise-grade complexity to a focused, user-friendly MVP that delivers core value immediately.
+
+### ✨ **New Features**
+- **Smart Note Analysis**: Analyze current note structure, metadata, and content
+- **AI-Powered Insights**: Generate personalized insights using OpenAI or local Ollama models
+- **Simple Summary Creation**: Create structured summary notes with automatic backlinking
+- **Privacy Protection**: Configurable privacy tags and folder exclusions
+- **Multi-Provider AI Support**: Choose between OpenAI (cloud) or Ollama (local)
+- **Intelligent Caching**: Fast repeat analysis with smart caching system
+- **User-Friendly Interface**: Simplified settings with clear configuration options
+
+### 🔧 **Core Commands**
+- `Analyze Current Note`: Basic structure and metadata analysis
+- `Analyze Current Note with AI`: AI-powered insight generation
+- `Create Simple Summary`: Generate structured summary notes
+- `Test AI Connection`: Verify AI provider connectivity
+- `Clear Processing Cache`: Reset analysis cache
+
+### 🛡️ **Privacy Features**
+- **Privacy Tags**: `#private`, `#noai`, `#confidential` automatically excluded
+- **Private Folders**: Configurable folder-based exclusions
+- **Local Processing**: Complete privacy with Ollama local models
+- **Content Filtering**: Pre-processing privacy filter before AI analysis
+
+### ⚙️ **Configuration**
+- **AI Providers**: OpenAI (GPT-4o Mini, GPT-4o, GPT-3.5) and Ollama support
+- **Writing Styles**: Personal, Business, and Academic tone options
+- **Performance Settings**: Caching, file size limits, debug mode
+- **Privacy Controls**: Comprehensive privacy tag and folder management
+
+### 📋 **Technical Details**
+- **File Size Limit**: 5MB per note (optimized for performance)
+- **Processing Speed**: Sub-10 second analysis for typical notes
+- **Memory Usage**: Optimized caching and cleanup
+- **Error Handling**: Comprehensive error handling with user-friendly messages
+
+### 🎯 **Scope Reduction**
+
+This MVP release intentionally removes complex enterprise features to focus on core functionality:
+
+#### ✅ **Kept (Core MVP)**
+- Note analysis and AI insights
+- Summary note creation
+- Privacy protection- Multi-provider AI support- Basic caching and performance optimization
+
+#### ⏸️ **Deferred (Future Versions)**
+- Advanced pattern detection engine
+- Vault-wide correlation analysis
+- Multi-stage AI orchestration
+- Complex prompt engineering
+- Enterprise-grade performance optimization
+- Advanced temporal analysis
+- Batch processing workflows
+
+### 🚀 **Installation & Usage**
+1. Download release files
+2. Extract to `.obsidian/plugins/retrospective-ai/`
+3. Enable plugin in Obsidian settings
+4. Configure AI provider (OpenAI API key or Ollama setup)
+5. Start analyzing your notes!
+
+### 🔄 **Migration from Previous Versions**
+
+If upgrading from development versions:
+- Settings will be automatically migrated to simplified format
+- Existing analysis cache will be cleared
+- Previous complex configurations will be reset to MVP defaults
+
+### 📖 **Documentation**
+- **README**: Comprehensive setup and usage guide
+- **Project Overview**: High-level project assessment and roadmap
+- **Technical Specifications**: Detailed architecture documentation (for future development)
+
+### 🐛 **Known Limitations**
+- Single note processing only (no batch operations)
+- Basic summary templates (no advanced customization)
+- Limited pattern detection (simple keyword-based)
+- No vault-wide analysis capabilities
+
+### 🎉 **Why This Release Matters**
+
+This MVP represents a successful pivot from scope creep to focused delivery:
+- **2-week timeline**: Achievable publication target
+- **Core value**: Immediate user benefit
+- **Solid foundation**: 80% of complex features already built for future use
+- **User feedback**: Ready for community testing and iteration
+
+---
+
+## Development History
+
+### [Pre-MVP] - Enterprise Development Phase
+- Comprehensive AI model abstraction layer (✅ Complete)
+- Advanced pattern detection engine (🚧 80% complete)\
+- Multi-stage AI orchestration (🚧 Framework ready)
+- Complex dependency management (✅ Complete)
+- Enterprise-grade testing suite (✅ Complete)
+
+**Total effort**: 6x original scope, 3+ months development
+
+**Result**: High-quality foundation, but too complex for initial release
+
+### [MVP Decision] 
+- Strategic Pivot
+- **Problem**: Scope creep from 2-week personal tool to enterprise platform
+- **Solution**: Extract working core functionality into focused MVP
+- **Timeline**: 1 week to publication-ready state
+- **Strategy**: Leverage existing 80% complete foundation
+
+---
+
+*This changelog follows [Keep a Changelog](https://keepachangelog.com/) format.*" 
