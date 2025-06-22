@@ -19,7 +19,7 @@ Transform your daily notes into actionable insights with privacy-first AI analys
 ### 📋 **Simple Summary Creation**
 - Create structured summaries of your notes
 - Automatic backlink generation
-- Organized in dedicated Summaries folder
+- Organized in a dedicated Summaries folder
 
 ### 🔒 **Privacy Protection**
 - Configurable privacy tags (`#private`, `#noai`, `#confidential`)
