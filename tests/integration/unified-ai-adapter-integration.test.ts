@@ -333,7 +333,7 @@ describe("Unified AI Adapter Integration Tests", () => {
       expect(costEstimate.estimatedCost).toBeGreaterThanOrEqual(0);
       expect(typeof costEstimate.currency).toBe('string');
       
-      const breakdown = costEstimate.breakdown;
+      const {breakdown} = costEstimate;
       expect(breakdown).toHaveProperty('inputTokens');
       expect(breakdown).toHaveProperty('outputTokens');
       expect(breakdown).toHaveProperty('inputCost');
