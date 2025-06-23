@@ -1,7 +1,7 @@
 {
-	"name": "retrospective-ai-plugin",
-	"version": "0.9.0",
-	"description": "AI-powered note analysis and reflection tool for Obsidian. Analyze your notes, generate insights, and create summaries with privacy protection.",
+	"name": "journal-reflection-plugin",
+	"version": "1.0.0",
+	"description": "Simple weekly journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

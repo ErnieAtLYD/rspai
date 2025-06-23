@@ -1,163 +1,91 @@
-# RetrospectAI - MVP Release
+# Journal Reflection
 
-> **AI-powered note analysis and reflection tool for Obsidian**
+> **Simple weekly journal summaries powered by AI**
 
-Transform your daily notes into actionable insights with privacy-first AI analysis.
+Transform your daily notes into meaningful weekly reflections with one click.
 
-## ✨ Core Features
+## ✨ What it does
 
-### 📝 **Smart Note Analysis**
-- Analyze current note structure, sections, and metadata
-- Extract word counts, links, tags, and key elements
-- Fast processing with intelligent caching
-
-### 🤖 **AI-Powered Insights** 
-- Generate personalized insights from your notes
-- Support for OpenAI (GPT-4, GPT-3.5) and local Ollama models
-- Configurable analysis depth and writing styles
-
-### 📋 **Simple Summary Creation**
-- Create structured summaries of your notes
-- Automatic backlink generation
-- Organized in dedicated Summaries folder
-
-### 🔒 **Privacy Protection**
-- Configurable privacy tags (`#private`, `#noai`, `#confidential`)
-- Exclude specific folders from AI analysis
-- Local processing option with Ollama
+- **One Command**: "Create Weekly Journal Summary"
+- **Smart Collection**: Finds all notes from the past 7 days
+- **Privacy Aware**: Skips notes with `#private` tag
+- **AI Reflection**: Uses OpenAI to create thoughtful weekly summaries
+- **Organized**: Saves summaries in `Summaries/` folder with backlinks
 
 ## 🚀 Quick Start
 
-### Installation
-1. Download the latest release
-2. Extract to your `.obsidian/plugins/` folder
-3. Enable "RetrospectAI" in Obsidian's Community Plugins settings
+### 1. Install
+- Download the latest release
+- Extract to your `.obsidian/plugins/` folder
+- Enable "Journal Reflection" in Community Plugins
 
-### Setup
-1. Open plugin settings
-2. Configure your AI provider:
-   - **OpenAI**: Add your API key and select model
-   - **Ollama**: Set endpoint (default: `http://localhost:11434`) and model
-3. Customize privacy settings if needed
+### 2. Setup
+- Open plugin settings
+- Add your OpenAI API key
+- Choose your preferred model (GPT-4o Mini recommended)
 
-### Usage
+### 3. Use
+- Click the book icon in the ribbon, or
+- Run command: "Create Weekly Journal Summary"
+- Your reflection appears in `Summaries/Weekly Reflection - YYYY-MM-DD.md`
 
-#### Analyze Your Current Note
-- **Ribbon Icon**: Click the brain icon in the left sidebar
-- **Command**: `Ctrl/Cmd + P` → "Analyze Current Note"
-- **Result**: View note structure, metadata, and basic stats
+## ⚙️ Settings
 
-#### Get AI Insights
-- **Command**: `Ctrl/Cmd + P` → "Analyze Current Note with AI"
-- **Result**: AI-generated insights and patterns from your note
-- **Privacy**: Automatically excludes private content
+- **OpenAI API Key**: Your API key from OpenAI
+- **Model**: GPT-4o Mini (recommended), GPT-4o, or GPT-3.5 Turbo
+- **Days to Include**: How far back to look (1-30 days)
+- **Exclude Private**: Skip notes with `#private` tag
 
-#### Create Simple Summaries
-- **Command**: `Ctrl/Cmd + P` → "Create Simple Summary"
-- **Result**: Structured summary note with analysis results
-- **Location**: Saved in `Summaries/` folder with backlinks
+## 💡 How to Use
 
-## ⚙️ Configuration
-
-### AI Providers
-
-**OpenAI (Recommended)**
-- Models: GPT-4o Mini, GPT-4o, GPT-3.5 Turbo
-- Best for: Comprehensive analysis and insights
-- Setup: Requires API key from OpenAI
-
-**Ollama (Privacy-First)**
-- Models: Llama 2, Mistral, CodeLlama, etc.
-- Best for: Local processing, privacy-sensitive content
-- Setup: Install Ollama locally, no API key needed
-
-### Privacy Settings
-
-**Privacy Tags** (Default: `private, noai, confidential`)
-- Add tags to any note to exclude from AI analysis
-- Example: `#private` or `#noai`
-
-**Private Folders** (Default: `Private/, Personal/, Confidential/`)
-- Entire folders excluded from AI processing
-- Supports nested folder patterns
-
-**Writing Styles**
-- **Personal**: Encouraging and supportive tone
-- **Business**: Analytical and action-oriented
-- **Academic**: Neutral and research-focused
-
-## 🎯 Use Cases
-
-### Daily Reflection
+### Daily Journaling
 1. Write your daily notes as usual
-2. Use "Analyze with AI" to get insights
-3. Create summaries for weekly/monthly review
+2. Add `#private` to sensitive entries you want excluded
+3. At the end of each week, run "Create Weekly Journal Summary"
 
-### Meeting Notes
-1. Take meeting notes in Obsidian
-2. Generate AI analysis for action items
-3. Create structured summaries for follow-up
+### What You Get
+Your AI reflection will include:
+- Key themes and patterns from your week
+- Emotional journey and growth observations
+- Important events and insights
+- Areas for future reflection or action
 
-### Research Notes
-1. Collect research in notes
-2. Analyze for patterns and connections
-3. Generate summaries for synthesis
+## 🎯 Perfect For
 
-### Journal Analysis
-1. Keep personal journal entries
-2. Use privacy tags for sensitive content
-3. Get insights on patterns and growth
+- **Daily journalers** who want weekly insights
+- **Reflective thinkers** seeking patterns in their thoughts
+- **Personal growth** enthusiasts tracking their journey
+- **Busy people** who want AI to help process their notes
 
 ## 🛠️ Troubleshooting
 
-### AI Connection Issues
-- **OpenAI**: Verify API key is correct and has credits
-- **Ollama**: Ensure Ollama is running (`ollama serve`)
-- **Test**: Use "Test AI Connection" command
+### "No API Key" Error
+- Go to Settings → Journal Reflection
+- Add your OpenAI API key (starts with `sk-`)
 
-### Privacy Concerns
-- **Local Processing**: Use Ollama for complete privacy
-- **Content Filtering**: Configure privacy tags and folders
-- **Debug Mode**: Enable in settings to see what's being processed
+### "No Notes Found"
+- Make sure you have notes from the past 7 days
+- Check if all your notes have `#private` tags
+- Adjust "Days to Include" in settings
 
-### Performance
-- **Caching**: Enable caching for faster repeated analysis
-- **File Size**: Large files (>5MB) may process slowly
-- **Batch Processing**: Plugin processes one note at a time
+### Summary Already Exists
+- Each week gets one summary
+- Delete the existing summary to regenerate
+- Or wait until next week
 
-## 📋 Commands Reference
+## 🔒 Privacy
 
-| Command | Description | Shortcut |
-|---------|-------------|----------|
-| Analyze Current Note | Basic note structure analysis | Ribbon icon |
-| Analyze Current Note with AI | AI-powered insights generation | None |
-| Create Simple Summary | Generate structured summary note | None |
-| Test AI Connection | Verify AI provider connectivity | None |
-| Clear Processing Cache | Reset analysis cache | None |
-
-## 🔄 What's Next?
-
-This MVP focuses on core functionality that works reliably. Future versions may include:
-- Vault-wide pattern detection
-- Advanced correlation analysis
-- Batch processing capabilities
-- Custom prompt templates
-- Integration with other plugins
+- Only sends note content to OpenAI (not metadata)
+- Notes with `#private` tag are completely excluded
+- Your API key is stored locally in Obsidian
+- No data is stored on our servers
 
 ## 📄 License
 
-MIT License - feel free to modify and distribute.
-
-## 🤝 Contributing
-
-This is a focused MVP release. For bug reports or feature requests, please create an issue with:
-- Clear description of the problem
-- Steps to reproduce
-- Expected vs actual behavior
-- Your Obsidian and plugin versions
+MIT License - Use freely and modify as needed.
 
 ---
 
-**Made with ❤️ for the Obsidian community**
+**Simple. Focused. Effective.**
 
-*Transform your notes into insights, one analysis at a time.*
+*Turn your daily thoughts into weekly wisdom.* 

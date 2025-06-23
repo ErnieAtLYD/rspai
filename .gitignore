@@ -21,6 +21,9 @@ dist/
 # obsidian
 data.json
 
+# Archive of old complex version (keep local only)
+archive/
+
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 
@@ -53,3 +56,4 @@ tasks.json
 tasks/ 
 
 .cursor/mcp.json
+.aider*

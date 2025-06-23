@@ -1,9 +1,9 @@
 {
 	"id": "retrospective-ai",
-	"name": "RetrospectAI",
-	"version": "0.9.0",
+	"name": "Journal Reflection",
+	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "AI-powered note analysis and reflection tool for Obsidian. Analyze your notes, generate insights, and create summaries with privacy protection.",
+	"description": "Simple weekly journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
 	"author": "Ernie Hsiung",
 	"authorUrl": "https://github.com/erniehsiung",
 	"fundingUrl": "https://obsidian.md/pricing",
