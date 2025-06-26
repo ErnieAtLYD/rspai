@@ -1,91 +1,130 @@
-# Journal Reflection
+# Retrospect AI
 
-> **Simple weekly journal summaries powered by AI**
+> **Transform your daily notes into meaningful weekly reflections with AI**
 
-Transform your daily notes into meaningful weekly reflections with one click.
+A simple, focused Obsidian plugin that creates thoughtful weekly summaries from your journal entries using OpenAI.
 
 ## ✨ What it does
 
-- **One Command**: "Create Weekly Journal Summary"
-- **Smart Collection**: Finds all notes from the past 7 days
-- **Privacy Aware**: Skips notes with `#private` tag
-- **AI Reflection**: Uses OpenAI to create thoughtful weekly summaries
-- **Organized**: Saves summaries in `Summaries/` folder with backlinks
+- **📖 One-Click Summaries**: Click the book icon or run a command to generate weekly reflections
+- **🔍 Smart Collection**: Automatically finds notes from the past 7 days (configurable)
+- **🔒 Privacy First**: Skips notes with `#private` tag to protect sensitive content
+- **🤖 AI-Powered**: Uses OpenAI to create thoughtful, encouraging reflections
+- **📁 Organized**: Saves summaries in `Summaries/` folder with backlinks to source notes
+- **⚡ Lightning Fast**: Simple, focused codebase with no unnecessary complexity
 
 ## 🚀 Quick Start
 
 ### 1. Install
 - Download the latest release
-- Extract to your `.obsidian/plugins/` folder
-- Enable "Journal Reflection" in Community Plugins
+- Extract to your `.obsidian/plugins/retrospect-ai/` folder
+- Enable "Journal Reflection" in Community Plugins settings
 
 ### 2. Setup
-- Open plugin settings
-- Add your OpenAI API key
-- Choose your preferred model (GPT-4o Mini recommended)
+- Open plugin settings (Settings → Community Plugins → Journal Reflection)
+- Add your OpenAI API key (get one at [platform.openai.com](https://platform.openai.com/api-keys))
+- Choose your preferred model (GPT-4o Mini recommended for cost/quality balance)
 
 ### 3. Use
-- Click the book icon in the ribbon, or
-- Run command: "Create Weekly Journal Summary"
-- Your reflection appears in `Summaries/Weekly Reflection - YYYY-MM-DD.md`
-
-## ⚙️ Settings
-
-- **OpenAI API Key**: Your API key from OpenAI
-- **Model**: GPT-4o Mini (recommended), GPT-4o, or GPT-3.5 Turbo
-- **Days to Include**: How far back to look (1-30 days)
-- **Exclude Private**: Skip notes with `#private` tag
-
-## 💡 How to Use
-
-### Daily Journaling
-1. Write your daily notes as usual
-2. Add `#private` to sensitive entries you want excluded
-3. At the end of each week, run "Create Weekly Journal Summary"
-
-### What You Get
-Your AI reflection will include:
-- Key themes and patterns from your week
-- Emotional journey and growth observations
-- Important events and insights
-- Areas for future reflection or action
+- **Ribbon Icon**: Click the 📖 book icon in the left sidebar
+- **Command Palette**: Run "Create Weekly Journal Summary"
+- **Result**: A beautiful reflection appears in your `Summaries/` folder
 
 ## 🎯 Perfect For
 
-- **Daily journalers** who want weekly insights
-- **Reflective thinkers** seeking patterns in their thoughts
-- **Personal growth** enthusiasts tracking their journey
-- **Busy people** who want AI to help process their notes
+- **Daily Journaling**: Reflect on your week's entries
+- **Personal Growth**: Identify patterns and insights
+- **Life Review**: Create meaningful weekly retrospectives
+- **Mindfulness**: Gain perspective on your thoughts and experiences
 
-## 🛠️ Troubleshooting
+## ⚙️ Settings
 
-### "No API Key" Error
-- Go to Settings → Journal Reflection
-- Add your OpenAI API key (starts with `sk-`)
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **OpenAI API Key** | Your API key for generating reflections | *Required* |
+| **OpenAI Model** | Which model to use | GPT-4o Mini |
+| **Days to Include** | How far back to look for entries | 7 days |
+| **Exclude Private Notes** | Skip notes with #private tag | Enabled |
 
-### "No Notes Found"
-- Make sure you have notes from the past 7 days
-- Check if all your notes have `#private` tags
-- Adjust "Days to Include" in settings
+## 💡 How It Works
 
-### Summary Already Exists
-- Each week gets one summary
-- Delete the existing summary to regenerate
-- Or wait until next week
+1. **Scans** your vault for notes modified in the last N days
+2. **Filters** out any notes containing `#private` tag
+3. **Combines** the content and sends to OpenAI with a thoughtful prompt
+4. **Creates** a structured reflection focusing on:
+   - Key themes and patterns
+   - Emotional journey and growth
+   - Important events or insights
+   - Areas for future reflection
 
-## 🔒 Privacy
+## 📝 Example Output
 
-- Only sends note content to OpenAI (not metadata)
-- Notes with `#private` tag are completely excluded
-- Your API key is stored locally in Obsidian
-- No data is stored on our servers
+```markdown
+# Weekly Reflection - 2024-01-21
 
-## 📄 License
+*Generated on 2024-01-21 at 14:30*
 
-MIT License - Use freely and modify as needed.
+## Key Themes This Week
+This week showed a beautiful progression in your creative projects...
+
+## Emotional Journey
+I notice a shift from Monday's uncertainty to Friday's confidence...
+
+## Important Insights
+Your reflection on work-life balance reveals...
+
+## Areas for Future Reflection
+Consider exploring how your morning routine impacts...
 
 ---
 
-**Simple. Focused. Effective.**
+## Source Notes
+- [[2024-01-15 Daily Note]]
+- [[2024-01-16 Daily Note]]
+- [[Team Meeting Notes]]
+- [[Weekend Thoughts]]
 
-*Turn your daily thoughts into weekly wisdom.* 
+---
+*This reflection was generated from 4 journal entries from the past 7 days.*
+```
+
+## 🔒 Privacy & Security
+
+- **Local Processing**: Only sends selected content to OpenAI
+- **Privacy Tags**: Automatically excludes notes with `#private`
+- **No Storage**: OpenAI doesn't store your data when using the API
+- **Full Control**: You choose what gets analyzed
+
+## 🛠️ Technical Details
+
+- **Lightweight**: ~200 lines of focused code
+- **Fast**: Direct OpenAI integration, no unnecessary abstractions
+- **Reliable**: Simple architecture means fewer things can break
+- **Extensible**: Clean codebase makes future enhancements easy
+
+## 🎨 Customization Ideas
+
+While the plugin is intentionally simple, you could extend it by:
+- Modifying the AI prompt for different reflection styles
+- Adding custom date ranges
+- Creating templates for different journal types
+- Adding more privacy filters
+
+## 🤝 Contributing
+
+This plugin embraces simplicity! If you have ideas:
+1. Keep it focused on weekly journal reflection
+2. Maintain the clean, readable codebase
+3. Prioritize user experience over features
+
+## 📄 License
+
+MIT License - feel free to use, modify, and share!
+
+## 🙏 Acknowledgments
+
+Built for the Obsidian community with a focus on simplicity and user value over technical complexity.
+
+---
+
+**Ready to transform your journaling practice?** Install Journal Reflection today and start gaining deeper insights from your daily notes! 📖✨ 

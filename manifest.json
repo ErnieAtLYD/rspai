@@ -1,11 +1,11 @@
 {
-	"id": "retrospective-ai",
-	"name": "Journal Reflection",
+	"id": "retrospect-ai",
+	"name": "Retrospect AI",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Simple weekly journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
+	"description": "Simple journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
 	"author": "Ernie Hsiung",
-	"authorUrl": "https://github.com/erniehsiung",
+	"authorUrl": "https://github.com/ErnieAtLYD",
 	"fundingUrl": "https://obsidian.md/pricing",
 	"isDesktopOnly": false
 }
