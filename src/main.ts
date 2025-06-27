@@ -350,7 +350,7 @@ ${backlinks}
 
 		// Migration: Convert old journalFolder to new periodicNoteFolders array
 		if (loadedData.journalFolder && !loadedData.periodicNoteFolders) {
-			const journalFolder = loadedData.journalFolder;
+			const {journalFolder} = loadedData;
 			if (typeof journalFolder === 'string') {
 				const oldFolder = journalFolder.trim();
 				if (oldFolder) {
