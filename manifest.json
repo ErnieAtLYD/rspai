@@ -3,7 +3,7 @@
 	"name": "Retrospect AI",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Simple journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
+	"description": "AI-powered weekly journal summaries. Transform daily notes into meaningful insights.",
 	"author": "Ernie Hsiung",
 	"authorUrl": "https://github.com/ErnieAtLYD",
 	"fundingUrl": "https://obsidian.md/pricing",
