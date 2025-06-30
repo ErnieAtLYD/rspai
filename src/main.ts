@@ -515,25 +515,50 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		const helpToggle = containerEl.createDiv({
 			cls: "setting-item-description journal-reflection-help-toggle",
 		});
-		helpToggle.innerHTML = `<a href="#">📁 Show folder configuration help</a>`;
+		
+		const helpLink = helpToggle.createEl("a", { 
+			href: "#",
+			text: "📁 Show folder configuration help"
+		});
 		
 		const folderHelpEl = containerEl.createDiv({
 			cls: "setting-item-description journal-reflection-folder-help",
 		});
-		folderHelpEl.innerHTML = `
-			<strong>Format:</strong> <code>Daily Notes, Journal/2024, Work/Logs</code><br>
-			<strong>Examples:</strong> Single: <code>Daily Notes</code> | Multiple: <code>Daily Notes, Journal</code><br>
-			<strong>Behavior:</strong> Searches specified folders first, falls back to entire vault if none found<br>
-			<strong>Tips:</strong> Leave empty for vault-wide search • Check validation icon (✓/✗/ℹ) for status
-		`;
+		
+		// Create help content using DOM API
+		const formatLine = folderHelpEl.createDiv();
+		formatLine.createEl("strong", { text: "Format:" });
+		formatLine.appendText(" ");
+		formatLine.createEl("code", { text: "Daily Notes, Journal/2024, Work/Logs" });
+		
+		folderHelpEl.createEl("br");
+		
+		const examplesLine = folderHelpEl.createDiv();
+		examplesLine.createEl("strong", { text: "Examples:" });
+		examplesLine.appendText(" Single: ");
+		examplesLine.createEl("code", { text: "Daily Notes" });
+		examplesLine.appendText(" | Multiple: ");
+		examplesLine.createEl("code", { text: "Daily Notes, Journal" });
+		
+		folderHelpEl.createEl("br");
+		
+		const behaviorLine = folderHelpEl.createDiv();
+		behaviorLine.createEl("strong", { text: "Behavior:" });
+		behaviorLine.appendText(" Searches specified folders first, falls back to entire vault if none found");
+		
+		folderHelpEl.createEl("br");
+		
+		const tipsLine = folderHelpEl.createDiv();
+		tipsLine.createEl("strong", { text: "Tips:" });
+		tipsLine.appendText(" Leave empty for vault-wide search • Check validation icon (✓/✗/ℹ) for status");
 		
 		helpToggle.addEventListener("click", (e) => {
 			e.preventDefault();
 			const isVisible = folderHelpEl.classList.contains("visible");
 			folderHelpEl.classList.toggle("visible", !isVisible);
-			helpToggle.innerHTML = isVisible 
-				? `<a href="#">📁 Show folder configuration help</a>`
-				: `<a href="#">📁 Hide folder configuration help</a>`;
+			helpLink.textContent = isVisible 
+				? "📁 Show folder configuration help"
+				: "📁 Hide folder configuration help";
 		});
 
 		// Reflection output folder
@@ -735,13 +760,13 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		// Set icon based on type
 		switch (type) {
 			case "success":
-				iconEl.innerHTML = "✓";
+				iconEl.textContent = "✓";
 				break;
 			case "error":
-				iconEl.innerHTML = "✗";
+				iconEl.textContent = "✗";
 				break;
 			case "info":
-				iconEl.innerHTML = "ℹ";
+				iconEl.textContent = "ℹ";
 				break;
 		}
 
