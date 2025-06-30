@@ -115,16 +115,10 @@ export default class JournalReflectionPlugin extends Plugin {
 				return fileDate.isAfter(cutoffDate);
 			});
 
-			console.log(
-				`Found ${recentFolderFiles.length} recent files from journal folder (${folderFiles.length} total)`
-			);
 			return recentFolderFiles;
 		}
 
 		// Fallback to current time-based filtering across all files
-		console.log(
-			"No journal folder configured or no files found, falling back to vault-wide search"
-		);
 		const allFiles = this.app.vault.getMarkdownFiles();
 
 		return allFiles.filter((file) => {
@@ -166,9 +160,6 @@ export default class JournalReflectionPlugin extends Plugin {
 
 				if (!folder || !(folder instanceof TFolder)) {
 					// Folder doesn't exist, handle gracefully
-					console.log(
-						`Periodic note folder "${trimmedPath}" not found, skipping`
-					);
 					continue;
 				}
 
@@ -185,10 +176,6 @@ export default class JournalReflectionPlugin extends Plugin {
 				});
 
 				periodicFiles.push(...folderFiles);
-
-				console.log(
-					`Found ${folderFiles.length} markdown files in periodic note folder "${trimmedPath}"`
-				);
 			} catch (error) {
 				// Handle any errors gracefully
 				console.error(
@@ -355,7 +342,7 @@ ${backlinks}
 				const oldFolder = journalFolder.trim();
 				if (oldFolder) {
 					this.settings.periodicNoteFolders = [oldFolder];
-					console.log(`Migrated journal folder "${oldFolder}" to periodicNoteFolders array`);
+					new Notice(`Settings migrated: Journal folder "${oldFolder}" converted to new format`);
 				} else {
 					this.settings.periodicNoteFolders = [];
 				}
@@ -384,7 +371,6 @@ ${backlinks}
 		// Save migrated settings
 		if (needsSave) {
 			await this.saveSettings();
-			console.log("Settings migration completed and saved");
 		}
 	}
 
@@ -393,7 +379,6 @@ ${backlinks}
 		this.validateSettings();
 
 		await this.saveData(this.settings);
-		console.log("Settings saved successfully", this.settings);
 	}
 
 	/**
@@ -430,51 +415,6 @@ ${backlinks}
 		if (!this.settings.reflectionFolder || this.settings.reflectionFolder.trim() === "") {
 			this.settings.reflectionFolder = DEFAULT_SETTINGS.reflectionFolder;
 		}
-	}
-
-	/**
-	 * Test settings persistence (for development/debugging)
-	 */
-	async testSettingsPersistence(): Promise<void> {
-		console.log("=== Testing Settings Persistence ===");
-
-		// Save current settings
-		const originalSettings = { ...this.settings };
-		console.log("Original settings:", originalSettings);
-
-		// Modify settings
-		const testFolders = ["Test Folder 1", "Test Folder 2", "Test/Nested"];
-		this.settings.periodicNoteFolders = testFolders;
-		this.settings.daysToInclude = 14;
-
-		console.log("Modified settings:", this.settings);
-
-		// Save and reload
-		await this.saveSettings();
-		await this.loadSettings();
-
-		console.log("Reloaded settings:", this.settings);
-
-		// Verify persistence
-		const foldersMatch =
-			JSON.stringify(this.settings.periodicNoteFolders) ===
-			JSON.stringify(testFolders);
-		const daysMatch = this.settings.daysToInclude === 14;
-
-		if (foldersMatch && daysMatch) {
-			new Notice("✅ Settings persistence test PASSED");
-			console.log("✅ Settings persistence test PASSED");
-		} else {
-			new Notice("❌ Settings persistence test FAILED");
-			console.log("❌ Settings persistence test FAILED");
-			console.log("Expected folders:", testFolders);
-			console.log("Actual folders:", this.settings.periodicNoteFolders);
-		}
-
-		// Restore original settings
-		this.settings = originalSettings;
-		await this.saveSettings();
-		console.log("Restored original settings");
 	}
 }
 
