@@ -34,9 +34,24 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	reflectionFolder: "Summaries",
 };
 
+/**
+ * Journal Reflection Plugin
+ * @description
+ * This plugin is used to create a weekly summary of the journal entries.
+ * It uses the OpenAI API to generate a summary of the journal entries.
+ * It then creates a summary note in the configured reflection folder.
+ * It also creates backlinks to the source notes.
+ */
 export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
 
+	/**
+	 * Load the plugin
+	 * @description
+	 * This function is used to load the plugin.
+	 * It loads the settings and adds the ribbon icon and command.
+	 * It also adds the settings tab.
+	 */
 	async onload() {
 		await this.loadSettings();
 
@@ -56,6 +71,14 @@ export default class JournalReflectionPlugin extends Plugin {
 		this.addSettingTab(new JournalReflectionSettingTab(this.app, this));
 	}
 
+	/**
+	 * Create a weekly summary
+	 * @description
+	 * This function is used to create a weekly summary of the journal entries.
+	 * It uses the OpenAI API to generate a summary of the journal entries.
+	 * It then creates a summary note in the configured reflection folder.
+	 * It also creates backlinks to the source notes.
+	 */
 	async createWeeklySummary() {
 		if (!this.settings.openaiApiKey) {
 			new Notice("Please set your OpenAI API key in settings first!");
@@ -99,6 +122,10 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Find recent notes
+	 * @returns {Promise<TFile[]>} - Array of markdown files from configured folders
+	 */
 	async findRecentNotes(): Promise<TFile[]> {
 		const cutoffDate = moment().subtract(
 			this.settings.daysToInclude,
@@ -111,8 +138,8 @@ export default class JournalReflectionPlugin extends Plugin {
 		if (folderFiles.length > 0) {
 			// Apply date filtering to folder-discovered files
 			const recentFolderFiles = folderFiles.filter((file) => {
-				const fileDate = moment(file.stat.mtime);
-				return fileDate.isAfter(cutoffDate);
+				const fileDate = this.extractDateFromFile(file);
+				return fileDate && fileDate.isAfter(cutoffDate);
 			});
 
 			return recentFolderFiles;
@@ -122,9 +149,92 @@ export default class JournalReflectionPlugin extends Plugin {
 		const allFiles = this.app.vault.getMarkdownFiles();
 
 		return allFiles.filter((file) => {
-			const fileDate = moment(file.stat.mtime);
-			return fileDate.isAfter(cutoffDate);
+			const fileDate = this.extractDateFromFile(file);
+			return fileDate && fileDate.isAfter(cutoffDate);
 		});
+	}
+
+	/**
+	 * Extract date from file using filename parsing with fallback to creation time
+	 * @param file - The file to extract date from
+	 * @returns {moment.Moment | null} - The extracted date or null if no valid date found
+	 */
+	private extractDateFromFile(file: TFile): moment.Moment | null {
+		// Try to parse date from filename first
+		const filenameDate = this.parseDateFromFilename(file.basename);
+		if (filenameDate && filenameDate.isValid()) {
+			return filenameDate;
+		}
+
+		// Fallback to file creation time
+		const creationDate = moment(file.stat.ctime);
+		return creationDate.isValid() ? creationDate : null;
+	}
+
+	/**
+	 * Parse date from filename using common journal date formats
+	 * @param filename - The filename (without extension) to parse
+	 * @returns {moment.Moment | null} - The parsed date or null if no date pattern found
+	 */
+	private parseDateFromFilename(filename: string): moment.Moment | null {
+		// Common date patterns in journal filenames
+		const datePatterns = [
+			// ISO format: YYYY-MM-DD
+			/(\d{4}-\d{2}-\d{2})/,
+			// US format: MM-DD-YYYY or MM/DD/YYYY
+			/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/,
+			// European format: DD-MM-YYYY or DD/MM/YYYY
+			/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/,
+			// Compact format: YYYYMMDD
+			/(\d{8})/,
+			// Year and day of year: YYYY-DDD
+			/(\d{4}-\d{3})/,
+			// Month and year: YYYY-MM
+			/(\d{4}-\d{2})$/,
+		];
+
+		for (const pattern of datePatterns) {
+			const match = filename.match(pattern);
+			if (match) {
+				const dateStr = match[1];
+				
+				// Try different moment parsing formats based on the pattern
+				let parsedDate: moment.Moment | null = null;
+
+				if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+					// ISO format: YYYY-MM-DD
+					parsedDate = moment(dateStr, "YYYY-MM-DD");
+				} else if (dateStr.match(/^\d{8}$/)) {
+					// Compact format: YYYYMMDD
+					parsedDate = moment(dateStr, "YYYYMMDD");
+				} else if (dateStr.match(/^\d{4}-\d{3}$/)) {
+					// Year and day of year: YYYY-DDD
+					parsedDate = moment(dateStr, "YYYY-DDD");
+				} else if (dateStr.match(/^\d{4}-\d{2}$/)) {
+					// Month and year: YYYY-MM (assume first day of month)
+					parsedDate = moment(dateStr + "-01", "YYYY-MM-DD");
+				} else if (dateStr.match(/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/)) {
+					// Try both US (MM/DD/YYYY) and European (DD/MM/YYYY) formats
+					const usDate = moment(dateStr, ["M/D/YYYY", "MM/DD/YYYY", "M-D-YYYY", "MM-DD-YYYY"], true);
+					const euDate = moment(dateStr, ["D/M/YYYY", "DD/MM/YYYY", "D-M-YYYY", "DD-MM-YYYY"], true);
+					
+					// Prefer the format that results in a more recent date (likely more accurate)
+					if (usDate.isValid() && euDate.isValid()) {
+						parsedDate = usDate.isAfter(euDate) ? usDate : euDate;
+					} else if (usDate.isValid()) {
+						parsedDate = usDate;
+					} else if (euDate.isValid()) {
+						parsedDate = euDate;
+					}
+				}
+
+				if (parsedDate && parsedDate.isValid()) {
+					return parsedDate;
+				}
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -196,6 +306,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * This function is used to get the content of the notes.
 	 */
 	async getNotesContent(files: TFile[]): Promise<string> {
+		// Initialize an empty string to store the combined content
 		let combinedContent = "";
 
 		for (const file of files) {
@@ -212,6 +323,12 @@ export default class JournalReflectionPlugin extends Plugin {
 		return combinedContent;
 	}
 
+	/**
+	 * Generate a summary of the journal entries
+	 * @param content - The content of the journal entries
+	 * @param files - The files to generate the summary from
+	 * @returns {Promise<string>} - The summary of the journal entries
+	 */
 	async generateSummary(content: string, files: TFile[]): Promise<string> {
 		const prompt = `Please analyze these journal entries from the past week and provide a thoughtful reflection. Focus on:
 
@@ -256,6 +373,11 @@ Please provide a structured reflection that would be meaningful for weekly revie
 		return data.choices[0].message.content;
 	}
 
+	/**
+	 * Create a summary note
+	 * @param summary - The summary to create
+	 * @param sourceFiles - The source files to create backlinks to
+	 */
 	async createSummaryNote(
 		summary: string,
 		sourceFiles: TFile[]
@@ -264,8 +386,9 @@ Please provide a structured reflection that would be meaningful for weekly revie
 		const summaryPath = `${this.settings.reflectionFolder}/Weekly Reflection - ${date}.md`;
 
 		// Create Summaries folder if it doesn't exist
-		const summariesFolder =
-			this.app.vault.getAbstractFileByPath(this.settings.reflectionFolder);
+		const summariesFolder = this.app.vault.getAbstractFileByPath(
+			this.settings.reflectionFolder
+		);
 		if (!summariesFolder) {
 			await this.app.vault.createFolder(this.settings.reflectionFolder);
 		}
@@ -313,6 +436,9 @@ ${backlinks}
 		}
 	}
 
+	/**
+	 * Load settings from storage
+	 */
 	async loadSettings() {
 		const loadedData = await this.loadData();
 
@@ -332,17 +458,21 @@ ${backlinks}
 	 * Migrate settings for existing users
 	 * @param loadedData - The raw data loaded from storage
 	 */
-	private async migrateSettings(loadedData: Record<string, unknown>): Promise<void> {
+	private async migrateSettings(
+		loadedData: Record<string, unknown>
+	): Promise<void> {
 		let needsSave = false;
 
 		// Migration: Convert old journalFolder to new periodicNoteFolders array
 		if (loadedData.journalFolder && !loadedData.periodicNoteFolders) {
-			const {journalFolder} = loadedData;
-			if (typeof journalFolder === 'string') {
+			const { journalFolder } = loadedData;
+			if (typeof journalFolder === "string") {
 				const oldFolder = journalFolder.trim();
 				if (oldFolder) {
 					this.settings.periodicNoteFolders = [oldFolder];
-					new Notice(`Settings migrated: Journal folder "${oldFolder}" converted to new format`);
+					new Notice(
+						`Settings migrated: Journal folder "${oldFolder}" converted to new format`
+					);
 				} else {
 					this.settings.periodicNoteFolders = [];
 				}
@@ -358,7 +488,8 @@ ${backlinks}
 
 		// Clean up any empty strings in the array
 		const cleanedFolders = this.settings.periodicNoteFolders.filter(
-			(folder) => folder && typeof folder === "string" && folder.trim().length > 0
+			(folder) =>
+				folder && typeof folder === "string" && folder.trim().length > 0
 		);
 
 		if (
@@ -374,6 +505,9 @@ ${backlinks}
 		}
 	}
 
+	/**
+	 * Save settings to storage
+	 */
 	async saveSettings() {
 		// Validate and clean settings before saving
 		this.validateSettings();
@@ -412,7 +546,10 @@ ${backlinks}
 			this.settings.openaiModel = DEFAULT_SETTINGS.openaiModel;
 		}
 
-		if (!this.settings.reflectionFolder || this.settings.reflectionFolder.trim() === "") {
+		if (
+			!this.settings.reflectionFolder ||
+			this.settings.reflectionFolder.trim() === ""
+		) {
 			this.settings.reflectionFolder = DEFAULT_SETTINGS.reflectionFolder;
 		}
 	}
@@ -515,48 +652,54 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		const helpToggle = containerEl.createDiv({
 			cls: "setting-item-description journal-reflection-help-toggle",
 		});
-		
-		const helpLink = helpToggle.createEl("a", { 
+
+		const helpLink = helpToggle.createEl("a", {
 			href: "#",
-			text: "📁 Show folder configuration help"
+			text: "📁 Show folder configuration help",
 		});
-		
+
 		const folderHelpEl = containerEl.createDiv({
 			cls: "setting-item-description journal-reflection-folder-help",
 		});
-		
+
 		// Create help content using DOM API
 		const formatLine = folderHelpEl.createDiv();
 		formatLine.createEl("strong", { text: "Format:" });
 		formatLine.appendText(" ");
-		formatLine.createEl("code", { text: "Daily Notes, Journal/2024, Work/Logs" });
-		
+		formatLine.createEl("code", {
+			text: "Daily Notes, Journal/2024, Work/Logs",
+		});
+
 		folderHelpEl.createEl("br");
-		
+
 		const examplesLine = folderHelpEl.createDiv();
 		examplesLine.createEl("strong", { text: "Examples:" });
 		examplesLine.appendText(" Single: ");
 		examplesLine.createEl("code", { text: "Daily Notes" });
 		examplesLine.appendText(" | Multiple: ");
 		examplesLine.createEl("code", { text: "Daily Notes, Journal" });
-		
+
 		folderHelpEl.createEl("br");
-		
+
 		const behaviorLine = folderHelpEl.createDiv();
 		behaviorLine.createEl("strong", { text: "Behavior:" });
-		behaviorLine.appendText(" Searches specified folders first, falls back to entire vault if none found");
-		
+		behaviorLine.appendText(
+			" Searches specified folders first, falls back to entire vault if none found"
+		);
+
 		folderHelpEl.createEl("br");
-		
+
 		const tipsLine = folderHelpEl.createDiv();
 		tipsLine.createEl("strong", { text: "Tips:" });
-		tipsLine.appendText(" Leave empty for vault-wide search • Check validation icon (✓/✗/ℹ) for status");
-		
+		tipsLine.appendText(
+			" Leave empty for vault-wide search • Check validation icon (✓/✗/ℹ) for status"
+		);
+
 		helpToggle.addEventListener("click", (e) => {
 			e.preventDefault();
 			const isVisible = folderHelpEl.classList.contains("visible");
 			folderHelpEl.classList.toggle("visible", !isVisible);
-			helpLink.textContent = isVisible 
+			helpLink.textContent = isVisible
 				? "📁 Show folder configuration help"
 				: "📁 Hide folder configuration help";
 		});
