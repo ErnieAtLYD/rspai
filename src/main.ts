@@ -513,15 +513,12 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 		// Add collapsible help section
 		const helpToggle = containerEl.createDiv({
-			cls: "setting-item-description",
+			cls: "setting-item-description journal-reflection-help-toggle",
 		});
-		helpToggle.innerHTML = `<a href="#" style="color: var(--text-accent); text-decoration: none;">📁 Show folder configuration help</a>`;
-		helpToggle.style.marginTop = "5px";
-		helpToggle.style.marginBottom = "15px";
-		helpToggle.style.cursor = "pointer";
+		helpToggle.innerHTML = `<a href="#">📁 Show folder configuration help</a>`;
 		
 		const folderHelpEl = containerEl.createDiv({
-			cls: "setting-item-description",
+			cls: "setting-item-description journal-reflection-folder-help",
 		});
 		folderHelpEl.innerHTML = `
 			<strong>Format:</strong> <code>Daily Notes, Journal/2024, Work/Logs</code><br>
@@ -529,24 +526,14 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 			<strong>Behavior:</strong> Searches specified folders first, falls back to entire vault if none found<br>
 			<strong>Tips:</strong> Leave empty for vault-wide search • Check validation icon (✓/✗/ℹ) for status
 		`;
-		folderHelpEl.style.marginTop = "8px";
-		folderHelpEl.style.marginBottom = "20px";
-		folderHelpEl.style.fontSize = "0.85em";
-		folderHelpEl.style.color = "var(--text-muted)";
-		folderHelpEl.style.lineHeight = "1.3";
-		folderHelpEl.style.padding = "8px";
-		folderHelpEl.style.backgroundColor = "var(--background-secondary)";
-		folderHelpEl.style.borderRadius = "4px";
-		folderHelpEl.style.border = "1px solid var(--background-modifier-border)";
-		folderHelpEl.style.display = "none";
 		
 		helpToggle.addEventListener("click", (e) => {
 			e.preventDefault();
-			const isVisible = folderHelpEl.style.display !== "none";
-			folderHelpEl.style.display = isVisible ? "none" : "block";
+			const isVisible = folderHelpEl.classList.contains("visible");
+			folderHelpEl.classList.toggle("visible", !isVisible);
 			helpToggle.innerHTML = isVisible 
-				? `<a href="#" style="color: var(--text-accent); text-decoration: none;">📁 Show folder configuration help</a>`
-				: `<a href="#" style="color: var(--text-accent); text-decoration: none;">📁 Hide folder configuration help</a>`;
+				? `<a href="#">📁 Show folder configuration help</a>`
+				: `<a href="#">📁 Hide folder configuration help</a>`;
 		});
 
 		// Reflection output folder
@@ -749,26 +736,15 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		switch (type) {
 			case "success":
 				iconEl.innerHTML = "✓";
-				iconEl.style.color = "var(--color-green)";
 				break;
 			case "error":
 				iconEl.innerHTML = "✗";
-				iconEl.style.color = "var(--color-red)";
 				break;
 			case "info":
 				iconEl.innerHTML = "ℹ";
-				iconEl.style.color = "var(--color-blue)";
 				break;
 		}
 
-		// Style the icon
-		iconEl.style.position = "absolute";
-		iconEl.style.right = "10px";
-		iconEl.style.top = "50%";
-		iconEl.style.transform = "translateY(-50%)";
-		iconEl.style.fontSize = "16px";
-		iconEl.style.fontWeight = "bold";
-		iconEl.style.cursor = "help";
 		iconEl.title = tooltip;
 
 		// Make the setting container relative for absolute positioning
@@ -776,7 +752,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 			".setting-item-control"
 		);
 		if (settingControl) {
-			(settingControl as HTMLElement).style.position = "relative";
+			settingControl.classList.add("has-validation");
 			settingControl.appendChild(iconEl);
 		}
 	}
