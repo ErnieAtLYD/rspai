@@ -249,3 +249,77 @@ available in the app when your plugin is enabled.
 .setting-item-control.has-validation {
     position: relative;
 }
+
+/* Encryption UI Styles */
+.encryption-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    font-weight: 500;
+}
+
+.encryption-status.encrypted {
+    background-color: rgba(40, 167, 69, 0.1);
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    color: var(--color-green);
+}
+
+.encryption-status.plain {
+    background-color: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: var(--color-orange);
+}
+
+.status-text {
+    font-size: 0.9em;
+}
+
+/* Password validation feedback */
+.password-validation {
+    margin-top: 8px;
+    font-size: 0.85em;
+}
+
+.password-validation-error {
+    color: var(--color-red);
+}
+
+.password-validation-success {
+    color: var(--color-green);
+}
+
+/* Callout styling for warnings */
+.callout {
+    margin: 16px 0;
+    padding: 16px;
+    border-radius: 4px;
+    border-left: 4px solid;
+}
+
+.callout-warning {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left-color: var(--color-orange);
+}
+
+.callout-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+/* Dark theme adjustments */
+.theme-dark .encryption-status.encrypted {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+.theme-dark .encryption-status.plain {
+    background-color: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.4);
+}
+
+.theme-dark .callout-warning {
+    background-color: rgba(255, 193, 7, 0.15);
+}

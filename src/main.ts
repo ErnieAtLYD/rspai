@@ -11,21 +11,28 @@ import {
 	moment,
 } from "obsidian";
 
+import { MasterPasswordModal, EncryptionSetupModal, EncryptionManagementModal } from "./modals";
+
 import { 
 	ServiceManager,
 	AIService,
 	AIServiceConfig,
 	FileOperationsService,
-	FileOperationsConfig
+	FileOperationsConfig,
+	EncryptionService,
+	EncryptionConfig,
+	EncryptedData
 } from "./services";
 
 interface JournalReflectionSettings {
-	openaiApiKey: string;
+	openaiApiKey: string | EncryptedData;
 	openaiModel: string;
 	daysToInclude: number;
 	excludePrivate: boolean;
 	periodicNoteFolders: string[];
 	reflectionFolder: string;
+	encryptionEnabled?: boolean;
+	encryptionSetup?: boolean;
 }
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -40,6 +47,8 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	excludePrivate: true,
 	periodicNoteFolders: ["Daily Notes"],
 	reflectionFolder: "Summaries",
+	encryptionEnabled: false,
+	encryptionSetup: false,
 };
 
 /**
@@ -53,6 +62,7 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
 	private serviceManager: ServiceManager;
+	private masterPassword: string | null = null;
 
 	/**
 	 * Load the plugin
@@ -88,11 +98,24 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Register all services with the service manager
 	 */
 	private async registerServices(): Promise<void> {
+		// Register encryption service
+		this.serviceManager.register('encryptionService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const config: EncryptionConfig = {
+					iterations: 100000,
+					keyLength: 256
+				};
+				return new EncryptionService(this.app, config);
+			},
+			dependencies: [],
+			singleton: true
+		});
+
 		// Register AI service
 		this.serviceManager.register('aiService', {
 			implementation: (serviceManager: ServiceManager) => {
 				const config: AIServiceConfig = {
-					apiKey: this.settings.openaiApiKey,
+					apiKey: "", // Will be set when needed
 					model: this.settings.openaiModel,
 					maxTokens: OPENAI_MAX_TOKENS,
 					temperature: OPENAI_TEMPERATURE,
@@ -126,14 +149,14 @@ export default class JournalReflectionPlugin extends Plugin {
 	/**
 	 * Update service configurations when settings change
 	 */
-	private updateServiceConfigurations(): void {
+	private async updateServiceConfigurations(): Promise<void> {
 		if (!this.serviceManager) return;
 
 		// Update AI service configuration
 		if (this.serviceManager.has('aiService')) {
 			const aiService = this.serviceManager.resolve<AIService>('aiService');
 			aiService.updateConfig({
-				apiKey: this.settings.openaiApiKey,
+				apiKey: await this.getDecryptedApiKey(),
 				model: this.settings.openaiModel,
 				maxTokens: OPENAI_MAX_TOKENS,
 				temperature: OPENAI_TEMPERATURE,
@@ -171,7 +194,8 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It also creates backlinks to the source notes.
 	 */
 	async createWeeklySummary() {
-		if (!this.settings.openaiApiKey) {
+		const apiKey = await this.getDecryptedApiKey();
+		if (!apiKey) {
 			new Notice("Please set your OpenAI API key in settings first!");
 			return;
 		}
@@ -298,7 +322,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		await this.saveData(this.settings);
 
 		// Update service configurations with new settings
-		this.updateServiceConfigurations();
+		await this.updateServiceConfigurations();
 	}
 
 	/**
@@ -339,6 +363,115 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.settings.reflectionFolder = DEFAULT_SETTINGS.reflectionFolder;
 		}
 	}
+
+	/**
+	 * Get decrypted API key
+	 */
+	private async getDecryptedApiKey(): Promise<string> {
+		if (!this.settings.openaiApiKey) {
+			return "";
+		}
+
+		// If encryption is not enabled, return the key as-is
+		if (!this.settings.encryptionEnabled) {
+			return typeof this.settings.openaiApiKey === 'string' ? this.settings.openaiApiKey : "";
+		}
+
+		// If encryption is enabled but no master password is set, prompt for it
+		if (!this.masterPassword) {
+			const password = await this.promptForMasterPassword();
+			if (!password) {
+				return "";
+			}
+			this.masterPassword = password;
+		}
+
+		// Decrypt the API key
+		try {
+			const encryptionService = this.serviceManager.resolve<EncryptionService>('encryptionService');
+			const encryptedData = this.settings.openaiApiKey as EncryptedData;
+			return await encryptionService.decrypt(encryptedData, this.masterPassword);
+		} catch (error) {
+			new Notice("Failed to decrypt API key. Please check your master password.");
+			this.masterPassword = null;
+			return "";
+		}
+	}
+
+	/**
+	 * Encrypt and store API key
+	 */
+	private async encryptAndStoreApiKey(apiKey: string, masterPassword: string): Promise<void> {
+		if (!apiKey) {
+			this.settings.openaiApiKey = "";
+			return;
+		}
+
+		try {
+			const encryptionService = this.serviceManager.resolve<EncryptionService>('encryptionService');
+			const encryptedData = await encryptionService.encrypt(apiKey, masterPassword);
+			this.settings.openaiApiKey = encryptedData;
+			this.settings.encryptionEnabled = true;
+			this.masterPassword = masterPassword;
+		} catch (error) {
+			throw new Error(`Failed to encrypt API key: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Prompt user for master password
+	 */
+	private async promptForMasterPassword(): Promise<string | null> {
+		return new Promise((resolve) => {
+			const modal = new MasterPasswordModal(this.app, (password) => {
+				resolve(password);
+			});
+			modal.open();
+		});
+	}
+
+	/**
+	 * Setup encryption for the first time
+	 */
+	async setupEncryption(): Promise<boolean> {
+		return new Promise((resolve) => {
+			const modal = new EncryptionSetupModal(this.app, async (password, apiKey) => {
+				if (password && apiKey) {
+					try {
+						await this.encryptAndStoreApiKey(apiKey, password);
+						this.settings.encryptionSetup = true;
+						await this.saveSettings();
+						new Notice("Encryption setup completed successfully!");
+						resolve(true);
+					} catch (error) {
+						new Notice(`Encryption setup failed: ${error.message}`);
+						resolve(false);
+					}
+				} else {
+					resolve(false);
+				}
+			});
+			modal.open();
+		});
+	}
+
+	/**
+	 * Disable encryption and convert to plain text
+	 */
+	async disableEncryption(): Promise<void> {
+		if (!this.settings.encryptionEnabled) {
+			return;
+		}
+
+		const apiKey = await this.getDecryptedApiKey();
+		if (apiKey) {
+			this.settings.openaiApiKey = apiKey;
+			this.settings.encryptionEnabled = false;
+			this.masterPassword = null;
+			await this.saveSettings();
+			new Notice("Encryption disabled. API key is now stored in plain text.");
+		}
+	}
 }
 
 /**
@@ -365,19 +498,58 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h2", { text: "Journal Reflection Settings" });
 
-		// OpenAI API Key
+		// Security Section
+		containerEl.createEl("h3", { text: "Security" });
+		
+		// Encryption status and management
+		const encryptionStatus = this.plugin.settings.encryptionEnabled ? "🔒 Encrypted" : "🔓 Plain Text";
 		new Setting(containerEl)
+			.setName("API Key Storage")
+			.setDesc(`Current status: ${encryptionStatus}. Click to manage encryption settings.`)
+			.addButton((btn) => {
+				btn.setButtonText("Manage Encryption")
+					.onClick(() => {
+						const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
+							// Refresh the settings display after modal closes
+							this.display();
+						});
+						modal.open();
+					});
+			});
+
+		// OpenAI API Key
+		const apiKeySetting = new Setting(containerEl)
 			.setName("OpenAI API Key")
-			.setDesc("Your OpenAI API key for generating reflections")
-			.addText((text) =>
-				text
-					.setPlaceholder("sk-...")
-					.setValue(this.plugin.settings.openaiApiKey)
+			.setDesc(this.plugin.settings.encryptionEnabled ? 
+				"Your API key is encrypted. Use 'Manage Encryption' to modify." : 
+				"Your OpenAI API key for generating reflections (stored in plain text)");
+			
+		if (!this.plugin.settings.encryptionEnabled) {
+			apiKeySetting.addText((text) => {
+				text.setPlaceholder("sk-...")
+					.setValue(typeof this.plugin.settings.openaiApiKey === 'string' ? this.plugin.settings.openaiApiKey : "")
 					.onChange(async (value) => {
 						this.plugin.settings.openaiApiKey = value;
 						await this.plugin.saveSettings();
-					})
-			);
+					});
+				text.inputEl.type = "password";
+			});
+		} else {
+			apiKeySetting.addText((text) => {
+				text.setPlaceholder("[Encrypted]")
+					.setValue("[Encrypted]")
+					.setDisabled(true);
+			});
+		}
+		
+		// Security warning for plain text storage
+		if (!this.plugin.settings.encryptionEnabled) {
+			const warningEl = containerEl.createDiv({ cls: "setting-item-description" });
+			warningEl.style.color = "var(--text-warning)";
+			warningEl.innerHTML = "⚠️ <strong>Security Warning:</strong> Your API key is stored in plain text. Consider enabling encryption for better security.";
+		}
+		
+		containerEl.createEl("h3", { text: "AI Configuration" });
 
 		// Model selection
 		new Setting(containerEl)

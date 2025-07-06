@@ -7,3 +7,5 @@ export { AIService } from "./AIService";
 export type { AIServiceConfig } from "./AIService";
 export { FileOperationsService } from "./FileOperationsService";
 export type { FileOperationsConfig } from "./FileOperationsService";
+export { EncryptionService } from "./EncryptionService";
+export type { EncryptionConfig, EncryptedData } from "./EncryptionService";
