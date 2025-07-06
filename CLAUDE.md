@@ -6,6 +6,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly journal summaries. The plugin analyzes journal entries from the past week and generates thoughtful reflections using OpenAI's API.
 
+## Architectural Evolution
+
+### From Single-File to Service-Based Architecture
+
+**Original Approach:** This plugin initially used a single-file architecture (`main.ts`) for simplicity and rapid development. This approach worked well for the core functionality of scanning notes and generating AI summaries.
+
+**Drivers for Change:** The introduction of AES-256 encryption for API key storage introduced several complexities that made the single-file approach unsustainable:
+
+1. **Security Requirements**: Encryption functionality requires careful separation of concerns, secure key management, and proper lifecycle handling
+2. **Testing Complexity**: Cryptographic operations need isolated unit testing with proper mocking strategies
+3. **Code Maintainability**: The encryption feature alone added ~600 lines of code, making the single file unwieldy
+4. **Dependency Management**: Encryption service needs to interact with settings, UI components, and the main plugin in complex ways
+
+**Why Service-Based Architecture:** The move to a service-based architecture was driven by specific needs:
+
+- **Security Isolation**: EncryptionService can be tested independently and has clear boundaries for sensitive operations
+- **Dependency Injection**: Services can be mocked for testing without affecting the entire plugin
+- **Modularity**: Each service has a single responsibility (AI operations, file operations, encryption)
+- **Lifecycle Management**: Services can be initialized, configured, and disposed of independently
+- **Future Extensibility**: New features can be added as services without modifying existing code
+
+**Justification for Complexity:** While this architecture adds complexity, it provides critical benefits:
+
+- **Security**: Encryption operations are isolated and can be thoroughly tested
+- **Testability**: Each service can be unit tested with proper mocking
+- **Maintainability**: Code is organized by functionality rather than bundled together
+- **Reliability**: Clear service boundaries reduce the risk of side effects
+- **Scalability**: New features can be added without increasing technical debt
+
+The added complexity is justified by the security-critical nature of the encryption feature and the need for a robust, testable foundation for future development.
+
 ## Common Development Commands
 
 ### Build and Development
@@ -23,6 +54,8 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - `tsc -noEmit -skipLibCheck` - Type check without emitting files (part of build process)
 
 ## Architecture Overview
+
+*See [Architectural Evolution](#architectural-evolution) for the rationale behind adopting a service-based architecture.*
 
 ### Core Components
 
@@ -253,3 +286,9 @@ root/
 - Minimal DOM manipulation and memory usage
 - Proper cleanup of event listeners and resources through ServiceManager
 - Lazy initialization of services only when needed
+
+**Architecture Trade-offs:**
+- Service-based architecture adds slight overhead compared to single-file approach
+- Trade-off is justified by improved security, testability, and maintainability
+- Performance impact is minimal for typical plugin usage scenarios
+- Benefits of modularity and proper separation of concerns outweigh the minor overhead
