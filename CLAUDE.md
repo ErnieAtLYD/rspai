@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly journal summaries. The plugin analyzes journal entries from the past week and generates thoughtful reflections using OpenAI's API.
+This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly journal summaries and comprehensive behavioral analysis. The plugin analyzes journal entries to generate thoughtful reflections, detect patterns, identify trends, and provide actionable insights using OpenAI's API.
 
 ## Common Development Commands
 
@@ -38,6 +38,9 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - **AIService**: Handles OpenAI API interactions and prompt generation
 - **FileOperationsService**: Manages file discovery, content extraction, and summary creation
 - **EncryptionService**: Provides AES-256 encryption for secure API key storage
+- **CacheService**: High-performance caching with TTL and disk persistence for analysis results
+- **PatternRecognitionService**: Behavioral pattern detection, trend analysis, and insight generation
+- **AnalysisManager**: Central orchestrator for comprehensive AI-powered analysis
 
 **User Interface** (`src/modals.ts`)
 - **MasterPasswordModal**: Prompts for master password to decrypt API keys
@@ -46,10 +49,15 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 
 **Key Features:**
 - **Weekly Summary Generation**: Scans recent notes, filters private content, sends to OpenAI
+- **Advanced Pattern Recognition**: Detects mood, activity, sleep, and productivity patterns
+- **Trend Analysis**: Identifies behavioral trends and changes over time
+- **AI-Powered Insights**: Generates actionable insights for personal growth
+- **Comprehensive Analysis Engine**: Combines patterns, trends, and insights with caching
 - **Settings Management**: Configurable OpenAI API key, model selection, date ranges
 - **Privacy Protection**: Automatically excludes notes with `#private` tag
 - **Smart File Discovery**: Searches configured periodic note folders or falls back to vault-wide search
 - **Encrypted Storage**: Optional AES-256 encryption for API keys with master password protection
+- **Performance Caching**: Multi-level caching system for analysis results with disk persistence
 
 ### Service-Based Architecture
 
@@ -81,6 +89,11 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - `reflectionFolder`: Where to save generated summaries
 - `encryptionEnabled`: Whether API key encryption is enabled
 - `encryptionSetup`: Whether encryption has been set up
+- `analysisEnabled`: Enable/disable analysis engine features (default: true)
+- `patternThreshold`: Minimum confidence for pattern detection (default: 0.6)
+- `enableTrendAnalysis`: Enable trend analysis over time (default: true)
+- `enableSemanticAnalysis`: Enable AI-powered insight generation (default: true)
+- `cacheAnalysisResults`: Enable caching of analysis results (default: true)
 
 **Settings Migration**: Handles migration from old `journalFolder` string to new `periodicNoteFolders` array
 
@@ -145,6 +158,58 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - Secure random number generation for cryptographic values
 - Proper memory handling for sensitive data
 
+### Analysis Engine Architecture
+
+**AnalysisManager** (`src/services/AnalysisManager.ts`)
+- **Central Orchestrator**: Coordinates all analysis operations across services
+- **Multiple Analysis Types**: Supports pattern-only, trend-only, and comprehensive analysis
+- **Caching Integration**: Intelligent caching with configurable TTL for performance
+- **Analysis History**: Tracks and persists analysis results for trend comparison
+- **Concurrent Analysis Management**: Prevents duplicate analysis requests
+- **Report Generation**: Creates formatted markdown reports with insights
+
+**PatternRecognitionService** (`src/services/PatternRecognitionService.ts`)
+- **Behavioral Pattern Detection**: 
+  - Mood patterns (positive, negative, neutral emotional states)
+  - Activity patterns (exercise, social, work, creative activities)
+  - Sleep patterns (sleep-related concerns and focus areas)
+  - Productivity patterns (high/low productivity indicators)
+- **Trend Analysis**: 
+  - Word count trends over time
+  - Sentiment analysis trends (extensible)
+  - Topic diversity analysis (extensible)
+- **AI-Powered Insights**: Uses OpenAI to generate deep semantic insights
+- **Rule-Based Insights**: Fallback analysis for reliable basic insights
+- **Configurable Thresholds**: Adjustable confidence levels for pattern detection
+
+**CacheService** (`src/services/CacheService.ts`)
+- **Multi-Level Caching**: Supports analysis results, patterns, trends, and insights
+- **TTL Management**: Configurable time-to-live for different cache types
+- **Disk Persistence**: Optional cache survival across plugin restarts
+- **Memory Management**: Size limits with LRU eviction policy
+- **Cache Key Generation**: Intelligent key generation based on content and parameters
+- **Statistics Tracking**: Cache hit ratios and memory usage monitoring
+
+**Analysis Workflow:**
+1. **Input Processing**: Files are discovered and content extracted
+2. **Pattern Detection**: Behavioral patterns identified with confidence scores
+3. **Trend Analysis**: Temporal trends calculated across multiple data points
+4. **Insight Generation**: AI and rule-based insights synthesized
+5. **Report Creation**: Comprehensive reports generated and cached
+6. **Result Persistence**: Analysis history maintained for comparison
+
+**Command Integration:**
+- `analyze-patterns`: Generate pattern analysis reports
+- `analyze-trends`: Create trend analysis over 14-day periods
+- `comprehensive-analysis`: Full analysis with AI insights and summaries
+- `clear-analysis-cache`: Cache management and cleanup
+
+**Performance Optimizations:**
+- **Intelligent Caching**: 6-24 hour TTL based on analysis type
+- **Incremental Analysis**: Avoids re-analyzing unchanged content
+- **Background Processing**: Non-blocking analysis execution
+- **Memory Efficiency**: Streaming content processing for large datasets
+
 ## Development Guidelines
 
 ### Code Style (from cursor rules)
@@ -185,7 +250,10 @@ src/
     ├── BaseService.ts     # Abstract base service class
     ├── AIService.ts       # OpenAI API integration
     ├── FileOperationsService.ts # File discovery and processing
-    └── EncryptionService.ts # AES-256 encryption implementation
+    ├── EncryptionService.ts # AES-256 encryption implementation
+    ├── CacheService.ts    # High-performance caching with TTL and persistence
+    ├── PatternRecognitionService.ts # Behavioral pattern detection and trend analysis
+    └── AnalysisManager.ts # Central analysis orchestrator and report generation
 
 tests/
 ├── setup.ts               # Test setup configuration

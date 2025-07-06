@@ -6,9 +6,8 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
-	TFile,
-	TFolder,
 	moment,
+	TFolder
 } from "obsidian";
 
 import { MasterPasswordModal, EncryptionSetupModal, EncryptionManagementModal } from "./modals";
@@ -21,7 +20,13 @@ import {
 	FileOperationsConfig,
 	EncryptionService,
 	EncryptionConfig,
-	EncryptedData
+	EncryptedData,
+	CacheService,
+	CacheConfig,
+	PatternRecognitionService,
+	PatternRecognitionConfig,
+	AnalysisManager,
+	AnalysisManagerConfig
 } from "./services";
 
 interface JournalReflectionSettings {
@@ -33,6 +38,11 @@ interface JournalReflectionSettings {
 	reflectionFolder: string;
 	encryptionEnabled?: boolean;
 	encryptionSetup?: boolean;
+	analysisEnabled?: boolean;
+	patternThreshold?: number;
+	enableTrendAnalysis?: boolean;
+	enableSemanticAnalysis?: boolean;
+	cacheAnalysisResults?: boolean;
 }
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -49,6 +59,11 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	reflectionFolder: "Summaries",
 	encryptionEnabled: false,
 	encryptionSetup: false,
+	analysisEnabled: true,
+	patternThreshold: 0.6,
+	enableTrendAnalysis: true,
+	enableSemanticAnalysis: true,
+	cacheAnalysisResults: true,
 };
 
 /**
@@ -83,11 +98,35 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.createWeeklySummary();
 		});
 
-		// Add command
+		// Add commands
 		this.addCommand({
 			id: "create-weekly-summary",
 			name: "Create Weekly Journal Summary",
 			callback: () => this.createWeeklySummary(),
+		});
+
+		this.addCommand({
+			id: "analyze-patterns",
+			name: "Analyze Journal Patterns",
+			callback: () => this.analyzePatterns(),
+		});
+
+		this.addCommand({
+			id: "analyze-trends",
+			name: "Analyze Journal Trends",
+			callback: () => this.analyzeTrends(),
+		});
+
+		this.addCommand({
+			id: "comprehensive-analysis",
+			name: "Comprehensive Journal Analysis",
+			callback: () => this.performComprehensiveAnalysis(),
+		});
+
+		this.addCommand({
+			id: "clear-analysis-cache",
+			name: "Clear Analysis Cache",
+			callback: () => this.clearAnalysisCache(),
 		});
 
 		// Add settings tab
@@ -106,6 +145,21 @@ export default class JournalReflectionPlugin extends Plugin {
 					keyLength: 256
 				};
 				return new EncryptionService(this.app, config);
+			},
+			dependencies: [],
+			singleton: true
+		});
+
+		// Register cache service
+		this.serviceManager.register('cacheService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const config: CacheConfig = {
+					defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
+					maxSize: 1000,
+					persistToDisk: true,
+					cleanupInterval: 5 * 60 * 1000 // 5 minutes
+				};
+				return new CacheService(this.app, config);
 			},
 			dependencies: [],
 			singleton: true
@@ -139,6 +193,51 @@ export default class JournalReflectionPlugin extends Plugin {
 				return new FileOperationsService(this.app, config);
 			},
 			dependencies: [],
+			singleton: true
+		});
+
+		// Register pattern recognition service
+		this.serviceManager.register('patternRecognitionService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const aiService = serviceManager.resolve<AIService>('aiService');
+				const cacheService = serviceManager.resolve<CacheService>('cacheService');
+				const config: PatternRecognitionConfig = {
+					aiService,
+					cacheService,
+					analysisDepth: 'medium',
+					patternThreshold: 0.6,
+					enableTrendAnalysis: true,
+					enableSemanticAnalysis: true
+				};
+				return new PatternRecognitionService(this.app, config);
+			},
+			dependencies: ['aiService', 'cacheService'],
+			singleton: true
+		});
+
+		// Register analysis manager
+		this.serviceManager.register('analysisManager', {
+			implementation: (serviceManager: ServiceManager) => {
+				const aiService = serviceManager.resolve<AIService>('aiService');
+				const fileOperationsService = serviceManager.resolve<FileOperationsService>('fileOperationsService');
+				const cacheService = serviceManager.resolve<CacheService>('cacheService');
+				const patternRecognitionService = serviceManager.resolve<PatternRecognitionService>('patternRecognitionService');
+				
+				const config: AnalysisManagerConfig = {
+					aiService,
+					fileOperationsService,
+					cacheService,
+					patternRecognitionService,
+					defaultOptions: {
+						useCache: true,
+						depth: 'medium',
+						includePredictions: false,
+						generateSummary: true
+					}
+				};
+				return new AnalysisManager(this.app, config);
+			},
+			dependencies: ['aiService', 'fileOperationsService', 'cacheService', 'patternRecognitionService'],
 			singleton: true
 		});
 
@@ -182,6 +281,19 @@ export default class JournalReflectionPlugin extends Plugin {
 	async onunload() {
 		if (this.serviceManager) {
 			await this.serviceManager.disposeAll();
+		}
+	}
+
+	/**
+	 * Validate that the API key is configured
+	 */
+	private async validateApiKey(): Promise<boolean> {
+		try {
+			const apiKey = await this.getDecryptedApiKey();
+			return !!(apiKey && apiKey.trim().length > 0);
+		} catch (error) {
+			console.error("API key validation failed:", error);
+			return false;
 		}
 	}
 
@@ -241,7 +353,209 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Analyze journal patterns
+	 */
+	async analyzePatterns(): Promise<void> {
+		if (!this.serviceManager) {
+			new Notice("Services not initialized");
+			return;
+		}
 
+		if (!await this.validateApiKey()) {
+			new Notice("Please configure your OpenAI API key first");
+			return;
+		}
+
+		new Notice("Analyzing journal patterns...");
+
+		try {
+			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
+			const patterns = await analysisManager.analyzePatterns(7);
+
+			if (patterns.length === 0) {
+				new Notice("No significant patterns detected in recent entries.");
+				return;
+			}
+
+			// Create patterns report
+			const report = this.formatPatternsReport(patterns);
+			const fileName = `Pattern Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
+			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
+
+			this.app.workspace.getLeaf().openFile(reportFile);
+			new Notice(`Found ${patterns.length} patterns - report created!`);
+		} catch (error) {
+			console.error("Error analyzing patterns:", error);
+			new Notice(`Failed to analyze patterns: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Analyze journal trends
+	 */
+	async analyzeTrends(): Promise<void> {
+		if (!this.serviceManager) {
+			new Notice("Services not initialized");
+			return;
+		}
+
+		if (!await this.validateApiKey()) {
+			new Notice("Please configure your OpenAI API key first");
+			return;
+		}
+
+		new Notice("Analyzing journal trends...");
+
+		try {
+			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
+			const trends = await analysisManager.analyzeTrends(14);
+
+			if (trends.length === 0) {
+				new Notice("No significant trends detected in recent entries.");
+				return;
+			}
+
+			// Create trends report
+			const report = this.formatTrendsReport(trends);
+			const fileName = `Trend Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
+			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
+
+			this.app.workspace.getLeaf().openFile(reportFile);
+			new Notice(`Found ${trends.length} trends - report created!`);
+		} catch (error) {
+			console.error("Error analyzing trends:", error);
+			new Notice(`Failed to analyze trends: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Perform comprehensive analysis
+	 */
+	async performComprehensiveAnalysis(): Promise<void> {
+		if (!this.serviceManager) {
+			new Notice("Services not initialized");
+			return;
+		}
+
+		if (!await this.validateApiKey()) {
+			new Notice("Please configure your OpenAI API key first");
+			return;
+		}
+
+		new Notice("Performing comprehensive analysis...");
+
+		try {
+			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
+			const result = await analysisManager.analyzeJournalEntries(7, { 
+				generateSummary: true, 
+				depth: 'deep' 
+			});
+
+			// Create comprehensive report
+			const report = this.formatComprehensiveReport(result);
+			const fileName = `Comprehensive Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
+			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
+
+			this.app.workspace.getLeaf().openFile(reportFile);
+			new Notice(`Analysis complete! Confidence: ${(result.confidence * 100).toFixed(0)}%`);
+		} catch (error) {
+			console.error("Error performing comprehensive analysis:", error);
+			new Notice(`Failed to perform analysis: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Clear analysis cache
+	 */
+	async clearAnalysisCache(): Promise<void> {
+		if (!this.serviceManager) {
+			new Notice("Services not initialized");
+			return;
+		}
+
+		try {
+			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
+			await analysisManager.clearAnalysisCache();
+		} catch (error) {
+			console.error("Error clearing cache:", error);
+			new Notice(`Failed to clear cache: ${error.message}`);
+		}
+	}
+
+	private formatPatternsReport(patterns: any[]): string {
+		let report = `# Journal Pattern Analysis\n\n`;
+		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
+		report += `## Detected Patterns (${patterns.length})\n\n`;
+
+		for (const pattern of patterns) {
+			report += `### ${pattern.type.replace('_', ' ').toUpperCase()}\n`;
+			report += `- **Confidence**: ${(pattern.confidence * 100).toFixed(0)}%\n`;
+			report += `- **Description**: ${pattern.description}\n`;
+			if (pattern.metadata?.keywords) {
+				report += `- **Keywords**: ${pattern.metadata.keywords.join(', ')}\n`;
+			}
+			report += `\n`;
+		}
+
+		return report;
+	}
+
+	private formatTrendsReport(trends: any[]): string {
+		let report = `# Journal Trend Analysis\n\n`;
+		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
+		report += `## Detected Trends (${trends.length})\n\n`;
+
+		for (const trend of trends) {
+			report += `### ${trend.metric.replace('_', ' ').toUpperCase()}\n`;
+			report += `- **Direction**: ${trend.direction}\n`;
+			report += `- **Strength**: ${trend.strength.toFixed(2)}\n`;
+			report += `- **Data Points**: ${trend.timePoints.length}\n`;
+			report += `\n`;
+		}
+
+		return report;
+	}
+
+	private formatComprehensiveReport(result: any): string {
+		let report = `# Comprehensive Journal Analysis\n\n`;
+		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n`;
+		report += `Time Range: ${result.timeRange}\n`;
+		report += `Overall Confidence: ${(result.confidence * 100).toFixed(0)}%\n\n`;
+
+		if (result.summary) {
+			report += `## Summary\n\n${result.summary}\n\n`;
+		}
+
+		if (result.patterns.length > 0) {
+			report += `## Patterns (${result.patterns.length})\n\n`;
+			for (const pattern of result.patterns) {
+				report += `- **${pattern.type}**: ${pattern.description} (${(pattern.confidence * 100).toFixed(0)}%)\n`;
+			}
+			report += `\n`;
+		}
+
+		if (result.trends.length > 0) {
+			report += `## Trends (${result.trends.length})\n\n`;
+			for (const trend of result.trends) {
+				report += `- **${trend.metric}**: ${trend.direction} trend (strength: ${trend.strength.toFixed(2)})\n`;
+			}
+			report += `\n`;
+		}
+
+		if (result.insights.length > 0) {
+			report += `## Insights (${result.insights.length})\n\n`;
+			for (const insight of result.insights) {
+				report += `### ${insight.category}\n`;
+				report += `${insight.insight}\n\n`;
+			}
+		}
+
+		return report;
+	}
 
 	/**
 	 * Load settings from storage

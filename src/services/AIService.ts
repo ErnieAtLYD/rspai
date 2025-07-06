@@ -66,6 +66,32 @@ export class AIService extends BaseService {
     }
 
     /**
+     * Generate a response to a custom prompt
+     * 
+     * @param prompt - Custom prompt to send to the AI
+     * @returns Generated response text
+     */
+    async generateResponse(prompt: string): Promise<string> {
+        this.ensureReady();
+
+        if (!this.config.apiKey) {
+            throw new Error("OpenAI API key is not configured");
+        }
+
+        if (!prompt || prompt.trim().length === 0) {
+            throw new Error("No prompt provided for response generation");
+        }
+        
+        try {
+            const response = await this.callOpenAI(prompt);
+            return this.extractSummaryFromResponse(response);
+        } catch (error) {
+            console.error("Failed to generate response:", error);
+            throw new Error(`Failed to generate response: ${error.message}`);
+        }
+    }
+
+    /**
      * Test the AI service configuration
      * Makes a simple API call to verify connectivity
      * 

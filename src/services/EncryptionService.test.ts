@@ -114,7 +114,7 @@ describe('EncryptionService', () => {
 
             expect(encryptionService['isWebCryptoAvailable']()).toBe(false);
 
-            global.crypto.subtle = originalSubtle;
+            (global.crypto as any).subtle = originalSubtle;
         });
 
         it('should return false when crypto.getRandomValues is undefined', () => {
