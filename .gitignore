@@ -12,6 +12,9 @@ node_modules
 # Don't include the dist folder with compiled files
 dist/
 
+# Build output
+main.js
+
 # Exclude sourcemaps
 *.map
 
