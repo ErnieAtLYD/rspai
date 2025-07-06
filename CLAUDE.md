@@ -28,28 +28,69 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 
 **Main Plugin Class** (`src/main.ts`)
 - Extends Obsidian's `Plugin` class
-- Handles plugin lifecycle, settings, and core functionality
-- Single-file architecture (~850 lines) for simplicity
+- Handles plugin lifecycle, settings, and UI coordination
+- Uses service-based architecture for modularity and maintainability
+- Manages service registration, initialization, and configuration updates
+
+**Service Architecture** (`src/services/`)
+- **ServiceManager**: Dependency injection container for managing services
+- **BaseService**: Abstract base class providing common service functionality
+- **AIService**: Handles OpenAI API interactions and prompt generation
+- **FileOperationsService**: Manages file discovery, content extraction, and summary creation
+- **EncryptionService**: Provides AES-256 encryption for secure API key storage
+
+**User Interface** (`src/modals.ts`)
+- **MasterPasswordModal**: Prompts for master password to decrypt API keys
+- **EncryptionSetupModal**: Guides users through encryption setup process
+- **EncryptionManagementModal**: Manages encryption settings and testing
 
 **Key Features:**
 - **Weekly Summary Generation**: Scans recent notes, filters private content, sends to OpenAI
 - **Settings Management**: Configurable OpenAI API key, model selection, date ranges
 - **Privacy Protection**: Automatically excludes notes with `#private` tag
 - **Smart File Discovery**: Searches configured periodic note folders or falls back to vault-wide search
+- **Encrypted Storage**: Optional AES-256 encryption for API keys with master password protection
+
+### Service-Based Architecture
+
+**ServiceManager** (`src/services/ServiceManager.ts`)
+- Dependency injection container with lifecycle management
+- Service registration with factory functions and dependency resolution
+- Singleton pattern support for stateful services
+- Proper cleanup and disposal of services
+
+**Service Lifecycle:**
+1. **Registration**: Services register with factory functions and dependencies
+2. **Initialization**: Services initialize in dependency order
+3. **Configuration**: Services can be reconfigured when settings change
+4. **Disposal**: Services properly clean up resources on plugin unload
+
+**Service Communication:**
+- Services communicate through well-defined interfaces
+- Main plugin coordinates between services
+- Configuration changes propagate to all affected services
 
 ### Settings System
 
 **Settings Interface** (`JournalReflectionSettings`)
-- `openaiApiKey`: User's OpenAI API key
+- `openaiApiKey`: User's OpenAI API key (string or encrypted data)
 - `openaiModel`: Selected OpenAI model (default: gpt-4o-mini)
 - `daysToInclude`: Number of days to look back (default: 7)
 - `excludePrivate`: Whether to skip #private tagged notes
 - `periodicNoteFolders`: Array of folder paths to search for journal entries
 - `reflectionFolder`: Where to save generated summaries
+- `encryptionEnabled`: Whether API key encryption is enabled
+- `encryptionSetup`: Whether encryption has been set up
 
 **Settings Migration**: Handles migration from old `journalFolder` string to new `periodicNoteFolders` array
 
-### File Operations
+**Encryption Features:**
+- Optional AES-256 encryption for API key storage
+- Master password protection with validation
+- Graceful fallback to plain text storage
+- Encryption management UI for setup and testing
+
+### File Operations Service
 
 **Note Discovery Strategy:**
 1. First tries to find files in configured `periodicNoteFolders`
@@ -60,7 +101,12 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - Scans note content for `#private` tag
 - Skips entire notes containing this tag when building summary content
 
-### OpenAI Integration
+**Content Processing:**
+- Extracts and combines content from multiple notes
+- Handles file metadata and creation timestamps
+- Creates backlinks to source notes in summaries
+
+### AI Service
 
 **API Configuration:**
 - Endpoint: `https://api.openai.com/v1/chat/completions`
@@ -72,6 +118,32 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 - Focuses on themes, emotional journey, insights, and future reflection areas
 - Encourages supportive, wise friend tone
 - Includes all filtered note content for comprehensive analysis
+
+**Error Handling:**
+- Robust error handling for API failures
+- User-friendly error messages
+- Fallback strategies for network issues
+
+### Encryption Service
+
+**Security Features:**
+- AES-256-GCM encryption for API key storage
+- PBKDF2 key derivation with 100,000 iterations
+- Cryptographically secure random salt generation
+- Password strength validation
+
+**Encryption Process:**
+1. User provides master password and API key
+2. Password is validated for strength requirements
+3. Salt is generated and key is derived using PBKDF2
+4. API key is encrypted using AES-256-GCM
+5. Encrypted data includes salt, IV, and authentication tag
+
+**Security Considerations:**
+- Master password is never stored permanently
+- Encryption keys are derived fresh each time
+- Secure random number generation for cryptographic values
+- Proper memory handling for sensitive data
 
 ## Development Guidelines
 
@@ -105,12 +177,22 @@ This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly jou
 
 ```
 src/
-├── main.ts                 # Single main file containing all functionality
-├── (no other source files - intentionally simple)
+├── main.ts                 # Main plugin class with service coordination
+├── modals.ts              # User interface modals for encryption management
+└── services/
+    ├── index.ts           # Service exports
+    ├── ServiceManager.ts  # Dependency injection container
+    ├── BaseService.ts     # Abstract base service class
+    ├── AIService.ts       # OpenAI API integration
+    ├── FileOperationsService.ts # File discovery and processing
+    └── EncryptionService.ts # AES-256 encryption implementation
 
 tests/
 ├── setup.ts               # Test setup configuration
 ├── mocks/obsidian.js      # Mock Obsidian API for testing
+
+archive/
+├── (legacy files)         # Previous single-file architecture versions
 
 root/
 ├── manifest.json          # Plugin manifest
@@ -118,7 +200,9 @@ root/
 ├── tsconfig.json         # TypeScript configuration
 ├── jest.config.js        # Jest test configuration
 ├── esbuild.config.mjs    # Build configuration
-└── styles.css            # Plugin styles
+├── styles.css            # Plugin styles
+└── styles/
+    └── styles.css         # Additional styling
 ```
 
 ## Testing Strategy
@@ -127,6 +211,8 @@ root/
 - Mocks Obsidian API for unit testing
 - Test timeout set to 30 seconds for potential AI integration tests
 - Coverage reporting configured for src/ directory
+- Service-based architecture enables better unit testing with dependency injection
+- Each service can be tested independently with mocked dependencies
 
 ## Build Process
 
@@ -151,14 +237,19 @@ root/
 
 ## Security Considerations
 
-- API keys stored in plugin settings (encrypted by Obsidian)
-- Privacy filtering prevents accidental sharing of sensitive notes
-- No data persistence beyond OpenAI API calls
-- Validates folder paths to prevent directory traversal
+- **API Key Storage**: Choose between plain text (default) or AES-256 encrypted storage
+- **Master Password Protection**: Optional encryption with user-defined master passwords
+- **Privacy Filtering**: Prevents accidental sharing of sensitive notes tagged with #private
+- **No Data Persistence**: No local storage of API responses beyond OpenAI API calls
+- **Path Validation**: Validates folder paths to prevent directory traversal attacks
+- **Secure Cryptography**: Uses Web Crypto API for all encryption operations
+- **Memory Safety**: Sensitive data is handled securely and not logged
 
 ## Performance Notes
 
-- Lightweight codebase (~200 lines of core logic)
+- Modular service-based architecture with efficient dependency injection
+- Singleton pattern for stateful services reduces memory overhead
 - Efficient file discovery with folder-first strategy
 - Minimal DOM manipulation and memory usage
-- Proper cleanup of event listeners and resources
+- Proper cleanup of event listeners and resources through ServiceManager
+- Lazy initialization of services only when needed

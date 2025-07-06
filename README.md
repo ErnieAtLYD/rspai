@@ -11,7 +11,8 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 - **🔒 Privacy First**: Skips notes with `#private` tag to protect sensitive content
 - **🤖 AI-Powered**: Uses OpenAI to create thoughtful, encouraging reflections
 - **📁 Organized**: Saves summaries in `Summaries/` folder with backlinks to source notes
-- **⚡ Lightning Fast**: Simple, focused codebase with no unnecessary complexity
+- **⚡ Lightning Fast**: Service-based architecture with efficient dependency injection
+- **🔧 Well-Tested**: Comprehensive test suite with 43+ unit tests ensuring reliability
 
 ## 🚀 Quick Start
 
@@ -118,29 +119,70 @@ Consider exploring how your morning routine impacts...
 
 ## 🛠️ Technical Details
 
-- **Service Architecture**: Modular design with encryption, AI, and file operation services
+### Architecture
+- **Service-Based Design**: Modular architecture with dependency injection
+  - `ServiceManager`: Central container for service lifecycle management
+  - `EncryptionService`: AES-256 encryption with PBKDF2 key derivation
+  - `AIService`: OpenAI API integration with error handling
+  - `FileOperationsService`: Smart file discovery and content processing
+- **TypeScript**: Full type safety with comprehensive interfaces and strict typing
 - **Web Crypto API**: Native browser encryption for maximum security and performance
-- **TypeScript**: Full type safety with comprehensive interfaces
-- **Fast**: Direct OpenAI integration with efficient encryption
-- **Reliable**: Robust error handling and validation
-- **Extensible**: Clean service-based architecture for future enhancements
+- **Comprehensive Testing**: 43+ unit tests with full coverage of encryption functionality
+
+### Quality & Reliability
+- **Robust Error Handling**: Graceful degradation and user-friendly error messages
+- **Memory Management**: Proper cleanup and disposal of sensitive data
+- **Performance Optimized**: Lazy initialization and singleton pattern for efficiency
+- **Security First**: No secrets in logs, secure random generation, password validation
 
 ## 🎨 Customization Ideas
 
-While the plugin maintains focus on core functionality, you could extend it by:
-- Modifying the AI prompt for different reflection styles
-- Adding custom date ranges for specific time periods
-- Creating templates for different journal types
-- Adding more privacy filters and tags
-- Implementing additional encryption algorithms
-- Adding export formats for reflections
+The plugin's service-based architecture makes it easy to extend:
+
+### Service Extensions
+- **AIService**: Modify prompts or add support for other AI providers
+- **EncryptionService**: Implement additional encryption algorithms or key storage methods
+- **FileOperationsService**: Add custom file filters or processing logic
+- **ServiceManager**: Register new services for additional functionality
+
+### Feature Ideas
+- Custom reflection templates and styles
+- Multiple AI provider support (Anthropic, local models)
+- Advanced privacy filters and content sanitization
+- Export formats (PDF, markdown, structured data)
+- Scheduled automatic reflections
+- Integration with other Obsidian plugins
+
+## 🧪 Development & Testing
+
+### Running Tests
+```bash
+npm test                 # Run all tests
+npm run test:watch      # Run tests in watch mode
+npm run test:coverage   # Generate coverage report
+```
+
+### Development Commands
+```bash
+npm run dev             # Start development build with watch mode
+npm run build           # Build for production with TypeScript check
+npm run version         # Bump version and update manifest files
+```
+
+### Test Coverage
+- **EncryptionService**: 43 comprehensive tests covering all security-critical functionality
+- **Mocked Environment**: Complete Obsidian API mocks for isolated testing
+- **Integration Tests**: Real Web Crypto API testing when available
+- **Error Scenarios**: Extensive edge case and error condition testing
 
 ## 🤝 Contributing
 
-This plugin embraces simplicity! If you have ideas:
+This plugin embraces simplicity and security! If you have ideas:
 1. Keep it focused on weekly journal reflection
-2. Maintain the clean, readable codebase
-3. Prioritize user experience over features
+2. Maintain the clean, readable codebase with comprehensive tests
+3. Prioritize user experience and security over features
+4. Add tests for any new functionality
+5. Follow the service-based architecture patterns
 
 ## 📄 License
 
@@ -152,4 +194,4 @@ Built for the Obsidian community with a focus on simplicity and user value over 
 
 ---
 
-**Ready to transform your journaling practice?** Install Journal Reflection today and start gaining deeper insights from your daily notes! 📖✨ 
+**Ready to transform your journaling practice?** Install Journal Reflection today and start gaining deeper insights from your notes! 📖✨ 

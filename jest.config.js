@@ -7,7 +7,8 @@ export default {
     '**/*.(test|spec).+(ts|tsx|js)'
   ],
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest'
+    '^.+\\.(ts|tsx)$': ['ts-jest', { useESM: true }],
+    '^.+\\.(js|jsx)$': 'babel-jest'
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -24,5 +25,6 @@ export default {
   testTimeout: 30000, // 30 seconds for AI integration tests
   verbose: true,
   detectOpenHandles: true,
-  forceExit: true
+  forceExit: true,
+  extensionsToTreatAsEsm: ['.ts']
 }; 
