@@ -11,6 +11,14 @@ import {
 	moment,
 } from "obsidian";
 
+import { 
+	ServiceManager,
+	AIService,
+	AIServiceConfig,
+	FileOperationsService,
+	FileOperationsConfig
+} from "./services";
+
 interface JournalReflectionSettings {
 	openaiApiKey: string;
 	openaiModel: string;
@@ -44,6 +52,7 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
  */
 export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
+	private serviceManager: ServiceManager;
 
 	/**
 	 * Load the plugin
@@ -54,6 +63,10 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	async onload() {
 		await this.loadSettings();
+
+		// Initialize service manager
+		this.serviceManager = new ServiceManager(this.app);
+		await this.registerServices();
 
 		// Add ribbon icon
 		this.addRibbonIcon("book-open", "Create Weekly Journal Summary", () => {
@@ -69,6 +82,84 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		// Add settings tab
 		this.addSettingTab(new JournalReflectionSettingTab(this.app, this));
+	}
+
+	/**
+	 * Register all services with the service manager
+	 */
+	private async registerServices(): Promise<void> {
+		// Register AI service
+		this.serviceManager.register('aiService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const config: AIServiceConfig = {
+					apiKey: this.settings.openaiApiKey,
+					model: this.settings.openaiModel,
+					maxTokens: OPENAI_MAX_TOKENS,
+					temperature: OPENAI_TEMPERATURE,
+					apiUrl: OPENAI_API_URL
+				};
+				return new AIService(this.app, config);
+			},
+			dependencies: [],
+			singleton: true
+		});
+
+		// Register file operations service
+		this.serviceManager.register('fileOperationsService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const config: FileOperationsConfig = {
+					daysToInclude: this.settings.daysToInclude,
+					excludePrivate: this.settings.excludePrivate,
+					periodicNoteFolders: this.settings.periodicNoteFolders,
+					reflectionFolder: this.settings.reflectionFolder
+				};
+				return new FileOperationsService(this.app, config);
+			},
+			dependencies: [],
+			singleton: true
+		});
+
+		// Initialize all services
+		await this.serviceManager.initializeAll();
+	}
+
+	/**
+	 * Update service configurations when settings change
+	 */
+	private updateServiceConfigurations(): void {
+		if (!this.serviceManager) return;
+
+		// Update AI service configuration
+		if (this.serviceManager.has('aiService')) {
+			const aiService = this.serviceManager.resolve<AIService>('aiService');
+			aiService.updateConfig({
+				apiKey: this.settings.openaiApiKey,
+				model: this.settings.openaiModel,
+				maxTokens: OPENAI_MAX_TOKENS,
+				temperature: OPENAI_TEMPERATURE,
+				apiUrl: OPENAI_API_URL
+			});
+		}
+
+		// Update file operations service configuration
+		if (this.serviceManager.has('fileOperationsService')) {
+			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
+			fileOpsService.updateConfig({
+				daysToInclude: this.settings.daysToInclude,
+				excludePrivate: this.settings.excludePrivate,
+				periodicNoteFolders: this.settings.periodicNoteFolders,
+				reflectionFolder: this.settings.reflectionFolder
+			});
+		}
+	}
+
+	/**
+	 * Cleanup when plugin unloads
+	 */
+	async onunload() {
+		if (this.serviceManager) {
+			await this.serviceManager.disposeAll();
+		}
 	}
 
 	/**
@@ -88,8 +179,12 @@ export default class JournalReflectionPlugin extends Plugin {
 		new Notice("Creating weekly journal summary...");
 
 		try {
+			// Get services
+			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
+			const aiService = this.serviceManager.resolve<AIService>('aiService');
+
 			// Find recent notes
-			const recentNotes = await this.findRecentNotes();
+			const recentNotes = await fileOpsService.findRecentNotes();
 
 			if (recentNotes.length === 0) {
 				new Notice("No journal entries found in the last week.");
@@ -97,7 +192,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			}
 
 			// Get content from notes
-			const notesContent = await this.getNotesContent(recentNotes);
+			const notesContent = await fileOpsService.getNotesContent(recentNotes);
 
 			if (notesContent.trim().length === 0) {
 				new Notice(
@@ -106,14 +201,14 @@ export default class JournalReflectionPlugin extends Plugin {
 				return;
 			}
 
-			// Generate summary with OpenAI
-			const summary = await this.generateSummary(
-				notesContent,
-				recentNotes
-			);
+			// Generate summary with AI service
+			const summary = await aiService.generateSummary(notesContent, recentNotes);
 
 			// Create summary note
-			await this.createSummaryNote(summary, recentNotes);
+			const summaryFile = await fileOpsService.createSummaryNote(summary, recentNotes);
+
+			// Open the summary file
+			this.app.workspace.getLeaf().openFile(summaryFile);
 
 			new Notice("Weekly journal summary created!");
 		} catch (error) {
@@ -122,319 +217,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
-	/**
-	 * Find recent notes
-	 * @returns {Promise<TFile[]>} - Array of markdown files from configured folders
-	 */
-	async findRecentNotes(): Promise<TFile[]> {
-		const cutoffDate = moment().subtract(
-			this.settings.daysToInclude,
-			"days"
-		);
 
-		// Try folder-based approach first
-		const folderFiles = await this.getPeriodicFilesFromFolders();
-
-		if (folderFiles.length > 0) {
-			// Apply date filtering to folder-discovered files
-			const recentFolderFiles = folderFiles.filter((file) => {
-				const fileDate = this.extractDateFromFile(file);
-				return fileDate && fileDate.isAfter(cutoffDate);
-			});
-
-			return recentFolderFiles;
-		}
-
-		// Fallback to current time-based filtering across all files
-		const allFiles = this.app.vault.getMarkdownFiles();
-
-		return allFiles.filter((file) => {
-			const fileDate = this.extractDateFromFile(file);
-			return fileDate && fileDate.isAfter(cutoffDate);
-		});
-	}
-
-	/**
-	 * Extract date from file using filename parsing with fallback to creation time
-	 * @param file - The file to extract date from
-	 * @returns {moment.Moment | null} - The extracted date or null if no valid date found
-	 */
-	private extractDateFromFile(file: TFile): moment.Moment | null {
-		// Try to parse date from filename first
-		const filenameDate = this.parseDateFromFilename(file.basename);
-		if (filenameDate && filenameDate.isValid()) {
-			return filenameDate;
-		}
-
-		// Fallback to file creation time
-		const creationDate = moment(file.stat.ctime);
-		return creationDate.isValid() ? creationDate : null;
-	}
-
-	/**
-	 * Parse date from filename using common journal date formats
-	 * @param filename - The filename (without extension) to parse
-	 * @returns {moment.Moment | null} - The parsed date or null if no date pattern found
-	 */
-	private parseDateFromFilename(filename: string): moment.Moment | null {
-		// Common date patterns in journal filenames
-		const datePatterns = [
-			// ISO format: YYYY-MM-DD
-			/(\d{4}-\d{2}-\d{2})/,
-			// US format: MM-DD-YYYY or MM/DD/YYYY
-			/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/,
-			// European format: DD-MM-YYYY or DD/MM/YYYY
-			/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/,
-			// Compact format: YYYYMMDD
-			/(\d{8})/,
-			// Year and day of year: YYYY-DDD
-			/(\d{4}-\d{3})/,
-			// Month and year: YYYY-MM
-			/(\d{4}-\d{2})$/,
-		];
-
-		for (const pattern of datePatterns) {
-			const match = filename.match(pattern);
-			if (match) {
-				const dateStr = match[1];
-				
-				// Try different moment parsing formats based on the pattern
-				let parsedDate: moment.Moment | null = null;
-
-				if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-					// ISO format: YYYY-MM-DD
-					parsedDate = moment(dateStr, "YYYY-MM-DD");
-				} else if (dateStr.match(/^\d{8}$/)) {
-					// Compact format: YYYYMMDD
-					parsedDate = moment(dateStr, "YYYYMMDD");
-				} else if (dateStr.match(/^\d{4}-\d{3}$/)) {
-					// Year and day of year: YYYY-DDD
-					parsedDate = moment(dateStr, "YYYY-DDD");
-				} else if (dateStr.match(/^\d{4}-\d{2}$/)) {
-					// Month and year: YYYY-MM (assume first day of month)
-					parsedDate = moment(dateStr + "-01", "YYYY-MM-DD");
-				} else if (dateStr.match(/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/)) {
-					// Try both US (MM/DD/YYYY) and European (DD/MM/YYYY) formats
-					const usDate = moment(dateStr, ["M/D/YYYY", "MM/DD/YYYY", "M-D-YYYY", "MM-DD-YYYY"], true);
-					const euDate = moment(dateStr, ["D/M/YYYY", "DD/MM/YYYY", "D-M-YYYY", "DD-MM-YYYY"], true);
-					
-					// Prefer the format that results in a more recent date (likely more accurate)
-					if (usDate.isValid() && euDate.isValid()) {
-						parsedDate = usDate.isAfter(euDate) ? usDate : euDate;
-					} else if (usDate.isValid()) {
-						parsedDate = usDate;
-					} else if (euDate.isValid()) {
-						parsedDate = euDate;
-					}
-				}
-
-				if (parsedDate && parsedDate.isValid()) {
-					return parsedDate;
-				}
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Get periodic files from configured folders
-	 * @returns {Promise<TFile[]>} - Array of markdown files from configured folders
-	 * @description
-	 * This method checks the configured journal folder and collects all markdown files.
-	 * Handles cases where folders don't exist gracefully by returning empty array.
-	 */
-	async getPeriodicFilesFromFolders(): Promise<TFile[]> {
-		const periodicFiles: TFile[] = [];
-
-		// If no periodic note folders are configured or empty, return empty array
-		if (
-			!this.settings.periodicNoteFolders ||
-			this.settings.periodicNoteFolders.length === 0
-		) {
-			return periodicFiles;
-		}
-
-		// Process each configured folder
-		for (const folderPath of this.settings.periodicNoteFolders) {
-			if (!folderPath || folderPath.trim() === "") {
-				continue; // Skip empty folder paths
-			}
-
-			const trimmedPath = folderPath.trim();
-
-			try {
-				// Check if the folder exists
-				const folder =
-					this.app.vault.getAbstractFileByPath(trimmedPath);
-
-				if (!folder || !(folder instanceof TFolder)) {
-					// Folder doesn't exist, handle gracefully
-					continue;
-				}
-
-				// Get all files in the folder (including subfolders)
-				const allFiles = this.app.vault.getMarkdownFiles();
-
-				// Filter files that are within the specified folder
-				const folderFiles = allFiles.filter((file) => {
-					return (
-						file.path.startsWith(trimmedPath + "/") ||
-						file.path === trimmedPath ||
-						(trimmedPath === "" && !file.path.includes("/"))
-					);
-				});
-
-				periodicFiles.push(...folderFiles);
-			} catch (error) {
-				// Handle any errors gracefully
-				console.error(
-					`Error accessing periodic note folder "${trimmedPath}":`,
-					error
-				);
-			}
-		}
-
-		return periodicFiles;
-	}
-
-	/**
-	 * Get the content of the notes
-	 * @param files - The files to get the content of
-	 * @returns {Promise<string>} - The content of the notes
-	 * @description
-	 * This function is used to get the content of the notes.
-	 */
-	async getNotesContent(files: TFile[]): Promise<string> {
-		// Initialize an empty string to store the combined content
-		let combinedContent = "";
-
-		for (const file of files) {
-			const content = await this.app.vault.read(file);
-
-			// Skip if private (contains #private tag)
-			if (this.settings.excludePrivate && content.includes("#private")) {
-				continue;
-			}
-
-			combinedContent += `\n## ${file.basename}\n${content}\n`;
-		}
-
-		return combinedContent;
-	}
-
-	/**
-	 * Generate a summary of the journal entries
-	 * @param content - The content of the journal entries
-	 * @param files - The files to generate the summary from
-	 * @returns {Promise<string>} - The summary of the journal entries
-	 */
-	async generateSummary(content: string, files: TFile[]): Promise<string> {
-		const prompt = `Please analyze these journal entries from the past week and provide a thoughtful reflection. Focus on:
-
-1. Key themes and patterns you notice
-2. Emotional journey and growth
-3. Important events or insights
-4. Areas for future reflection or action
-
-Be encouraging and supportive in your tone, like a wise friend reflecting back what they've observed.
-
-Journal entries:
-${content}
-
-Please provide a structured reflection that would be meaningful for weekly review.`;
-
-		const response = await fetch(OPENAI_API_URL, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.settings.openaiApiKey}`,
-			},
-			body: JSON.stringify({
-				model: this.settings.openaiModel,
-				messages: [
-					{
-						role: "user",
-						content: prompt,
-					},
-				],
-				max_tokens: OPENAI_MAX_TOKENS,
-				temperature: OPENAI_TEMPERATURE,
-			}),
-		});
-
-		if (!response.ok) {
-			throw new Error(
-				`OpenAI API error: ${response.status} ${response.statusText}`
-			);
-		}
-
-		const data = await response.json();
-		return data.choices[0].message.content;
-	}
-
-	/**
-	 * Create a summary note
-	 * @param summary - The summary to create
-	 * @param sourceFiles - The source files to create backlinks to
-	 */
-	async createSummaryNote(
-		summary: string,
-		sourceFiles: TFile[]
-	): Promise<void> {
-		const date = moment().format("YYYY-MM-DD");
-		const summaryPath = `${this.settings.reflectionFolder}/Weekly Reflection - ${date}.md`;
-
-		// Create Summaries folder if it doesn't exist
-		const summariesFolder = this.app.vault.getAbstractFileByPath(
-			this.settings.reflectionFolder
-		);
-		if (!summariesFolder) {
-			await this.app.vault.createFolder(this.settings.reflectionFolder);
-		}
-
-		// Create backlinks to source files
-		const backlinks = sourceFiles
-			.map((file) => `- [[${file.basename}]]`)
-			.join("\n");
-
-		const summaryContent = `# Weekly Reflection - ${date}
-
-*Generated on ${moment().format("YYYY-MM-DD [at] HH:mm")}*
-
-${summary}
-
----
-
-## Source Notes
-${backlinks}
-
----
-*This reflection was generated from ${
-			sourceFiles.length
-		} journal entries from the past ${this.settings.daysToInclude} days.*
-`;
-
-		// Create the summary file
-		try {
-			await this.app.vault.create(summaryPath, summaryContent);
-
-			// Open the summary file
-			const summaryFile =
-				this.app.vault.getAbstractFileByPath(summaryPath);
-			if (summaryFile instanceof TFile) {
-				this.app.workspace.getLeaf().openFile(summaryFile);
-			}
-		} catch (error) {
-			if (error.message.includes("already exists")) {
-				new Notice(
-					"Summary for this week already exists. Delete it first or wait for next week."
-				);
-			} else {
-				throw error;
-			}
-		}
-	}
 
 	/**
 	 * Load settings from storage
@@ -513,6 +296,9 @@ ${backlinks}
 		this.validateSettings();
 
 		await this.saveData(this.settings);
+
+		// Update service configurations with new settings
+		this.updateServiceConfigurations();
 	}
 
 	/**
