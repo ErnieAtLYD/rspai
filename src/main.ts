@@ -159,7 +159,7 @@ export default class JournalReflectionPlugin extends Plugin {
 					persistToDisk: true,
 					cleanupInterval: 5 * 60 * 1000 // 5 minutes
 				};
-				return new CacheService(this.app, config);
+				return new CacheService(this.app, config, "retrospect-ai");
 			},
 			dependencies: [],
 			singleton: true

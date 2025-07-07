@@ -32,8 +32,9 @@ export class CacheService extends BaseService {
     private cache: Map<string, CacheEntry<any>> = new Map();
     private cleanupTimer: NodeJS.Timeout | null = null;
     private config: CacheConfig;
+    private cacheFilePath: string;
 
-    constructor(app: App, config: Partial<CacheConfig> = {}) {
+    constructor(app: App, config: Partial<CacheConfig> = {}, pluginId: string = "retrospect-ai") {
         super(app);
         this.config = {
             defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
@@ -42,6 +43,8 @@ export class CacheService extends BaseService {
             cleanupInterval: 5 * 60 * 1000, // 5 minutes
             ...config
         };
+        // Derive the cache file path from plugin ID
+        this.cacheFilePath = `.obsidian/plugins/${pluginId}/cache.json`;
     }
 
     protected async onInitialize(): Promise<void> {
@@ -245,7 +248,7 @@ export class CacheService extends BaseService {
 
     private async loadFromDisk(): Promise<void> {
         try {
-            const data = await this.app.vault.adapter.read('.obsidian/plugins/rspai/cache.json');
+            const data = await this.app.vault.adapter.read(this.cacheFilePath);
             const cacheData = JSON.parse(data);
             
             // Restore cache entries
@@ -269,7 +272,7 @@ export class CacheService extends BaseService {
             };
             
             await this.app.vault.adapter.write(
-                '.obsidian/plugins/rspai/cache.json',
+                this.cacheFilePath,
                 JSON.stringify(cacheData, null, 2)
             );
         } catch (error) {
