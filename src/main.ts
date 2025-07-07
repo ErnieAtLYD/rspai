@@ -298,6 +298,23 @@ export default class JournalReflectionPlugin extends Plugin {
 	}
 
 	/**
+	 * Validate prerequisites for analysis commands
+	 */
+	private async validateAnalysisPrerequisites(): Promise<boolean> {
+		if (!this.serviceManager) {
+			new Notice("Services not initialized");
+			return false;
+		}
+
+		if (!await this.validateApiKey()) {
+			new Notice("Please configure your OpenAI API key first");
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Create a weekly summary
 	 * @description
 	 * This function is used to create a weekly summary of the journal entries.
@@ -357,13 +374,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Analyze journal patterns
 	 */
 	async analyzePatterns(): Promise<void> {
-		if (!this.serviceManager) {
-			new Notice("Services not initialized");
-			return;
-		}
-
-		if (!await this.validateApiKey()) {
-			new Notice("Please configure your OpenAI API key first");
+		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
 
@@ -396,13 +407,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Analyze journal trends
 	 */
 	async analyzeTrends(): Promise<void> {
-		if (!this.serviceManager) {
-			new Notice("Services not initialized");
-			return;
-		}
-
-		if (!await this.validateApiKey()) {
-			new Notice("Please configure your OpenAI API key first");
+		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
 
@@ -435,13 +440,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Perform comprehensive analysis
 	 */
 	async performComprehensiveAnalysis(): Promise<void> {
-		if (!this.serviceManager) {
-			new Notice("Services not initialized");
-			return;
-		}
-
-		if (!await this.validateApiKey()) {
-			new Notice("Please configure your OpenAI API key first");
+		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
 
