@@ -421,7 +421,7 @@ describe('EncryptionService', () => {
     describe('Base64 Conversion', () => {
         it('should convert ArrayBuffer to Base64 correctly', () => {
             const testData = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
-            const buffer = testData.buffer;
+            const {buffer} = testData;
             
             const result = encryptionService['arrayBufferToBase64'](buffer);
             
