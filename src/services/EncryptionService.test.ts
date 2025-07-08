@@ -129,7 +129,6 @@ describe('EncryptionService', () => {
 
     describe('Random Value Generation', () => {
         it('should generate salt with correct length', () => {
-            const mockArray = new Uint8Array(16);
             mockCrypto.getRandomValues.mockImplementation((arr) => {
                 arr.set(Array.from({ length: 16 }, (_, i) => i));
                 return arr;
@@ -142,7 +141,6 @@ describe('EncryptionService', () => {
         });
 
         it('should generate IV with correct length', () => {
-            const mockArray = new Uint8Array(12);
             mockCrypto.getRandomValues.mockImplementation((arr) => {
                 arr.set(Array.from({ length: 12 }, (_, i) => i));
                 return arr;
@@ -513,9 +511,9 @@ describe('EncryptionService', () => {
             }
 
             // Create a real encryption service for integration testing
-            const realCrypto = require('crypto').webcrypto;
+            const { webcrypto: realCrypto } = await import('crypto');
             if (realCrypto) {
-                global.crypto = realCrypto;
+                global.crypto = realCrypto as any;
                 
                 const realService = new EncryptionService(app);
                 await realService.initialize();
