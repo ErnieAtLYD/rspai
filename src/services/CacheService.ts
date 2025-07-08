@@ -34,7 +34,7 @@ export class CacheService extends BaseService {
     private config: CacheConfig;
     private cacheFilePath: string;
 
-    constructor(app: App, config: Partial<CacheConfig> = {}, pluginId: string = "retrospect-ai") {
+    constructor(app: App, config: Partial<CacheConfig> = {}, pluginId: 'retrospect-ai') {
         super(app);
         this.config = {
             defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
