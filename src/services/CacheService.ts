@@ -206,9 +206,13 @@ export class CacheService extends BaseService {
     }
 
     private startCleanupTimer(): void {
+        // Add jitter to prevent thundering herd - randomize interval by ±20%
+        const jitter = Math.random() * 0.4 + 0.8; // 0.8-1.2 multiplier
+        const interval = this.config.cleanupInterval * jitter;
+        
         this.cleanupTimer = setInterval(() => {
             this.cleanupExpired();
-        }, this.config.cleanupInterval);
+        }, interval);
     }
 
     private cleanupExpired(): void {
