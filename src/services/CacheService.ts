@@ -214,11 +214,18 @@ export class CacheService extends BaseService {
     private cleanupExpired(): void {
         const now = Date.now();
         const expiredKeys: string[] = [];
+        const maxEntriesPerCleanup = 100; // Limit entries processed per cleanup cycle
+        let processedCount = 0;
 
         for (const [key, entry] of this.cache.entries()) {
+            if (processedCount >= maxEntriesPerCleanup) {
+                break;
+            }
+            
             if (now > entry.timestamp + entry.ttl) {
                 expiredKeys.push(key);
             }
+            processedCount++;
         }
 
         for (const key of expiredKeys) {
@@ -226,7 +233,7 @@ export class CacheService extends BaseService {
         }
 
         if (expiredKeys.length > 0) {
-            console.log(`Cleaned up ${expiredKeys.length} expired cache entries`);
+            console.log(`Cleaned up ${expiredKeys.length} expired cache entries (processed ${processedCount}/${this.cache.size} total entries)`);
         }
     }
 
