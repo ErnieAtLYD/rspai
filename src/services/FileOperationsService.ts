@@ -302,6 +302,37 @@ ${backlinks}
     }
 
     /**
+     * Create an analysis report file
+     */
+    async createAnalysisReport(fileName: string, content: string): Promise<TFile> {
+        this.ensureReady();
+        
+        // Ensure analysis folder exists
+        const analysisFolder = `${this.config.reflectionFolder}/Analysis`;
+        if (!await this.app.vault.adapter.exists(analysisFolder)) {
+            await this.app.vault.createFolder(analysisFolder);
+        }
+        
+        const filePath = `${analysisFolder}/${fileName}.md`;
+        
+        // Check if file already exists and modify name if needed
+        let finalPath = filePath;
+        let counter = 1;
+        while (await this.app.vault.adapter.exists(finalPath)) {
+            const baseName = fileName.replace(/\s*\(\d+\)$/, '');
+            finalPath = `${analysisFolder}/${baseName} (${counter}).md`;
+            counter++;
+        }
+        
+        try {
+            return await this.app.vault.create(finalPath, content);
+        } catch (error) {
+            console.error("Error creating analysis report:", error);
+            throw error;
+        }
+    }
+
+    /**
      * Initialize the file operations service
      */
     protected async onInitialize(): Promise<void> {
