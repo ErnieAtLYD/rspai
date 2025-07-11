@@ -15,3 +15,6 @@ export { PatternRecognitionService } from "./PatternRecognitionService";
 export type { PatternData, TrendData, InsightData, PatternRecognitionConfig } from "./PatternRecognitionService";
 export { AnalysisManager } from "./AnalysisManager";
 export type { AnalysisRequest, AnalysisOptions, AnalysisResult, AnalysisManagerConfig } from "./AnalysisManager";
+export { ErrorHandlingService } from "./ErrorHandlingService";
+export type { ErrorHandlingConfig, ErrorContext, ErrorHandlerOptions } from "./ErrorHandlingService";
+export { RetrospectError, ErrorType, ErrorCode } from "./ErrorHandlingService";

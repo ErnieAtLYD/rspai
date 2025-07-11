@@ -26,7 +26,12 @@ import {
 	PatternRecognitionService,
 	PatternRecognitionConfig,
 	AnalysisManager,
-	AnalysisManagerConfig
+	AnalysisManagerConfig,
+	ErrorHandlingService,
+	ErrorHandlingConfig,
+	RetrospectError,
+	ErrorType,
+	ErrorCode
 } from "./services";
 
 interface JournalReflectionSettings {
@@ -78,6 +83,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
 	private serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
+	private errorHandler: ErrorHandlingService;
 
 	/**
 	 * Load the plugin
@@ -137,6 +143,21 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Register all services with the service manager
 	 */
 	private async registerServices(): Promise<void> {
+		// Register error handling service first
+		this.serviceManager.register('errorHandlingService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const config: ErrorHandlingConfig = {
+					maxRetries: 3,
+					baseRetryDelay: 1000,
+					enableLogging: true,
+					enableNotifications: true
+				};
+				return new ErrorHandlingService(this.app, config);
+			},
+			dependencies: [],
+			singleton: true
+		});
+
 		// Register encryption service
 		this.serviceManager.register('encryptionService', {
 			implementation: (serviceManager: ServiceManager) => {
@@ -168,6 +189,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		// Register AI service
 		this.serviceManager.register('aiService', {
 			implementation: (serviceManager: ServiceManager) => {
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: AIServiceConfig = {
 					apiKey: "", // Will be set when needed
 					model: this.settings.openaiModel,
@@ -175,9 +197,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					temperature: OPENAI_TEMPERATURE,
 					apiUrl: OPENAI_API_URL
 				};
-				return new AIService(this.app, config);
+				return new AIService(this.app, config, errorHandler);
 			},
-			dependencies: [],
+			dependencies: ['errorHandlingService'],
 			singleton: true
 		});
 
@@ -243,6 +265,9 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		// Initialize all services
 		await this.serviceManager.initializeAll();
+		
+		// Get error handler reference for easy access
+		this.errorHandler = this.serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 	}
 
 	/**
@@ -292,7 +317,13 @@ export default class JournalReflectionPlugin extends Plugin {
 			const apiKey = await this.getDecryptedApiKey();
 			return !!(apiKey && apiKey.trim().length > 0);
 		} catch (error) {
-			console.error("API key validation failed:", error);
+			if (this.errorHandler) {
+				await this.errorHandler.handleError(
+					error instanceof Error ? error : new Error(String(error)),
+					{ operation: 'validateApiKey', component: 'JournalReflectionPlugin', timestamp: Date.now() },
+					{ showNotice: false, logToConsole: true }
+				);
+			}
 			return false;
 		}
 	}
@@ -308,6 +339,12 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		if (!await this.validateApiKey()) {
 			new Notice("Please configure your OpenAI API key first");
+			return false;
+		}
+
+		// Check if critical services are available
+		if (!this.serviceManager.has('fileOperationsService')) {
+			new Notice("File operations service not available");
 			return false;
 		}
 
@@ -332,7 +369,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		new Notice("Creating weekly journal summary...");
 
 		try {
-			// Get services
+			// Get services with fallback handling
 			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
 			const aiService = this.serviceManager.resolve<AIService>('aiService');
 
@@ -365,8 +402,23 @@ export default class JournalReflectionPlugin extends Plugin {
 
 			new Notice("Weekly journal summary created!");
 		} catch (error) {
-			console.error("Error creating summary:", error);
-			new Notice(`Failed to create summary: ${error.message}`);
+			if (error instanceof RetrospectError) {
+				// Handle specific error types with recovery suggestions
+				if (error.code === ErrorCode.API_KEY_INVALID) {
+					new Notice("❌ Invalid API key. Please check your OpenAI API key in settings.");
+				} else if (error.code === ErrorCode.API_RATE_LIMITED) {
+					new Notice("⏱️ Rate limited. Please try again in a few minutes.");
+				} else if (error.code === ErrorCode.API_NETWORK_ERROR) {
+					new Notice("🌐 Network error. Please check your connection and try again.");
+				} else {
+					await this.errorHandler.handleError(error, { operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() });
+				}
+			} else {
+				await this.errorHandler.handleError(
+					error instanceof Error ? error : new Error(String(error)),
+					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
+			}
 		}
 	}
 
@@ -381,6 +433,12 @@ export default class JournalReflectionPlugin extends Plugin {
 		new Notice("Analyzing journal patterns...");
 
 		try {
+			// Check if analysis service is available
+			if (!this.serviceManager.has('analysisManager')) {
+				new Notice("⚠️ Analysis service not available. Pattern analysis disabled.");
+				return;
+			}
+
 			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
 			const patterns = await analysisManager.analyzePatterns(7);
 
@@ -398,8 +456,14 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.app.workspace.getLeaf().openFile(reportFile);
 			new Notice(`Found ${patterns.length} patterns - report created!`);
 		} catch (error) {
-			console.error("Error analyzing patterns:", error);
-			new Notice(`Failed to analyze patterns: ${error.message}`);
+			if (error instanceof RetrospectError && error.code === ErrorCode.API_KEY_INVALID) {
+				new Notice("❌ Invalid API key. Please check your OpenAI API key in settings.");
+			} else {
+				await this.errorHandler.handleError(
+					error instanceof Error ? error : new Error(String(error)),
+					{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
+			}
 		}
 	}
 
@@ -431,8 +495,10 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.app.workspace.getLeaf().openFile(reportFile);
 			new Notice(`Found ${trends.length} trends - report created!`);
 		} catch (error) {
-			console.error("Error analyzing trends:", error);
-			new Notice(`Failed to analyze trends: ${error.message}`);
+			await this.errorHandler.handleError(
+				error instanceof Error ? error : new Error(String(error)),
+				{ operation: 'analyzeTrends', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 
@@ -462,8 +528,10 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.app.workspace.getLeaf().openFile(reportFile);
 			new Notice(`Analysis complete! Confidence: ${(result.confidence * 100).toFixed(0)}%`);
 		} catch (error) {
-			console.error("Error performing comprehensive analysis:", error);
-			new Notice(`Failed to perform analysis: ${error.message}`);
+			await this.errorHandler.handleError(
+				error instanceof Error ? error : new Error(String(error)),
+				{ operation: 'performComprehensiveAnalysis', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 
@@ -480,8 +548,10 @@ export default class JournalReflectionPlugin extends Plugin {
 			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
 			await analysisManager.clearAnalysisCache();
 		} catch (error) {
-			console.error("Error clearing cache:", error);
-			new Notice(`Failed to clear cache: ${error.message}`);
+			await this.errorHandler.handleError(
+				error instanceof Error ? error : new Error(String(error)),
+				{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 

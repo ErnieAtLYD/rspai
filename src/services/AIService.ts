@@ -2,6 +2,7 @@
 
 import { App, TFile } from "obsidian";
 import { BaseService } from "./BaseService";
+import { ErrorHandlingService, ErrorType, ErrorCode, RetrospectError } from "./ErrorHandlingService";
 
 /**
  * AI service configuration
@@ -20,10 +21,17 @@ export interface AIServiceConfig {
  */
 export class AIService extends BaseService {
     private config: AIServiceConfig;
+    private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, config: AIServiceConfig) {
+    constructor(app: App, config: AIServiceConfig, errorHandler?: ErrorHandlingService) {
         super(app);
         this.config = config;
+        this.errorHandler = errorHandler || new ErrorHandlingService(app, {
+            maxRetries: 3,
+            baseRetryDelay: 1000,
+            enableLogging: true,
+            enableNotifications: true
+        });
     }
 
     /**
@@ -47,22 +55,35 @@ export class AIService extends BaseService {
         this.ensureReady();
 
         if (!this.config.apiKey) {
-            throw new Error("OpenAI API key is not configured");
+            throw new RetrospectError(
+                ErrorType.USER,
+                ErrorCode.API_KEY_MISSING,
+                "OpenAI API key is not configured",
+                "Please configure your OpenAI API key in settings",
+                { operation: 'generateSummary', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         if (!content || content.trim().length === 0) {
-            throw new Error("No content provided for summary generation");
+            throw new RetrospectError(
+                ErrorType.VALIDATION,
+                ErrorCode.INVALID_CONFIG,
+                "No content provided for summary generation",
+                "No journal content found to summarize",
+                { operation: 'generateSummary', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         const prompt = this.buildPrompt(content, sourceFiles);
         
-        try {
-            const response = await this.callOpenAI(prompt);
-            return this.extractSummaryFromResponse(response);
-        } catch (error) {
-            console.error("Failed to generate summary:", error);
-            throw new Error(`Failed to generate summary: ${error.message}`);
-        }
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                const response = await this.callOpenAI(prompt);
+                return this.extractSummaryFromResponse(response);
+            },
+            { operation: 'generateSummary', component: 'AIService', timestamp: Date.now() },
+            { maxRetries: 3, retryDelay: 1000 }
+        );
     }
 
     /**
@@ -75,20 +96,33 @@ export class AIService extends BaseService {
         this.ensureReady();
 
         if (!this.config.apiKey) {
-            throw new Error("OpenAI API key is not configured");
+            throw new RetrospectError(
+                ErrorType.USER,
+                ErrorCode.API_KEY_MISSING,
+                "OpenAI API key is not configured",
+                "Please configure your OpenAI API key in settings",
+                { operation: 'generateResponse', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         if (!prompt || prompt.trim().length === 0) {
-            throw new Error("No prompt provided for response generation");
+            throw new RetrospectError(
+                ErrorType.VALIDATION,
+                ErrorCode.INVALID_CONFIG,
+                "No prompt provided for response generation",
+                "No prompt provided for AI response",
+                { operation: 'generateResponse', component: 'AIService', timestamp: Date.now() }
+            );
         }
         
-        try {
-            const response = await this.callOpenAI(prompt);
-            return this.extractSummaryFromResponse(response);
-        } catch (error) {
-            console.error("Failed to generate response:", error);
-            throw new Error(`Failed to generate response: ${error.message}`);
-        }
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                const response = await this.callOpenAI(prompt);
+                return this.extractSummaryFromResponse(response);
+            },
+            { operation: 'generateResponse', component: 'AIService', timestamp: Date.now() },
+            { maxRetries: 3, retryDelay: 1000 }
+        );
     }
 
     /**
@@ -101,7 +135,13 @@ export class AIService extends BaseService {
         this.ensureReady();
 
         if (!this.config.apiKey) {
-            throw new Error("OpenAI API key is not configured");
+            throw new RetrospectError(
+                ErrorType.USER,
+                ErrorCode.API_KEY_MISSING,
+                "OpenAI API key is not configured",
+                "Please configure your OpenAI API key in settings",
+                { operation: 'testConnection', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         try {
@@ -109,7 +149,11 @@ export class AIService extends BaseService {
             const response = await this.callOpenAI(testPrompt);
             return response.choices && response.choices.length > 0;
         } catch (error) {
-            console.error("AI service connection test failed:", error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                { operation: 'testConnection', component: 'AIService', timestamp: Date.now() },
+                { showNotice: false, logToConsole: true }
+            );
             return false;
         }
     }
@@ -162,31 +206,108 @@ Please provide a structured reflection that would be meaningful for weekly revie
      * @returns API response
      */
     private async callOpenAI(prompt: string): Promise<any> {
-        const response = await fetch(this.config.apiUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${this.config.apiKey}`,
-            },
-            body: JSON.stringify({
-                model: this.config.model,
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt,
-                    },
-                ],
-                max_tokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-            }),
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+        try {
+            const response = await fetch(this.config.apiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${this.config.apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: this.config.model,
+                    messages: [
+                        {
+                            role: "user",
+                            content: prompt,
+                        },
+                    ],
+                    max_tokens: this.config.maxTokens,
+                    temperature: this.config.temperature,
+                }),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                
+                if (response.status === 401) {
+                    throw new RetrospectError(
+                        ErrorType.USER,
+                        ErrorCode.API_KEY_INVALID,
+                        `Invalid API key: ${response.status} ${response.statusText}`,
+                        "Invalid API key. Please check your OpenAI API key in settings",
+                        { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() }
+                    );
+                }
+                
+                if (response.status === 429) {
+                    throw new RetrospectError(
+                        ErrorType.API,
+                        ErrorCode.API_RATE_LIMITED,
+                        `Rate limited: ${response.status} ${response.statusText}`,
+                        "API rate limit exceeded. Please try again in a few minutes",
+                        { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() },
+                        true,
+                        true
+                    );
+                }
+                
+                if (response.status >= 500) {
+                    throw new RetrospectError(
+                        ErrorType.API,
+                        ErrorCode.API_RESPONSE_ERROR,
+                        `Server error: ${response.status} ${response.statusText}`,
+                        "OpenAI service is temporarily unavailable. Please try again later",
+                        { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() },
+                        true,
+                        true
+                    );
+                }
+                
+                throw new RetrospectError(
+                    ErrorType.API,
+                    ErrorCode.API_RESPONSE_ERROR,
+                    `OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`,
+                    "OpenAI API request failed. Please check your settings and try again",
+                    { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() }
+                );
+            }
+
+            return await response.json();
+        } catch (error) {
+            clearTimeout(timeoutId);
+            
+            if (error.name === 'AbortError') {
+                throw new RetrospectError(
+                    ErrorType.NETWORK,
+                    ErrorCode.API_NETWORK_ERROR,
+                    "Request timeout",
+                    "Request timed out. Please check your internet connection and try again",
+                    { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() },
+                    true,
+                    true
+                );
+            }
+            
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                throw new RetrospectError(
+                    ErrorType.NETWORK,
+                    ErrorCode.API_NETWORK_ERROR,
+                    "Network error",
+                    "Unable to connect to OpenAI. Please check your internet connection",
+                    { operation: 'callOpenAI', component: 'AIService', timestamp: Date.now() },
+                    true,
+                    true
+                );
+            }
+            
+            throw error;
         }
-
-        return await response.json();
     }
 
     /**
@@ -197,12 +318,24 @@ Please provide a structured reflection that would be meaningful for weekly revie
      */
     private extractSummaryFromResponse(response: any): string {
         if (!response.choices || response.choices.length === 0) {
-            throw new Error("No choices in OpenAI response");
+            throw new RetrospectError(
+                ErrorType.API,
+                ErrorCode.API_RESPONSE_ERROR,
+                "No choices in OpenAI response",
+                "Invalid response from OpenAI. Please try again",
+                { operation: 'extractSummaryFromResponse', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         const content = response.choices[0].message?.content;
         if (!content) {
-            throw new Error("No content in OpenAI response");
+            throw new RetrospectError(
+                ErrorType.API,
+                ErrorCode.API_RESPONSE_ERROR,
+                "No content in OpenAI response",
+                "Empty response from OpenAI. Please try again",
+                { operation: 'extractSummaryFromResponse', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         return content.trim();
@@ -212,13 +345,30 @@ Please provide a structured reflection that would be meaningful for weekly revie
      * Initialize the AI service
      */
     protected async onInitialize(): Promise<void> {
+        // Initialize error handler first if not already initialized
+        if (!this.errorHandler.isReady()) {
+            await this.errorHandler.initialize();
+        }
+        
         // Validate configuration
         if (!this.config.apiUrl) {
-            throw new Error("AI service API URL is not configured");
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.INVALID_CONFIG,
+                "AI service API URL is not configured",
+                "AI service configuration is invalid",
+                { operation: 'onInitialize', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         if (!this.config.model) {
-            throw new Error("AI service model is not configured");
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.INVALID_CONFIG,
+                "AI service model is not configured",
+                "AI service configuration is invalid",
+                { operation: 'onInitialize', component: 'AIService', timestamp: Date.now() }
+            );
         }
 
         console.log(`AI service initialized with model: ${this.config.model}`);
@@ -228,6 +378,11 @@ Please provide a structured reflection that would be meaningful for weekly revie
      * Dispose the AI service
      */
     protected async onDispose(): Promise<void> {
+        // Dispose error handler only if we own it
+        if (this.errorHandler && this.errorHandler.isReady()) {
+            await this.errorHandler.dispose();
+        }
+        
         // Clear sensitive data
         this.config = {
             apiKey: "",
