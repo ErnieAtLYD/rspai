@@ -1,5 +1,5 @@
 import { App, Modal, Setting, Notice } from "obsidian";
-import { EncryptionService } from "./services";
+import { EncryptionService, ErrorHandlingService } from "./services";
 
 /**
  * Modal for prompting user for master password
@@ -88,10 +88,10 @@ export class EncryptionSetupModal extends Modal {
     private onSubmit: (password: string | null, apiKey: string | null) => void;
     private encryptionService: EncryptionService;
 
-    constructor(app: App, onSubmit: (password: string | null, apiKey: string | null) => void) {
+    constructor(app: App, onSubmit: (password: string | null, apiKey: string | null) => void, errorHandler: ErrorHandlingService) {
         super(app);
         this.onSubmit = onSubmit;
-        this.encryptionService = new EncryptionService(app);
+        this.encryptionService = new EncryptionService(app, {}, errorHandler);
     }
 
     onOpen() {

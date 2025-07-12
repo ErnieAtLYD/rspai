@@ -2,6 +2,7 @@
 
 import { App, TFile, TFolder, moment } from "obsidian";
 import { BaseService } from "./BaseService";
+import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
 
 /**
  * File operations service configuration
@@ -19,10 +20,12 @@ export interface FileOperationsConfig {
  */
 export class FileOperationsService extends BaseService {
     private config: FileOperationsConfig;
+    private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, config: FileOperationsConfig) {
+    constructor(app: App, config: FileOperationsConfig, errorHandler: ErrorHandlingService) {
         super(app);
         this.config = config;
+        this.errorHandler = errorHandler;
     }
 
     /**
@@ -76,20 +79,51 @@ export class FileOperationsService extends BaseService {
     async getNotesContent(files: TFile[]): Promise<string> {
         this.ensureReady();
 
-        let combinedContent = "";
+        const context: ErrorContext = {
+            operation: 'getNotesContent',
+            component: 'FileOperationsService',
+            timestamp: Date.now(),
+            metadata: { fileCount: files.length }
+        };
 
-        for (const file of files) {
-            const content = await this.app.vault.read(file);
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                let combinedContent = "";
 
-            // Skip if private (contains #private tag)
-            if (this.config.excludePrivate && content.includes("#private")) {
-                continue;
-            }
+                for (const file of files) {
+                    try {
+                        const content = await this.app.vault.read(file);
 
-            combinedContent += `\n## ${file.basename}\n${content}\n`;
-        }
+                        // Skip if private (contains #private tag)
+                        if (this.config.excludePrivate && content.includes("#private")) {
+                            continue;
+                        }
 
-        return combinedContent;
+                        combinedContent += `\n## ${file.basename}\n${content}\n`;
+                    } catch (error) {
+                        const fileContext: ErrorContext = {
+                            operation: 'readFile',
+                            component: 'FileOperationsService',
+                            timestamp: Date.now(),
+                            metadata: { filePath: file.path, fileName: file.basename }
+                        };
+
+                        await this.errorHandler.handleError(
+                            error instanceof Error ? error : new Error(String(error)),
+                            fileContext,
+                            { showNotice: false, logToConsole: true }
+                        );
+                        
+                        // Continue with other files
+                        continue;
+                    }
+                }
+
+                return combinedContent;
+            },
+            context,
+            { maxRetries: 2, retryDelay: 500 }
+        );
     }
 
     /**
@@ -129,16 +163,32 @@ ${backlinks}
 `;
 
         // Create the summary file
-        try {
-            const summaryFile = await this.app.vault.create(summaryPath, summaryContent);
-            return summaryFile;
-        } catch (error) {
-            if (error.message.includes("already exists")) {
-                throw new Error("Summary for this week already exists. Delete it first or wait for next week.");
-            } else {
-                throw error;
-            }
-        }
+        const context: ErrorContext = {
+            operation: 'createSummaryNote',
+            component: 'FileOperationsService',
+            timestamp: Date.now(),
+            metadata: { summaryPath, sourceFileCount: sourceFiles.length }
+        };
+
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                try {
+                    return await this.app.vault.create(summaryPath, summaryContent);
+                } catch (error) {
+                    if (error instanceof Error && error.message.includes("already exists")) {
+                        const duplicateError = new Error("Summary for this week already exists. Delete it first or wait for next week.");
+                        await this.errorHandler.handleError(duplicateError, context, { 
+                            showNotice: true, 
+                            throwAfterHandling: true 
+                        });
+                        throw duplicateError;
+                    }
+                    throw error;
+                }
+            },
+            context,
+            { maxRetries: 1 }
+        );
     }
 
     /**
@@ -149,19 +199,36 @@ ${backlinks}
     async ensureReflectionFolderExists(): Promise<boolean> {
         this.ensureReady();
 
-        const summariesFolder = this.app.vault.getAbstractFileByPath(this.config.reflectionFolder);
-        
-        if (!summariesFolder) {
-            try {
-                await this.app.vault.createFolder(this.config.reflectionFolder);
-                return true;
-            } catch (error) {
-                console.error(`Failed to create reflection folder: ${this.config.reflectionFolder}`, error);
-                return false;
-            }
-        }
+        const context: ErrorContext = {
+            operation: 'ensureReflectionFolderExists',
+            component: 'FileOperationsService',
+            timestamp: Date.now(),
+            metadata: { folderPath: this.config.reflectionFolder }
+        };
 
-        return true;
+        try {
+            const summariesFolder = this.app.vault.getAbstractFileByPath(this.config.reflectionFolder);
+            
+            if (!summariesFolder) {
+                return await this.errorHandler.executeWithRetry(
+                    async () => {
+                        await this.app.vault.createFolder(this.config.reflectionFolder);
+                        return true;
+                    },
+                    context,
+                    { maxRetries: 2, retryDelay: 500 }
+                );
+            }
+
+            return true;
+        } catch (error) {
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                context,
+                { showNotice: false, logToConsole: true }
+            );
+            return false;
+        }
     }
 
     /**
@@ -209,7 +276,18 @@ ${backlinks}
                 periodicFiles.push(...folderFiles);
             } catch (error) {
                 // Handle any errors gracefully
-                console.error(`Error accessing periodic note folder "${trimmedPath}":`, error);
+                const folderContext: ErrorContext = {
+                    operation: 'getPeriodicFilesFromFolders',
+                    component: 'FileOperationsService',
+                    timestamp: Date.now(),
+                    metadata: { folderPath: trimmedPath }
+                };
+
+                await this.errorHandler.handleError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    folderContext,
+                    { showNotice: false, logToConsole: true }
+                );
             }
         }
 
@@ -324,34 +402,85 @@ ${backlinks}
             counter++;
         }
         
-        try {
-            return await this.app.vault.create(finalPath, content);
-        } catch (error) {
-            console.error("Error creating analysis report:", error);
-            throw error;
-        }
+        const context: ErrorContext = {
+            operation: 'createAnalysisReport',
+            component: 'FileOperationsService',
+            timestamp: Date.now(),
+            metadata: { fileName, finalPath }
+        };
+
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                return await this.app.vault.create(finalPath, content);
+            },
+            context,
+            { maxRetries: 2, retryDelay: 500 }
+        );
     }
 
     /**
      * Initialize the file operations service
      */
     protected async onInitialize(): Promise<void> {
-        // Validate configuration
-        if (!this.config.reflectionFolder) {
-            throw new Error("Reflection folder is not configured");
-        }
+        const context: ErrorContext = {
+            operation: 'initialize',
+            component: 'FileOperationsService',
+            timestamp: Date.now(),
+            metadata: { config: this.config }
+        };
 
-        if (this.config.daysToInclude < 1) {
-            throw new Error("Days to include must be at least 1");
-        }
+        try {
+            // Validate configuration
+            if (!this.config.reflectionFolder) {
+                const configError = new Error("Reflection folder is not configured");
+                await this.errorHandler.handleError(configError, context, { 
+                    showNotice: true, 
+                    throwAfterHandling: true 
+                });
+                throw configError;
+            }
 
-        console.log(`File operations service initialized - scanning ${this.config.daysToInclude} days`);
+            if (this.config.daysToInclude < 1) {
+                const configError = new Error("Days to include must be at least 1");
+                await this.errorHandler.handleError(configError, context, { 
+                    showNotice: true, 
+                    throwAfterHandling: true 
+                });
+                throw configError;
+            }
+
+            // Log successful initialization through error handler (info level)
+            await this.errorHandler.handleError(
+                new Error(`File operations service initialized - scanning ${this.config.daysToInclude} days`),
+                context,
+                { showNotice: false, logToConsole: true, throwAfterHandling: false }
+            );
+        } catch (error) {
+            if (error instanceof Error && !error.message.includes("File operations service initialized")) {
+                await this.errorHandler.handleError(error, context, { 
+                    showNotice: true, 
+                    throwAfterHandling: true 
+                });
+            }
+            throw error;
+        }
     }
 
     /**
      * Dispose the file operations service
      */
     protected async onDispose(): Promise<void> {
-        console.log("File operations service disposed");
+        const context: ErrorContext = {
+            operation: 'dispose',
+            component: 'FileOperationsService',
+            timestamp: Date.now()
+        };
+
+        // Log disposal through error handler (info level)
+        await this.errorHandler.handleError(
+            new Error("File operations service disposed"),
+            context,
+            { showNotice: false, logToConsole: true, throwAfterHandling: false }
+        );
     }
 }

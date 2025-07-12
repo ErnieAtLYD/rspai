@@ -4,6 +4,7 @@ import { App, TFile } from "obsidian";
 import { BaseService } from "./BaseService";
 import { CacheService } from "./CacheService";
 import { AIService } from "./AIService";
+import { ErrorHandlingService } from "./ErrorHandlingService";
 
 export interface PatternData {
     type: string;
@@ -31,6 +32,7 @@ export interface InsightData {
 export interface PatternRecognitionConfig {
     aiService: AIService;
     cacheService: CacheService;
+    errorHandler: ErrorHandlingService;
     analysisDepth: 'shallow' | 'medium' | 'deep';
     patternThreshold: number;
     enableTrendAnalysis: boolean;
@@ -52,19 +54,39 @@ export class PatternRecognitionService extends BaseService {
         this.config = config;
     }
 
+    private get errorHandler(): ErrorHandlingService {
+        return this.config.errorHandler;
+    }
+
     protected async onInitialize(): Promise<void> {
-        if (!this.config.aiService || !this.config.cacheService) {
-            throw new Error("PatternRecognitionService requires AIService and CacheService");
+        if (!this.config.aiService || !this.config.cacheService || !this.config.errorHandler) {
+            throw new Error("PatternRecognitionService requires AIService, CacheService, and ErrorHandlingService");
         }
         
-        console.log("Pattern recognition service initialized");
+        await this.errorHandler.handleError(
+            new Error("Pattern recognition service initialized"),
+            {
+                operation: 'initialize',
+                component: 'PatternRecognitionService',
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     protected async onDispose(): Promise<void> {
         this.patterns.clear();
         this.trends.clear();
         this.insights.clear();
-        console.log("Pattern recognition service disposed");
+        await this.errorHandler.handleError(
+            new Error("Pattern recognition service disposed"),
+            {
+                operation: 'dispose',
+                component: 'PatternRecognitionService',
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     /**
@@ -196,7 +218,16 @@ export class PatternRecognitionService extends BaseService {
                 const content = await this.app.vault.read(file);
                 contents.push(content);
             } catch (error) {
-                console.warn(`Failed to read file ${file.path}:`, error);
+                await this.errorHandler.handleError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                        operation: 'extract_content_read_file',
+                        component: 'PatternRecognitionService',
+                        metadata: { filePath: file.path },
+                        timestamp: Date.now()
+                    },
+                    { showNotice: false }
+                );
             }
         }
         
@@ -401,7 +432,15 @@ Please provide insights in this format:
 
 Focus on actionable insights about personal growth, habits, and well-being.`;
 
-            const response = await this.config.aiService.generateResponse(prompt);
+            const response = await this.errorHandler.executeWithRetry(
+                () => this.config.aiService.generateResponse(prompt),
+                {
+                    operation: 'ai_insights_generation',
+                    component: 'PatternRecognitionService',
+                    metadata: { patternCount: patterns.length, trendCount: trends.length },
+                    timestamp: Date.now()
+                }
+            );
             
             // Parse AI response into insights
             const lines = response.split('\n').filter((line: string) => line.trim().match(/^\d+\./));
@@ -419,7 +458,15 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
                 }
             }
         } catch (error) {
-            console.error("Failed to generate AI insights:", error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'generate_ai_insights',
+                    component: 'PatternRecognitionService',
+                    metadata: { patternCount: patterns.length, trendCount: trends.length },
+                    timestamp: Date.now()
+                }
+            );
         }
 
         return insights;

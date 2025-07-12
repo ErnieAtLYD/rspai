@@ -30,7 +30,7 @@ export enum ErrorCode {
 export interface ErrorContext {
     operation: string;
     component: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     stack?: string;
     timestamp: number;
 }
@@ -58,8 +58,8 @@ export class RetrospectError extends Error {
         message: string,
         userMessage: string,
         context: ErrorContext,
-        recoverable: boolean = true,
-        retryable: boolean = false
+        recoverable = true,
+        retryable = false
     ) {
         super(message);
         this.type = type;

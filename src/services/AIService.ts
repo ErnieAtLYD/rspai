@@ -346,9 +346,7 @@ Please provide a structured reflection that would be meaningful for weekly revie
      */
     protected async onInitialize(): Promise<void> {
         // Initialize error handler first if not already initialized
-        if (!this.errorHandler.isReady()) {
-            await this.errorHandler.initialize();
-        }
+        await this.errorHandler.initialize();
         
         // Validate configuration
         if (!this.config.apiUrl) {

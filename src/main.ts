@@ -161,28 +161,30 @@ export default class JournalReflectionPlugin extends Plugin {
 		// Register encryption service
 		this.serviceManager.register('encryptionService', {
 			implementation: (serviceManager: ServiceManager) => {
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: EncryptionConfig = {
 					iterations: 100000,
 					keyLength: 256
 				};
-				return new EncryptionService(this.app, config);
+				return new EncryptionService(this.app, config, errorHandler);
 			},
-			dependencies: [],
+			dependencies: ['errorHandlingService'],
 			singleton: true
 		});
 
 		// Register cache service
 		this.serviceManager.register('cacheService', {
 			implementation: (serviceManager: ServiceManager) => {
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: CacheConfig = {
 					defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
 					maxSize: 1000,
 					persistToDisk: true,
 					cleanupInterval: 5 * 60 * 1000 // 5 minutes
 				};
-				return new CacheService(this.app, config, "retrospect-ai");
+				return new CacheService(this.app, errorHandler, config, "retrospect-ai");
 			},
-			dependencies: [],
+			dependencies: ['errorHandlingService'],
 			singleton: true
 		});
 
@@ -206,15 +208,16 @@ export default class JournalReflectionPlugin extends Plugin {
 		// Register file operations service
 		this.serviceManager.register('fileOperationsService', {
 			implementation: (serviceManager: ServiceManager) => {
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: FileOperationsConfig = {
 					daysToInclude: this.settings.daysToInclude,
 					excludePrivate: this.settings.excludePrivate,
 					periodicNoteFolders: this.settings.periodicNoteFolders,
 					reflectionFolder: this.settings.reflectionFolder
 				};
-				return new FileOperationsService(this.app, config);
+				return new FileOperationsService(this.app, config, errorHandler);
 			},
-			dependencies: [],
+			dependencies: ['errorHandlingService'],
 			singleton: true
 		});
 
@@ -223,9 +226,11 @@ export default class JournalReflectionPlugin extends Plugin {
 			implementation: (serviceManager: ServiceManager) => {
 				const aiService = serviceManager.resolve<AIService>('aiService');
 				const cacheService = serviceManager.resolve<CacheService>('cacheService');
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: PatternRecognitionConfig = {
 					aiService,
 					cacheService,
+					errorHandler,
 					analysisDepth: 'medium',
 					patternThreshold: 0.6,
 					enableTrendAnalysis: true,
@@ -233,7 +238,7 @@ export default class JournalReflectionPlugin extends Plugin {
 				};
 				return new PatternRecognitionService(this.app, config);
 			},
-			dependencies: ['aiService', 'cacheService'],
+			dependencies: ['aiService', 'cacheService', 'errorHandlingService'],
 			singleton: true
 		});
 
@@ -244,12 +249,14 @@ export default class JournalReflectionPlugin extends Plugin {
 				const fileOperationsService = serviceManager.resolve<FileOperationsService>('fileOperationsService');
 				const cacheService = serviceManager.resolve<CacheService>('cacheService');
 				const patternRecognitionService = serviceManager.resolve<PatternRecognitionService>('patternRecognitionService');
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				
 				const config: AnalysisManagerConfig = {
 					aiService,
 					fileOperationsService,
 					cacheService,
 					patternRecognitionService,
+					errorHandler,
 					defaultOptions: {
 						useCache: true,
 						depth: 'medium',
@@ -259,15 +266,16 @@ export default class JournalReflectionPlugin extends Plugin {
 				};
 				return new AnalysisManager(this.app, config);
 			},
-			dependencies: ['aiService', 'fileOperationsService', 'cacheService', 'patternRecognitionService'],
+			dependencies: ['aiService', 'fileOperationsService', 'cacheService', 'patternRecognitionService', 'errorHandlingService'],
 			singleton: true
 		});
 
 		// Initialize all services
 		await this.serviceManager.initializeAll();
 		
-		// Get error handler reference for easy access
+		// Get error handler reference for easy access and configure ServiceManager to use it
 		this.errorHandler = this.serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
+		this.serviceManager.setErrorHandler(this.errorHandler);
 	}
 
 	/**
@@ -818,6 +826,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	async setupEncryption(): Promise<boolean> {
 		return new Promise((resolve) => {
+			const errorHandler = this.serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 			const modal = new EncryptionSetupModal(this.app, async (password, apiKey) => {
 				if (password && apiKey) {
 					try {
@@ -833,7 +842,7 @@ export default class JournalReflectionPlugin extends Plugin {
 				} else {
 					resolve(false);
 				}
-			});
+			}, errorHandler);
 			modal.open();
 		});
 	}
