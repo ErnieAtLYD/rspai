@@ -32,7 +32,9 @@ import {
 	ErrorHandlingConfig,
 	RetrospectError,
 	ErrorCode,
-	ErrorType
+	ErrorType,
+	NLPAnalysisService,
+	NLPAnalysisConfig
 } from "./services";
 
 interface JournalReflectionSettings {
@@ -49,6 +51,9 @@ interface JournalReflectionSettings {
 	enableTrendAnalysis?: boolean;
 	enableSemanticAnalysis?: boolean;
 	cacheAnalysisResults?: boolean;
+	enableAdvancedNLP?: boolean;
+	nlpAnalysisDepth?: 'basic' | 'moderate' | 'deep';
+	blockerDetectionSensitivity?: 'low' | 'medium' | 'high';
 }
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -70,6 +75,9 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	enableTrendAnalysis: true,
 	enableSemanticAnalysis: true,
 	cacheAnalysisResults: true,
+	enableAdvancedNLP: true,
+	nlpAnalysisDepth: 'moderate',
+	blockerDetectionSensitivity: 'medium',
 };
 
 /**
@@ -222,24 +230,49 @@ export default class JournalReflectionPlugin extends Plugin {
 			singleton: true
 		});
 
+		// Register NLP analysis service
+		this.serviceManager.register('nlpAnalysisService', {
+			implementation: (serviceManager: ServiceManager) => {
+				const cacheService = serviceManager.resolve<CacheService>('cacheService');
+				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
+				const config: NLPAnalysisConfig = {
+					cacheService,
+					errorHandler,
+					enableEntityRecognition: true,
+					enableAdvancedSentiment: true,
+					themeExtractionDepth: this.settings.nlpAnalysisDepth || 'moderate',
+					blockerDetectionSensitivity: this.settings.blockerDetectionSensitivity || 'medium'
+				};
+				return new NLPAnalysisService(this.app, config);
+			},
+			dependencies: ['cacheService', 'errorHandlingService'],
+			singleton: true
+		});
+
 		// Register pattern recognition service
 		this.serviceManager.register('patternRecognitionService', {
 			implementation: (serviceManager: ServiceManager) => {
 				const aiService = serviceManager.resolve<AIService>('aiService');
 				const cacheService = serviceManager.resolve<CacheService>('cacheService');
 				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
+				const nlpService = this.settings.enableAdvancedNLP ? 
+					serviceManager.resolve<NLPAnalysisService>('nlpAnalysisService') : undefined;
 				const config: PatternRecognitionConfig = {
 					aiService,
 					cacheService,
 					errorHandler,
+					nlpService,
 					analysisDepth: 'medium',
-					patternThreshold: 0.6,
-					enableTrendAnalysis: true,
-					enableSemanticAnalysis: true
+					patternThreshold: this.settings.patternThreshold || 0.6,
+					enableTrendAnalysis: this.settings.enableTrendAnalysis ?? true,
+					enableSemanticAnalysis: this.settings.enableSemanticAnalysis ?? true,
+					enableAdvancedNLP: this.settings.enableAdvancedNLP ?? true
 				};
 				return new PatternRecognitionService(this.app, config);
 			},
-			dependencies: ['aiService', 'cacheService', 'errorHandlingService'],
+			dependencies: this.settings.enableAdvancedNLP ? 
+				['aiService', 'cacheService', 'errorHandlingService', 'nlpAnalysisService'] :
+				['aiService', 'cacheService', 'errorHandlingService'],
 			singleton: true
 		});
 
@@ -1200,6 +1233,123 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// Advanced NLP Analysis Section
+		containerEl.createEl("h3", { text: "Advanced NLP Analysis" });
+
+		// Enable Advanced NLP
+		new Setting(containerEl)
+			.setName("Enable Advanced NLP Analysis")
+			.setDesc("Use sophisticated natural language processing for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableAdvancedNLP ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.enableAdvancedNLP = value;
+						await this.plugin.saveSettings();
+						// Refresh to show/hide dependent settings
+						this.display();
+					})
+			);
+
+		// NLP Analysis Depth (only show if advanced NLP is enabled)
+		if (this.plugin.settings.enableAdvancedNLP ?? true) {
+			new Setting(containerEl)
+				.setName("NLP Analysis Depth")
+				.setDesc("Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("basic", "Basic - Fast analysis with core features")
+						.addOption("moderate", "Moderate - Balanced depth and performance")
+						.addOption("deep", "Deep - Comprehensive analysis (slower)")
+						.setValue(this.plugin.settings.nlpAnalysisDepth || 'moderate')
+						.onChange(async (value: 'basic' | 'moderate' | 'deep') => {
+							this.plugin.settings.nlpAnalysisDepth = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Blocker Detection Sensitivity
+			new Setting(containerEl)
+				.setName("Blocker Detection Sensitivity")
+				.setDesc("Adjust how sensitive the system is to detecting productivity blockers")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("low", "Low - Only detect obvious blockers")
+						.addOption("medium", "Medium - Balanced detection")
+						.addOption("high", "High - Detect subtle blockers")
+						.setValue(this.plugin.settings.blockerDetectionSensitivity || 'medium')
+						.onChange(async (value: 'low' | 'medium' | 'high') => {
+							this.plugin.settings.blockerDetectionSensitivity = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Pattern Recognition Threshold
+			new Setting(containerEl)
+				.setName("Pattern Recognition Threshold")
+				.setDesc("Minimum confidence level for pattern detection (0.1 = very sensitive, 1.0 = very specific)")
+				.addSlider((slider) =>
+					slider
+						.setLimits(0.1, 1.0, 0.1)
+						.setValue(this.plugin.settings.patternThreshold || 0.6)
+						.setDynamicTooltip()
+						.onChange(async (value) => {
+							this.plugin.settings.patternThreshold = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Enable Trend Analysis
+			new Setting(containerEl)
+				.setName("Enable Trend Analysis")
+				.setDesc("Analyze patterns and changes over time")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.enableTrendAnalysis ?? true)
+						.onChange(async (value) => {
+							this.plugin.settings.enableTrendAnalysis = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Enable Semantic Analysis
+			new Setting(containerEl)
+				.setName("Enable AI Semantic Analysis")
+				.setDesc("Use OpenAI for deep semantic understanding and insights generation")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.enableSemanticAnalysis ?? true)
+						.onChange(async (value) => {
+							this.plugin.settings.enableSemanticAnalysis = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// Cache Analysis Results
+			new Setting(containerEl)
+				.setName("Cache Analysis Results")
+				.setDesc("Cache analysis results to improve performance (recommended)")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.cacheAnalysisResults ?? true)
+						.onChange(async (value) => {
+							this.plugin.settings.cacheAnalysisResults = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// NLP Features Info
+			const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
+			infoEl.innerHTML = `
+				<strong>Advanced NLP Features:</strong><br>
+				• <strong>Productivity Theme Extraction:</strong> Identifies recurring themes in your work<br>
+				• <strong>Blocker Detection:</strong> Spots procrastination, time management, and workflow issues<br>
+				• <strong>Multi-dimensional Sentiment:</strong> Analyzes emotions, arousal levels, and productivity mood<br>
+				• <strong>Context-aware Analysis:</strong> Understands the nuances of your writing style<br>
+				• <strong>Pattern Correlation:</strong> Connects productivity patterns with mood and activities
+			`;
+		}
 	}
 
 	/**
