@@ -325,7 +325,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		await this.errorHandler?.handleError(
 			new RetrospectError(
 				ErrorType.USER,
-				ErrorCode.INVALID_CONFIG, // Using a generic code for info messages
+				ErrorCode.INFO,
 				message,
 				message,
 				{ operation, component: 'JournalReflectionPlugin', timestamp: Date.now() },

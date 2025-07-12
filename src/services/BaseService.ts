@@ -1,7 +1,12 @@
 // src/services/BaseService.ts
 
-import { App, Notice } from "obsidian";
+import { App } from "obsidian";
 import { IService } from "./ServiceManager";
+
+/**
+ * Error callback type for BaseService
+ */
+export type ServiceErrorCallback = (serviceName: string, error: Error, operation: string) => void;
 
 /**
  * Base service class providing common functionality
@@ -10,8 +15,11 @@ import { IService } from "./ServiceManager";
 export abstract class BaseService implements IService {
     protected isInitialized = false;
     protected isDisposed = false;
+    private errorCallback?: ServiceErrorCallback;
 
-    constructor(protected app: App) {}
+    constructor(protected app: App, errorCallback?: ServiceErrorCallback) {
+        this.errorCallback = errorCallback;
+    }
 
     /**
      * Initialize the service
@@ -26,19 +34,8 @@ export abstract class BaseService implements IService {
             await this.onInitialize();
             this.isInitialized = true;
         } catch (error) {
-            // Use simple error handling to avoid circular dependency with ErrorHandlingService
-            const errorMessage = `Failed to initialize ${this.constructor.name}`;
-            console.error(errorMessage, error);
-            
-            // Show notice if we have access to the app and Notice is available
-            if (this.app && typeof Notice !== 'undefined') {
-                try {
-                    new Notice(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`);
-                } catch (noticeError) {
-                    // Fallback to console if Notice fails
-                    console.error('Failed to show notice:', noticeError);
-                }
-            }
+            const serviceError = error instanceof Error ? error : new Error(String(error));
+            this.handleServiceError(serviceError, 'initialize');
             throw error;
         }
     }
@@ -56,19 +53,8 @@ export abstract class BaseService implements IService {
             await this.onDispose();
             this.isDisposed = true;
         } catch (error) {
-            // Use simple error handling to avoid circular dependency with ErrorHandlingService
-            const errorMessage = `Failed to dispose ${this.constructor.name}`;
-            console.error(errorMessage, error);
-            
-            // Show notice if we have access to the app and Notice is available
-            if (this.app && typeof Notice !== 'undefined') {
-                try {
-                    new Notice(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`);
-                } catch (noticeError) {
-                    // Fallback to console if Notice fails
-                    console.error('Failed to show notice:', noticeError);
-                }
-            }
+            const serviceError = error instanceof Error ? error : new Error(String(error));
+            this.handleServiceError(serviceError, 'dispose');
             throw error;
         }
     }
@@ -101,6 +87,26 @@ export abstract class BaseService implements IService {
     protected ensureReady(): void {
         if (!this.isReady()) {
             throw new Error(`${this.constructor.name} is not ready. Call initialize() first.`);
+        }
+    }
+
+    /**
+     * Handle service errors using callback or fallback to console
+     */
+    private handleServiceError(error: Error, operation: string): void {
+        const serviceName = this.constructor.name;
+        
+        if (this.errorCallback) {
+            try {
+                this.errorCallback(serviceName, error, operation);
+            } catch (callbackError) {
+                // Fallback to console if callback fails
+                console.error(`Failed to handle ${serviceName} ${operation} error via callback:`, callbackError);
+                console.error(`Original ${serviceName} ${operation} error:`, error);
+            }
+        } else {
+            // Fallback to console logging only
+            console.error(`Failed to ${operation} ${serviceName}:`, error);
         }
     }
 
