@@ -27,11 +27,12 @@ import {
 	PatternRecognitionConfig,
 	AnalysisManager,
 	AnalysisManagerConfig,
+	AnalysisResult,
 	ErrorHandlingService,
 	ErrorHandlingConfig,
 	RetrospectError,
-	ErrorType,
-	ErrorCode
+	ErrorCode,
+	ErrorType
 } from "./services";
 
 interface JournalReflectionSettings {
@@ -83,7 +84,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
 	private serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
-	private errorHandler: ErrorHandlingService;
+	public errorHandler: ErrorHandlingService;
 
 	/**
 	 * Load the plugin
@@ -318,6 +319,25 @@ export default class JournalReflectionPlugin extends Plugin {
 	}
 
 	/**
+	 * Helper method to show info messages through ErrorHandlingService
+	 */
+	private async showInfo(message: string, operation: string): Promise<void> {
+		await this.errorHandler?.handleError(
+			new RetrospectError(
+				ErrorType.USER,
+				ErrorCode.INVALID_CONFIG, // Using a generic code for info messages
+				message,
+				message,
+				{ operation, component: 'JournalReflectionPlugin', timestamp: Date.now() },
+				true,
+				false
+			),
+			{ operation, component: 'JournalReflectionPlugin', timestamp: Date.now() },
+			{ showNotice: true, logToConsole: false, throwAfterHandling: false }
+		);
+	}
+
+	/**
 	 * Validate that the API key is configured
 	 */
 	private async validateApiKey(): Promise<boolean> {
@@ -341,18 +361,45 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private async validateAnalysisPrerequisites(): Promise<boolean> {
 		if (!this.serviceManager) {
-			new Notice("Services not initialized");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.CRITICAL,
+					ErrorCode.SERVICE_UNAVAILABLE,
+					"Services not initialized",
+					"Services not initialized",
+					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			return false;
 		}
 
 		if (!await this.validateApiKey()) {
-			new Notice("Please configure your OpenAI API key first");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.USER,
+					ErrorCode.API_KEY_INVALID,
+					"Please configure your OpenAI API key first",
+					"Please configure your OpenAI API key first",
+					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			return false;
 		}
 
 		// Check if critical services are available
 		if (!this.serviceManager.has('fileOperationsService')) {
-			new Notice("File operations service not available");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.CRITICAL,
+					ErrorCode.SERVICE_UNAVAILABLE,
+					"File operations service not available",
+					"File operations service not available",
+					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			return false;
 		}
 
@@ -370,11 +417,20 @@ export default class JournalReflectionPlugin extends Plugin {
 	async createWeeklySummary() {
 		const apiKey = await this.getDecryptedApiKey();
 		if (!apiKey) {
-			new Notice("Please set your OpenAI API key in settings first!");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.USER,
+					ErrorCode.API_KEY_INVALID,
+					"Please set your OpenAI API key in settings first!",
+					"Please set your OpenAI API key in settings first!",
+					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			return;
 		}
 
-		new Notice("Creating weekly journal summary...");
+		await this.showInfo("Creating weekly journal summary...", 'createWeeklySummary');
 
 		try {
 			// Get services with fallback handling
@@ -385,7 +441,16 @@ export default class JournalReflectionPlugin extends Plugin {
 			const recentNotes = await fileOpsService.findRecentNotes();
 
 			if (recentNotes.length === 0) {
-				new Notice("No journal entries found in the last week.");
+				await this.errorHandler?.handleError(
+					new RetrospectError(
+						ErrorType.USER,
+						ErrorCode.NO_CONTENT_FOUND,
+						"No journal entries found in the last week.",
+						"No journal entries found in the last week.",
+						{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					),
+					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
 				return;
 			}
 
@@ -393,8 +458,15 @@ export default class JournalReflectionPlugin extends Plugin {
 			const notesContent = await fileOpsService.getNotesContent(recentNotes);
 
 			if (notesContent.trim().length === 0) {
-				new Notice(
-					"No content found in recent notes (all may be private)."
+				await this.errorHandler?.handleError(
+					new RetrospectError(
+						ErrorType.USER,
+						ErrorCode.NO_CONTENT_FOUND,
+						"No content found in recent notes (all may be private).",
+						"No content found in recent notes (all may be private).",
+						{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					),
+					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
 				);
 				return;
 			}
@@ -408,7 +480,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			// Open the summary file
 			this.app.workspace.getLeaf().openFile(summaryFile);
 
-			new Notice("Weekly journal summary created!");
+			await this.showInfo("Weekly journal summary created!", 'createWeeklySummary');
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
@@ -425,12 +497,21 @@ export default class JournalReflectionPlugin extends Plugin {
 			return;
 		}
 
-		new Notice("Analyzing journal patterns...");
+		await this.showInfo("Analyzing journal patterns...", 'analyzePatterns');
 
 		try {
 			// Check if analysis service is available
 			if (!this.serviceManager.has('analysisManager')) {
-				new Notice("⚠️ Analysis service not available. Pattern analysis disabled.");
+				await this.errorHandler?.handleError(
+					new RetrospectError(
+						ErrorType.CRITICAL,
+						ErrorCode.SERVICE_UNAVAILABLE,
+						"Analysis service not available. Pattern analysis disabled.",
+						"Analysis service not available. Pattern analysis disabled.",
+						{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					),
+					{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
 				return;
 			}
 
@@ -438,7 +519,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			const patterns = await analysisManager.analyzePatterns(7);
 
 			if (patterns.length === 0) {
-				new Notice("No significant patterns detected in recent entries.");
+				await this.showInfo("No significant patterns detected in recent entries.", 'analyzePatterns');
 				return;
 			}
 
@@ -449,16 +530,12 @@ export default class JournalReflectionPlugin extends Plugin {
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
 			this.app.workspace.getLeaf().openFile(reportFile);
-			new Notice(`Found ${patterns.length} patterns - report created!`);
+			await this.showInfo(`Found ${patterns.length} patterns - report created!`, 'analyzePatterns');
 		} catch (error) {
-			if (error instanceof RetrospectError && error.code === ErrorCode.API_KEY_INVALID) {
-				new Notice("❌ Invalid API key. Please check your OpenAI API key in settings.");
-			} else {
-				await this.errorHandler.handleError(
-					error instanceof Error ? error : new Error(String(error)),
-					{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
-				);
-			}
+			await this.errorHandler.handleError(
+				error instanceof Error ? error : new Error(String(error)),
+				{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 
@@ -470,14 +547,14 @@ export default class JournalReflectionPlugin extends Plugin {
 			return;
 		}
 
-		new Notice("Analyzing journal trends...");
+		await this.showInfo("Analyzing journal trends...", 'analyzeTrends');
 
 		try {
 			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
 			const trends = await analysisManager.analyzeTrends(14);
 
 			if (trends.length === 0) {
-				new Notice("No significant trends detected in recent entries.");
+				await this.showInfo("No significant trends detected in recent entries.", 'analyzeTrends');
 				return;
 			}
 
@@ -488,7 +565,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
 			this.app.workspace.getLeaf().openFile(reportFile);
-			new Notice(`Found ${trends.length} trends - report created!`);
+			await this.showInfo(`Found ${trends.length} trends - report created!`, 'analyzeTrends');
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
@@ -505,7 +582,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			return;
 		}
 
-		new Notice("Performing comprehensive analysis...");
+		await this.showInfo("Performing comprehensive analysis...", 'performComprehensiveAnalysis');
 
 		try {
 			const analysisManager = this.serviceManager.resolve<AnalysisManager>('analysisManager');
@@ -521,7 +598,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
 			this.app.workspace.getLeaf().openFile(reportFile);
-			new Notice(`Analysis complete! Confidence: ${(result.confidence * 100).toFixed(0)}%`);
+			await this.showInfo(`Analysis complete! Confidence: ${(result.confidence * 100).toFixed(0)}%`, 'performComprehensiveAnalysis');
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
@@ -535,7 +612,16 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	async clearAnalysisCache(): Promise<void> {
 		if (!this.serviceManager) {
-			new Notice("Services not initialized");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.CRITICAL,
+					ErrorCode.SERVICE_UNAVAILABLE,
+					"Services not initialized",
+					"Services not initialized",
+					{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			return;
 		}
 
@@ -584,7 +670,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		return report;
 	}
 
-	private formatComprehensiveReport(result: any): string {
+	private formatComprehensiveReport(result: AnalysisResult): string {
 		let report = `# Comprehensive Journal Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n`;
 		report += `Time Range: ${result.timeRange}\n`;
@@ -655,8 +741,9 @@ export default class JournalReflectionPlugin extends Plugin {
 				const oldFolder = journalFolder.trim();
 				if (oldFolder) {
 					this.settings.periodicNoteFolders = [oldFolder];
-					new Notice(
-						`Settings migrated: Journal folder "${oldFolder}" converted to new format`
+					await this.showInfo(
+						`Settings migrated: Journal folder "${oldFolder}" converted to new format`,
+						'migrateSettings'
 					);
 				} else {
 					this.settings.periodicNoteFolders = [];
@@ -770,7 +857,16 @@ export default class JournalReflectionPlugin extends Plugin {
 			const encryptedData = this.settings.openaiApiKey as EncryptedData;
 			return await encryptionService.decrypt(encryptedData, this.masterPassword);
 		} catch (error) {
-			new Notice("Failed to decrypt API key. Please check your master password.");
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.USER,
+					ErrorCode.ENCRYPTION_ERROR,
+					"Failed to decrypt API key. Please check your master password.",
+					"Failed to decrypt API key. Please check your master password.",
+					{ operation: 'getDecryptedApiKey', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'getDecryptedApiKey', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 			this.masterPassword = null;
 			return "";
 		}
@@ -820,10 +916,13 @@ export default class JournalReflectionPlugin extends Plugin {
 						await this.encryptAndStoreApiKey(apiKey, password);
 						this.settings.encryptionSetup = true;
 						await this.saveSettings();
-						new Notice("Encryption setup completed successfully!");
+						await this.showInfo("Encryption setup completed successfully!", 'setupEncryption');
 						resolve(true);
 					} catch (error) {
-						new Notice(`Encryption setup failed: ${error.message}`);
+						await this.errorHandler?.handleError(
+							error instanceof Error ? error : new Error(String(error)),
+							{ operation: 'setupEncryption', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+						);
 						resolve(false);
 					}
 				} else {
@@ -848,7 +947,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.settings.encryptionEnabled = false;
 			this.masterPassword = null;
 			await this.saveSettings();
-			new Notice("Encryption disabled. API key is now stored in plain text.");
+			await this.showInfo("Encryption disabled. API key is now stored in plain text.", 'disableEncryption');
 		}
 	}
 }
@@ -891,7 +990,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
 							// Refresh the settings display after modal closes
 							this.display();
-						});
+						}, this.plugin.errorHandler);
 						modal.open();
 					});
 			});

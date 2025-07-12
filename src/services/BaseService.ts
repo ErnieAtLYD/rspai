@@ -1,6 +1,6 @@
 // src/services/BaseService.ts
 
-import { App } from "obsidian";
+import { App, Notice } from "obsidian";
 import { IService } from "./ServiceManager";
 
 /**
@@ -26,7 +26,19 @@ export abstract class BaseService implements IService {
             await this.onInitialize();
             this.isInitialized = true;
         } catch (error) {
-            console.error(`Failed to initialize ${this.constructor.name}:`, error);
+            // Use simple error handling to avoid circular dependency with ErrorHandlingService
+            const errorMessage = `Failed to initialize ${this.constructor.name}`;
+            console.error(errorMessage, error);
+            
+            // Show notice if we have access to the app and Notice is available
+            if (this.app && typeof Notice !== 'undefined') {
+                try {
+                    new Notice(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`);
+                } catch (noticeError) {
+                    // Fallback to console if Notice fails
+                    console.error('Failed to show notice:', noticeError);
+                }
+            }
             throw error;
         }
     }
@@ -44,7 +56,19 @@ export abstract class BaseService implements IService {
             await this.onDispose();
             this.isDisposed = true;
         } catch (error) {
-            console.error(`Failed to dispose ${this.constructor.name}:`, error);
+            // Use simple error handling to avoid circular dependency with ErrorHandlingService
+            const errorMessage = `Failed to dispose ${this.constructor.name}`;
+            console.error(errorMessage, error);
+            
+            // Show notice if we have access to the app and Notice is available
+            if (this.app && typeof Notice !== 'undefined') {
+                try {
+                    new Notice(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`);
+                } catch (noticeError) {
+                    // Fallback to console if Notice fails
+                    console.error('Failed to show notice:', noticeError);
+                }
+            }
             throw error;
         }
     }

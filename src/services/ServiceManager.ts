@@ -1,7 +1,7 @@
 // src/services/ServiceManager.ts
 
 import { App } from "obsidian";
-import { ErrorHandlingService } from "./ErrorHandlingService";
+import { ErrorHandlingService, RetrospectError, ErrorCode, ErrorType } from "./ErrorHandlingService";
 
 /**
  * Base interface for all services
@@ -112,7 +112,13 @@ export class ServiceManager {
         registration: ServiceRegistration<T>
     ): void {
         if (this.services.has(key)) {
-            throw new Error(`Service '${key}' is already registered`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_REGISTRATION_FAILED,
+                `Service '${key}' is already registered`,
+                `Service '${key}' is already registered`,
+                { operation: 'register_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Set defaults
@@ -146,7 +152,13 @@ export class ServiceManager {
     resolve<T extends IService>(key: string): T {
         // Check for circular dependencies
         if (this.initializing.has(key)) {
-            throw new Error(`Circular dependency detected for service '${key}'`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_REGISTRATION_FAILED,
+                `Circular dependency detected for service '${key}'`,
+                `Circular dependency detected for service '${key}'`,
+                { operation: 'resolve_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Return existing instance if singleton
@@ -156,7 +168,13 @@ export class ServiceManager {
 
         const registration = this.services.get(key);
         if (!registration) {
-            throw new Error(`Service '${key}' is not registered`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_UNAVAILABLE,
+                `Service '${key}' is not registered`,
+                `Service '${key}' is not registered`,
+                { operation: 'resolve_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Mark as initializing to detect circular dependencies
