@@ -410,23 +410,10 @@ export default class JournalReflectionPlugin extends Plugin {
 
 			new Notice("Weekly journal summary created!");
 		} catch (error) {
-			if (error instanceof RetrospectError) {
-				// Handle specific error types with recovery suggestions
-				if (error.code === ErrorCode.API_KEY_INVALID) {
-					new Notice("❌ Invalid API key. Please check your OpenAI API key in settings.");
-				} else if (error.code === ErrorCode.API_RATE_LIMITED) {
-					new Notice("⏱️ Rate limited. Please try again in a few minutes.");
-				} else if (error.code === ErrorCode.API_NETWORK_ERROR) {
-					new Notice("🌐 Network error. Please check your connection and try again.");
-				} else {
-					await this.errorHandler.handleError(error, { operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() });
-				}
-			} else {
-				await this.errorHandler.handleError(
-					error instanceof Error ? error : new Error(String(error)),
-					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
-				);
-			}
+			await this.errorHandler.handleError(
+				error instanceof Error ? error : new Error(String(error)),
+				{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 
