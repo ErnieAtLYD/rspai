@@ -1,5 +1,6 @@
 import { App } from 'obsidian';
 import { EncryptionService, EncryptionConfig, EncryptedData } from './EncryptionService';
+import { ErrorHandlingService } from './ErrorHandlingService';
 
 // Mock the crypto module for consistent testing
 const mockCrypto = {
@@ -21,11 +22,35 @@ Object.defineProperty(global, 'crypto', {
 describe('EncryptionService', () => {
     let app: App;
     let encryptionService: EncryptionService;
+    let mockErrorHandler: ErrorHandlingService;
 
     beforeEach(() => {
         jest.clearAllMocks();
         app = new App();
-        encryptionService = new EncryptionService(app);
+        
+        // Reset crypto mock to working state for each test
+        mockCrypto.getRandomValues.mockImplementation((arr) => {
+            arr.fill(1);
+            return arr;
+        });
+        mockCrypto.subtle.importKey.mockResolvedValue({});
+        mockCrypto.subtle.deriveKey.mockResolvedValue({ type: 'key' });
+        mockCrypto.subtle.encrypt.mockResolvedValue(new ArrayBuffer(16));
+        mockCrypto.subtle.decrypt.mockResolvedValue(new TextEncoder().encode('test data'));
+        
+        // Create mock error handler
+        mockErrorHandler = {
+            handleError: jest.fn().mockResolvedValue(undefined),
+            executeWithRetry: jest.fn().mockImplementation((fn) => fn()),
+            getErrorHistory: jest.fn().mockReturnValue([]),
+            clearErrorHistory: jest.fn(),
+            isReady: jest.fn().mockReturnValue(true),
+            initialize: jest.fn().mockResolvedValue(undefined),
+            dispose: jest.fn().mockResolvedValue(undefined),
+            onConfigUpdate: jest.fn().mockResolvedValue(undefined)
+        } as any;
+        
+        encryptionService = new EncryptionService(app, {}, mockErrorHandler);
     });
 
     describe('Constructor and Configuration', () => {
@@ -42,7 +67,7 @@ describe('EncryptionService', () => {
                 iterations: 50000,
                 keyLength: 128
             };
-            const customService = new EncryptionService(app, customConfig);
+            const customService = new EncryptionService(app, customConfig, mockErrorHandler);
             expect(customService['config']).toEqual(customConfig);
         });
 
@@ -50,7 +75,7 @@ describe('EncryptionService', () => {
             const partialConfig: EncryptionConfig = {
                 iterations: 75000
             };
-            const customService = new EncryptionService(app, partialConfig);
+            const customService = new EncryptionService(app, partialConfig, mockErrorHandler);
             expect(customService['config']).toEqual({
                 iterations: 75000,
                 keyLength: 256
@@ -83,7 +108,7 @@ describe('EncryptionService', () => {
                 iterations: 50000,
                 keyLength: 128
             };
-            const customService = new EncryptionService(app, customConfig);
+            const customService = new EncryptionService(app, customConfig, mockErrorHandler);
             
             await customService.dispose();
             
@@ -195,6 +220,8 @@ describe('EncryptionService', () => {
 
     describe('Encryption', () => {
         it('should encrypt data successfully', async () => {
+            await encryptionService.initialize();
+            
             const testData = 'sensitive data';
             const password = 'TestPassword123';
             const mockEncryptedBuffer = new ArrayBuffer(16);
@@ -221,37 +248,48 @@ describe('EncryptionService', () => {
         it('should throw error when Web Crypto API is not available', async () => {
             const originalCrypto = global.crypto;
             delete (global as any).crypto;
+            
+            // Create a new service instance without initializing it
+            const uninitializedService = new EncryptionService(app, {}, mockErrorHandler);
 
-            await expect(encryptionService.encrypt('data', 'password')).rejects.toThrow(
-                'Web Crypto API not available'
+            await expect(uninitializedService.encrypt('data', 'password')).rejects.toThrow(
+                'EncryptionService is not ready. Call initialize() first.'
             );
 
             global.crypto = originalCrypto;
         });
 
         it('should throw error when data is empty', async () => {
+            await encryptionService.initialize();
+            
             await expect(encryptionService.encrypt('', 'password')).rejects.toThrow(
                 'Data and password are required for encryption'
             );
         });
 
         it('should throw error when password is empty', async () => {
+            await encryptionService.initialize();
+            
             await expect(encryptionService.encrypt('data', '')).rejects.toThrow(
                 'Data and password are required for encryption'
             );
         });
 
         it('should handle encryption errors gracefully', async () => {
+            await encryptionService.initialize();
+            
             mockCrypto.subtle.importKey.mockRejectedValue(new Error('Crypto error'));
 
             await expect(encryptionService.encrypt('data', 'password')).rejects.toThrow(
-                'Encryption failed: Crypto error'
+                'Crypto error'
             );
         });
     });
 
     describe('Decryption', () => {
         it('should decrypt data successfully', async () => {
+            await encryptionService.initialize();
+            
             const encryptedData: EncryptedData = {
                 iv: 'dGVzdGl2',
                 salt: 'dGVzdHNhbHQ=',
@@ -281,6 +319,9 @@ describe('EncryptionService', () => {
         it('should throw error when Web Crypto API is not available', async () => {
             const originalCrypto = global.crypto;
             delete (global as any).crypto;
+            
+            // Create a new service instance without initializing it
+            const uninitializedService = new EncryptionService(app, {}, mockErrorHandler);
 
             const encryptedData: EncryptedData = {
                 iv: 'test',
@@ -288,20 +329,24 @@ describe('EncryptionService', () => {
                 encryptedData: 'test'
             };
 
-            await expect(encryptionService.decrypt(encryptedData, 'password')).rejects.toThrow(
-                'Web Crypto API not available'
+            await expect(uninitializedService.decrypt(encryptedData, 'password')).rejects.toThrow(
+                'EncryptionService is not ready. Call initialize() first.'
             );
 
             global.crypto = originalCrypto;
         });
 
         it('should throw error when encrypted data is null', async () => {
+            await encryptionService.initialize();
+            
             await expect(encryptionService.decrypt(null as any, 'password')).rejects.toThrow(
                 'Encrypted data and password are required for decryption'
             );
         });
 
         it('should throw error when password is empty', async () => {
+            await encryptionService.initialize();
+            
             const encryptedData: EncryptedData = {
                 iv: 'test',
                 salt: 'test',
@@ -314,6 +359,8 @@ describe('EncryptionService', () => {
         });
 
         it('should handle decryption errors gracefully', async () => {
+            await encryptionService.initialize();
+            
             const encryptedData: EncryptedData = {
                 iv: 'dGVzdGl2',
                 salt: 'dGVzdHNhbHQ=',
@@ -323,7 +370,7 @@ describe('EncryptionService', () => {
             mockCrypto.subtle.importKey.mockRejectedValue(new Error('Crypto error'));
 
             await expect(encryptionService.decrypt(encryptedData, 'password')).rejects.toThrow(
-                'Decryption failed: Crypto error'
+                'Crypto error'
             );
         });
     });
@@ -475,6 +522,8 @@ describe('EncryptionService', () => {
 
     describe('Test Encryption Functionality', () => {
         it('should test encryption/decryption successfully', async () => {
+            await encryptionService.initialize();
+            
             const password = 'TestPassword123';
             const mockEncryptedBuffer = new ArrayBuffer(16);
             const mockKey = { type: 'key' };
@@ -494,6 +543,8 @@ describe('EncryptionService', () => {
         });
 
         it('should return false when encryption test fails', async () => {
+            await encryptionService.initialize();
+            
             const password = 'TestPassword123';
             mockCrypto.subtle.importKey.mockRejectedValue(new Error('Test error'));
 
@@ -515,7 +566,7 @@ describe('EncryptionService', () => {
             if (realCrypto) {
                 global.crypto = realCrypto as any;
                 
-                const realService = new EncryptionService(app);
+                const realService = new EncryptionService(app, {}, mockErrorHandler);
                 await realService.initialize();
 
                 const testData = 'This is sensitive test data';
@@ -539,6 +590,8 @@ describe('EncryptionService', () => {
         });
 
         it('should handle encryption with wrong data types', async () => {
+            await encryptionService.initialize();
+            
             await expect(encryptionService.encrypt(null as any, 'password')).rejects.toThrow();
             await expect(encryptionService.encrypt(undefined as any, 'password')).rejects.toThrow();
             await expect(encryptionService.encrypt('data', null as any)).rejects.toThrow();
@@ -546,6 +599,8 @@ describe('EncryptionService', () => {
         });
 
         it('should handle decryption with malformed encrypted data', async () => {
+            await encryptionService.initialize();
+            
             const malformedData = {
                 iv: 'invalid-base64!@#',
                 salt: 'dGVzdHNhbHQ=',

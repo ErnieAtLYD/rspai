@@ -1,6 +1,7 @@
 // src/services/ServiceManager.ts
 
 import { App } from "obsidian";
+import { ErrorHandlingService, RetrospectError, ErrorCode, ErrorType } from "./ErrorHandlingService";
 
 /**
  * Base interface for all services
@@ -79,8 +80,17 @@ export class ServiceManager {
     private services = new Map<string, ServiceRegistration<any>>();
     private instances = new Map<string, any>();
     private initializing = new Set<string>();
+    private errorHandler?: ErrorHandlingService;
 
     constructor(private app: App) {}
+
+    /**
+     * Set the error handler for service operations
+     * This should be called after the ErrorHandlingService is registered
+     */
+    setErrorHandler(errorHandler: ErrorHandlingService): void {
+        this.errorHandler = errorHandler;
+    }
 
     /**
      * Register a service with the manager
@@ -102,7 +112,13 @@ export class ServiceManager {
         registration: ServiceRegistration<T>
     ): void {
         if (this.services.has(key)) {
-            throw new Error(`Service '${key}' is already registered`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_REGISTRATION_FAILED,
+                `Service '${key}' is already registered`,
+                `Service '${key}' is already registered`,
+                { operation: 'register_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Set defaults
@@ -136,7 +152,13 @@ export class ServiceManager {
     resolve<T extends IService>(key: string): T {
         // Check for circular dependencies
         if (this.initializing.has(key)) {
-            throw new Error(`Circular dependency detected for service '${key}'`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_REGISTRATION_FAILED,
+                `Circular dependency detected for service '${key}'`,
+                `Circular dependency detected for service '${key}'`,
+                { operation: 'resolve_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Return existing instance if singleton
@@ -146,7 +168,13 @@ export class ServiceManager {
 
         const registration = this.services.get(key);
         if (!registration) {
-            throw new Error(`Service '${key}' is not registered`);
+            throw new RetrospectError(
+                ErrorType.CRITICAL,
+                ErrorCode.SERVICE_UNAVAILABLE,
+                `Service '${key}' is not registered`,
+                `Service '${key}' is not registered`,
+                { operation: 'resolve_service', component: 'ServiceManager', metadata: { serviceKey: key }, timestamp: Date.now() }
+            );
         }
 
         // Mark as initializing to detect circular dependencies
@@ -210,7 +238,19 @@ export class ServiceManager {
                     }
                 }
             } catch (error) {
-                console.error(`Failed to initialize service '${key}':`, error);
+                if (this.errorHandler) {
+                    await this.errorHandler.handleError(
+                        error instanceof Error ? error : new Error(String(error)),
+                        {
+                            operation: 'initialize_service',
+                            component: 'ServiceManager',
+                            metadata: { serviceKey: key },
+                            timestamp: Date.now()
+                        }
+                    );
+                } else {
+                    console.error(`Failed to initialize service '${key}':`, error);
+                }
             }
         }
 
@@ -237,7 +277,19 @@ export class ServiceManager {
                     }
                 }
             } catch (error) {
-                console.error(`Failed to dispose service '${key}':`, error);
+                if (this.errorHandler) {
+                    await this.errorHandler.handleError(
+                        error instanceof Error ? error : new Error(String(error)),
+                        {
+                            operation: 'dispose_service',
+                            component: 'ServiceManager',
+                            metadata: { serviceKey: key },
+                            timestamp: Date.now()
+                        }
+                    );
+                } else {
+                    console.error(`Failed to dispose service '${key}':`, error);
+                }
             }
         }
 
@@ -294,12 +346,34 @@ export class ServiceManager {
             try {
                 const result = service.initialize();
                 if (result instanceof Promise) {
-                    result.catch(error => {
-                        console.error('Service initialization failed:', error);
+                    result.catch(async (error) => {
+                        if (this.errorHandler) {
+                            await this.errorHandler.handleError(
+                                error instanceof Error ? error : new Error(String(error)),
+                                {
+                                    operation: 'async_service_initialization',
+                                    component: 'ServiceManager',
+                                    timestamp: Date.now()
+                                }
+                            );
+                        } else {
+                            console.error('Service initialization failed:', error);
+                        }
                     });
                 }
             } catch (error) {
-                console.error('Service initialization failed:', error);
+                if (this.errorHandler) {
+                    this.errorHandler.handleError(
+                        error instanceof Error ? error : new Error(String(error)),
+                        {
+                            operation: 'sync_service_initialization',
+                            component: 'ServiceManager',
+                            timestamp: Date.now()
+                        }
+                    );
+                } else {
+                    console.error('Service initialization failed:', error);
+                }
             }
         }
     }

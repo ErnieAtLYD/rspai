@@ -1,5 +1,6 @@
 import { App } from "obsidian";
 import { BaseService } from "./BaseService";
+import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
 
 export interface EncryptionConfig {
     iterations?: number;
@@ -18,25 +19,58 @@ export interface EncryptedData {
  */
 export class EncryptionService extends BaseService {
     private config: EncryptionConfig;
+    private errorHandler: ErrorHandlingService;
     private readonly defaultConfig: EncryptionConfig = {
         iterations: 100000,
         keyLength: 256
     };
 
-    constructor(app: App, config: EncryptionConfig = {}) {
+    constructor(app: App, config: EncryptionConfig = {}, errorHandler: ErrorHandlingService) {
         super(app);
         this.config = { ...this.defaultConfig, ...config };
+        this.errorHandler = errorHandler;
     }
 
-    async initialize(): Promise<void> {
+    protected async onInitialize(): Promise<void> {
+        const context: ErrorContext = {
+            operation: 'initialize',
+            component: 'EncryptionService',
+            timestamp: Date.now()
+        };
+
         if (!this.isWebCryptoAvailable()) {
-            throw new Error("Web Crypto API not available. Cannot initialize encryption service.");
+            const cryptoError = new Error("Web Crypto API not available. Cannot initialize encryption service.");
+            await this.errorHandler.handleError(cryptoError, context, { 
+                showNotice: true, 
+                throwAfterHandling: true 
+            });
+            throw cryptoError;
         }
+
+        // Log successful initialization
+        await this.errorHandler.handleError(
+            new Error("Encryption service initialized successfully"),
+            context,
+            { showNotice: false, logToConsole: true, throwAfterHandling: false }
+        );
     }
 
-    async dispose(): Promise<void> {
+    protected async onDispose(): Promise<void> {
+        const context: ErrorContext = {
+            operation: 'dispose',
+            component: 'EncryptionService',
+            timestamp: Date.now()
+        };
+
         // Clear any cached keys or sensitive data
         this.config = { ...this.defaultConfig };
+
+        // Log disposal
+        await this.errorHandler.handleError(
+            new Error("Encryption service disposed"),
+            context,
+            { showNotice: false, logToConsole: true, throwAfterHandling: false }
+        );
     }
 
     /**
@@ -100,74 +134,124 @@ export class EncryptionService extends BaseService {
      * Encrypt data using AES-256-GCM
      */
     async encrypt(data: string, password: string): Promise<EncryptedData> {
+        this.ensureReady();
+
+        const context: ErrorContext = {
+            operation: 'encrypt',
+            component: 'EncryptionService',
+            timestamp: Date.now(),
+            metadata: { dataLength: data?.length || 0 }
+        };
+
         if (!this.isWebCryptoAvailable()) {
-            throw new Error("Web Crypto API not available");
+            const cryptoError = new Error("Web Crypto API not available");
+            await this.errorHandler.handleError(cryptoError, context, { 
+                showNotice: true, 
+                throwAfterHandling: true 
+            });
+            throw cryptoError;
         }
 
         if (!data || !password) {
-            throw new Error("Data and password are required for encryption");
+            const validationError = new Error("Data and password are required for encryption");
+            await this.errorHandler.handleError(validationError, context, { 
+                showNotice: true, 
+                throwAfterHandling: true 
+            });
+            throw validationError;
         }
 
-        try {
-            const salt = this.generateSalt();
-            const iv = this.generateIV();
-            const key = await this.deriveKey(password, salt);
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                const salt = this.generateSalt();
+                const iv = this.generateIV();
+                const key = await this.deriveKey(password, salt);
 
-            const encoder = new TextEncoder();
-            const dataBuffer = encoder.encode(data);
+                const encoder = new TextEncoder();
+                const dataBuffer = encoder.encode(data);
 
-            const encryptedBuffer = await crypto.subtle.encrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: iv
-                },
-                key,
-                dataBuffer
-            );
+                const encryptedBuffer = await crypto.subtle.encrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: iv
+                    },
+                    key,
+                    dataBuffer
+                );
 
-            return {
-                iv: this.arrayBufferToBase64(iv),
-                salt: this.arrayBufferToBase64(salt),
-                encryptedData: this.arrayBufferToBase64(encryptedBuffer)
-            };
-        } catch (error) {
-            throw new Error(`Encryption failed: ${error.message}`);
-        }
+                return {
+                    iv: this.arrayBufferToBase64(iv),
+                    salt: this.arrayBufferToBase64(salt),
+                    encryptedData: this.arrayBufferToBase64(encryptedBuffer)
+                };
+            },
+            context,
+            { maxRetries: 2, retryDelay: 500 }
+        );
     }
 
     /**
      * Decrypt data using AES-256-GCM
      */
     async decrypt(encryptedData: EncryptedData, password: string): Promise<string> {
+        this.ensureReady();
+
+        const context: ErrorContext = {
+            operation: 'decrypt',
+            component: 'EncryptionService',
+            timestamp: Date.now(),
+            metadata: { hasEncryptedData: !!encryptedData }
+        };
+
         if (!this.isWebCryptoAvailable()) {
-            throw new Error("Web Crypto API not available");
+            const cryptoError = new Error("Web Crypto API not available");
+            await this.errorHandler.handleError(cryptoError, context, { 
+                showNotice: true, 
+                throwAfterHandling: true 
+            });
+            throw cryptoError;
         }
 
         if (!encryptedData || !password) {
-            throw new Error("Encrypted data and password are required for decryption");
+            const validationError = new Error("Encrypted data and password are required for decryption");
+            await this.errorHandler.handleError(validationError, context, { 
+                showNotice: true, 
+                throwAfterHandling: true 
+            });
+            throw validationError;
         }
 
-        try {
-            const salt = this.base64ToArrayBuffer(encryptedData.salt);
-            const iv = this.base64ToArrayBuffer(encryptedData.iv);
-            const encrypted = this.base64ToArrayBuffer(encryptedData.encryptedData);
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                try {
+                    const salt = this.base64ToArrayBuffer(encryptedData.salt);
+                    const iv = this.base64ToArrayBuffer(encryptedData.iv);
+                    const encrypted = this.base64ToArrayBuffer(encryptedData.encryptedData);
 
-            const key = await this.deriveKey(password, new Uint8Array(salt));
+                    const key = await this.deriveKey(password, new Uint8Array(salt));
 
-            const decryptedBuffer = await crypto.subtle.decrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: new Uint8Array(iv)
-                },
-                key,
-                encrypted
-            );
+                    const decryptedBuffer = await crypto.subtle.decrypt(
+                        {
+                            name: 'AES-GCM',
+                            iv: new Uint8Array(iv)
+                        },
+                        key,
+                        encrypted
+                    );
 
-            const decoder = new TextDecoder();
-            return decoder.decode(decryptedBuffer);
-        } catch (error) {
-            throw new Error(`Decryption failed: ${error.message}`);
-        }
+                    const decoder = new TextDecoder();
+                    return decoder.decode(decryptedBuffer);
+                } catch (error) {
+                    // Handle specific decryption failures
+                    if (error instanceof Error && error.name === 'OperationError') {
+                        throw new Error("Decryption failed - incorrect password or corrupted data");
+                    }
+                    throw error;
+                }
+            },
+            context,
+            { maxRetries: 1 } // Don't retry decryption as password is likely wrong
+        );
     }
 
     /**
@@ -243,13 +327,38 @@ export class EncryptionService extends BaseService {
      * Test encryption/decryption functionality
      */
     async testEncryption(password: string): Promise<boolean> {
-        try {
-            const testData = "test-encryption-" + Date.now();
-            const encrypted = await this.encrypt(testData, password);
-            const decrypted = await this.decrypt(encrypted, password);
-            return decrypted === testData;
-        } catch (error) {
-            return false;
-        }
+        this.ensureReady();
+
+        const context: ErrorContext = {
+            operation: 'testEncryption',
+            component: 'EncryptionService',
+            timestamp: Date.now()
+        };
+
+        return await this.errorHandler.executeWithRetry(
+            async () => {
+                try {
+                    const testData = "test-encryption-" + Date.now();
+                    const encrypted = await this.encrypt(testData, password);
+                    const decrypted = await this.decrypt(encrypted, password);
+                    const success = decrypted === testData;
+
+                    if (!success) {
+                        throw new Error("Encryption test failed - decrypted data does not match original");
+                    }
+
+                    return success;
+                } catch (error) {
+                    await this.errorHandler.handleError(
+                        error instanceof Error ? error : new Error(String(error)),
+                        context,
+                        { showNotice: false, logToConsole: true }
+                    );
+                    return false;
+                }
+            },
+            context,
+            { maxRetries: 2, retryDelay: 500 }
+        );
     }
 }

@@ -1,5 +1,5 @@
 import { App, Modal, Setting, Notice } from "obsidian";
-import { EncryptionService } from "./services";
+import { EncryptionService, ErrorHandlingService } from "./services";
 
 /**
  * Modal for prompting user for master password
@@ -88,10 +88,10 @@ export class EncryptionSetupModal extends Modal {
     private onSubmit: (password: string | null, apiKey: string | null) => void;
     private encryptionService: EncryptionService;
 
-    constructor(app: App, onSubmit: (password: string | null, apiKey: string | null) => void) {
+    constructor(app: App, onSubmit: (password: string | null, apiKey: string | null) => void, errorHandler: ErrorHandlingService) {
         super(app);
         this.onSubmit = onSubmit;
-        this.encryptionService = new EncryptionService(app);
+        this.encryptionService = new EncryptionService(app, {}, errorHandler);
     }
 
     onOpen() {
@@ -244,11 +244,13 @@ export class EncryptionSetupModal extends Modal {
 export class EncryptionManagementModal extends Modal {
     private plugin: any; // JournalReflectionPlugin type
     private onCloseCallback: () => void;
+    private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, plugin: any, onCloseCallback: () => void) {
+    constructor(app: App, plugin: any, onCloseCallback: () => void, errorHandler: ErrorHandlingService) {
         super(app);
         this.plugin = plugin;
         this.onCloseCallback = onCloseCallback;
+        this.errorHandler = errorHandler;
     }
 
     onOpen() {
@@ -290,11 +292,22 @@ export class EncryptionManagementModal extends Modal {
                     btn
                         .setButtonText("Test Decryption")
                         .onClick(async () => {
-                            const decrypted = await this.plugin.getDecryptedApiKey();
-                            if (decrypted) {
-                                new Notice("✓ Decryption successful!");
-                            } else {
-                                new Notice("✗ Decryption failed!");
+                            try {
+                                const decrypted = await this.plugin.getDecryptedApiKey();
+                                if (decrypted) {
+                                    // Show success message using Notice directly for modal feedback
+                                    new Notice("✓ Decryption successful!");
+                                } else {
+                                    await this.errorHandler.handleError(
+                                        new Error("Decryption test failed"),
+                                        { operation: 'testDecryption', component: 'EncryptionManagementModal', timestamp: Date.now() }
+                                    );
+                                }
+                            } catch (error) {
+                                await this.errorHandler.handleError(
+                                    error instanceof Error ? error : new Error(String(error)),
+                                    { operation: 'testDecryption', component: 'EncryptionManagementModal', timestamp: Date.now() }
+                                );
                             }
                         })
                 );

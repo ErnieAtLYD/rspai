@@ -2,6 +2,7 @@
 
 import { App } from "obsidian";
 import { BaseService } from "./BaseService";
+import { ErrorHandlingService, ErrorType, ErrorCode } from "./ErrorHandlingService";
 
 export interface CacheEntry<T> {
     key: string;
@@ -33,9 +34,11 @@ export class CacheService extends BaseService {
     private cleanupTimer: NodeJS.Timeout | null = null;
     private config: CacheConfig;
     private cacheFilePath: string;
+    private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, config: Partial<CacheConfig> = {}, pluginId: 'retrospect-ai') {
+    constructor(app: App, errorHandler: ErrorHandlingService, config: Partial<CacheConfig> = {}, pluginId: 'retrospect-ai') {
         super(app);
+        this.errorHandler = errorHandler;
         this.config = {
             defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
             maxSize: 1000,
@@ -53,7 +56,16 @@ export class CacheService extends BaseService {
         }
         
         this.startCleanupTimer();
-        console.log(`Cache service initialized with ${this.cache.size} entries`);
+        await this.errorHandler.handleError(
+            new Error(`Cache service initialized with ${this.cache.size} entries`),
+            {
+                operation: 'initialize',
+                component: 'CacheService',
+                metadata: { cacheSize: this.cache.size },
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     protected async onDispose(): Promise<void> {
@@ -63,11 +75,26 @@ export class CacheService extends BaseService {
         }
 
         if (this.config.persistToDisk) {
-            await this.saveToDisk();
+            await this.errorHandler.executeWithRetry(
+                () => this.saveToDisk(),
+                {
+                    operation: 'dispose_save_to_disk',
+                    component: 'CacheService',
+                    timestamp: Date.now()
+                }
+            );
         }
 
         this.cache.clear();
-        console.log("Cache service disposed");
+        await this.errorHandler.handleError(
+            new Error("Cache service disposed"),
+            {
+                operation: 'dispose',
+                component: 'CacheService',
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     /**
@@ -113,7 +140,15 @@ export class CacheService extends BaseService {
         this.cache.set(key, entry);
         
         if (this.config.persistToDisk) {
-            await this.saveToDisk();
+            await this.errorHandler.executeWithRetry(
+                () => this.saveToDisk(),
+                {
+                    operation: 'set_save_to_disk',
+                    component: 'CacheService',
+                    metadata: { key, hasValue: !!value },
+                    timestamp: Date.now()
+                }
+            );
         }
     }
 
@@ -126,7 +161,15 @@ export class CacheService extends BaseService {
         const deleted = this.cache.delete(key);
         
         if (deleted && this.config.persistToDisk) {
-            await this.saveToDisk();
+            await this.errorHandler.executeWithRetry(
+                () => this.saveToDisk(),
+                {
+                    operation: 'delete_save_to_disk',
+                    component: 'CacheService',
+                    metadata: { key, deleted },
+                    timestamp: Date.now()
+                }
+            );
         }
         
         return deleted;
@@ -141,7 +184,14 @@ export class CacheService extends BaseService {
         this.cache.clear();
         
         if (this.config.persistToDisk) {
-            await this.saveToDisk();
+            await this.errorHandler.executeWithRetry(
+                () => this.saveToDisk(),
+                {
+                    operation: 'clear_save_to_disk',
+                    component: 'CacheService',
+                    timestamp: Date.now()
+                }
+            );
         }
     }
 
@@ -210,12 +260,12 @@ export class CacheService extends BaseService {
         const jitter = Math.random() * 0.4 + 0.8; // 0.8-1.2 multiplier
         const interval = this.config.cleanupInterval * jitter;
         
-        this.cleanupTimer = setInterval(() => {
-            this.cleanupExpired();
+        this.cleanupTimer = setInterval(async () => {
+            await this.cleanupExpired();
         }, interval);
     }
 
-    private cleanupExpired(): void {
+    private async cleanupExpired(): Promise<void> {
         const now = Date.now();
         const expiredKeys: string[] = [];
         const maxEntriesPerCleanup = 100; // Limit entries processed per cleanup cycle
@@ -237,7 +287,16 @@ export class CacheService extends BaseService {
         }
 
         if (expiredKeys.length > 0) {
-            console.log(`Cleaned up ${expiredKeys.length} expired cache entries (processed ${processedCount}/${this.cache.size} total entries)`);
+            await this.errorHandler.handleError(
+                new Error(`Cleaned up ${expiredKeys.length} expired cache entries (processed ${processedCount}/${this.cache.size} total entries)`),
+                {
+                    operation: 'cleanup_expired',
+                    component: 'CacheService',
+                    metadata: { expiredCount: expiredKeys.length, processedCount, totalEntries: this.cache.size },
+                    timestamp: Date.now()
+                },
+                { logToConsole: true, showNotice: false }
+            );
         }
     }
 
@@ -258,37 +317,51 @@ export class CacheService extends BaseService {
     }
 
     private async loadFromDisk(): Promise<void> {
-        try {
-            const data = await this.app.vault.adapter.read(this.cacheFilePath);
-            const cacheData = JSON.parse(data);
-            
-            // Restore cache entries
-            for (const entry of cacheData.entries || []) {
-                // Skip expired entries
-                if (Date.now() <= entry.timestamp + entry.ttl) {
-                    this.cache.set(entry.key, entry);
+        await this.errorHandler.executeWithRetry(
+            async () => {
+                const data = await this.app.vault.adapter.read(this.cacheFilePath);
+                const cacheData = JSON.parse(data);
+                
+                // Restore cache entries
+                for (const entry of cacheData.entries || []) {
+                    // Skip expired entries
+                    if (Date.now() <= entry.timestamp + entry.ttl) {
+                        this.cache.set(entry.key, entry);
+                    }
                 }
-            }
-        } catch (error) {
+            },
+            {
+                operation: 'load_from_disk',
+                component: 'CacheService',
+                metadata: { cacheFilePath: this.cacheFilePath },
+                timestamp: Date.now()
+            },
+            { showNotice: false }
+        ).catch(async (error) => {
             // Cache file doesn't exist or is corrupted, start fresh
-            console.log("No existing cache file found, starting fresh");
-        }
+            await this.errorHandler.handleError(
+                error,
+                {
+                    operation: 'load_from_disk_fallback',
+                    component: 'CacheService',
+                    metadata: { cacheFilePath: this.cacheFilePath },
+                    timestamp: Date.now()
+                },
+                { logToConsole: true, showNotice: false }
+            );
+        });
     }
 
     private async saveToDisk(): Promise<void> {
-        try {
-            const cacheData = {
-                entries: Array.from(this.cache.values()),
-                timestamp: Date.now()
-            };
-            
-            await this.app.vault.adapter.write(
-                this.cacheFilePath,
-                JSON.stringify(cacheData, null, 2)
-            );
-        } catch (error) {
-            console.error("Failed to save cache to disk:", error);
-        }
+        const cacheData = {
+            entries: Array.from(this.cache.values()),
+            timestamp: Date.now()
+        };
+        
+        await this.app.vault.adapter.write(
+            this.cacheFilePath,
+            JSON.stringify(cacheData, null, 2)
+        );
     }
 
     private hashObject(obj: Record<string, any>): string {

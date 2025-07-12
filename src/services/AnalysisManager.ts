@@ -6,6 +6,7 @@ import { CacheService } from "./CacheService";
 import { PatternRecognitionService, PatternData, TrendData, InsightData } from "./PatternRecognitionService";
 import { AIService } from "./AIService";
 import { FileOperationsService } from "./FileOperationsService";
+import { ErrorHandlingService } from "./ErrorHandlingService";
 
 export interface AnalysisRequest {
     type: 'pattern' | 'trend' | 'insight' | 'comprehensive';
@@ -39,6 +40,7 @@ export interface AnalysisManagerConfig {
     fileOperationsService: FileOperationsService;
     cacheService: CacheService;
     patternRecognitionService: PatternRecognitionService;
+    errorHandler: ErrorHandlingService;
     defaultOptions: AnalysisOptions;
 }
 
@@ -56,12 +58,17 @@ export class AnalysisManager extends BaseService {
         this.config = config;
     }
 
+    private get errorHandler(): ErrorHandlingService {
+        return this.config.errorHandler;
+    }
+
     protected async onInitialize(): Promise<void> {
         const requiredServices = [
             this.config.aiService,
             this.config.fileOperationsService,
             this.config.cacheService,
-            this.config.patternRecognitionService
+            this.config.patternRecognitionService,
+            this.config.errorHandler
         ];
 
         for (const service of requiredServices) {
@@ -73,13 +80,30 @@ export class AnalysisManager extends BaseService {
         // Load analysis history from cache
         await this.loadAnalysisHistory();
         
-        console.log("Analysis Manager initialized");
+        await this.errorHandler.handleError(
+            new Error("Analysis Manager initialized"),
+            {
+                operation: 'initialize',
+                component: 'AnalysisManager',
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     protected async onDispose(): Promise<void> {
         // Cancel active analyses
         for (const [id] of this.activeAnalyses.entries()) {
-            console.log(`Cancelling active analysis: ${id}`);
+            await this.errorHandler.handleError(
+                new Error(`Cancelling active analysis: ${id}`),
+                {
+                    operation: 'dispose_cancel_analysis',
+                    component: 'AnalysisManager',
+                    metadata: { analysisId: id },
+                    timestamp: Date.now()
+                },
+                { logToConsole: true, showNotice: false }
+            );
         }
         this.activeAnalyses.clear();
 
@@ -87,7 +111,15 @@ export class AnalysisManager extends BaseService {
         await this.saveAnalysisHistory();
         
         this.analysisHistory = [];
-        console.log("Analysis Manager disposed");
+        await this.errorHandler.handleError(
+            new Error("Analysis Manager disposed"),
+            {
+                operation: 'dispose',
+                component: 'AnalysisManager',
+                timestamp: Date.now()
+            },
+            { logToConsole: true, showNotice: false }
+        );
     }
 
     /**
@@ -297,7 +329,15 @@ export class AnalysisManager extends BaseService {
 
             return result;
         } catch (error) {
-            console.error('Analysis failed:', error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'perform_comprehensive_analysis',
+                    component: 'AnalysisManager',
+                    metadata: { daysBack, timeRange, analysisId },
+                    timestamp: Date.now()
+                }
+            );
             throw error;
         }
     }
@@ -333,9 +373,25 @@ Please provide a 2-3 paragraph summary that:
 4. Focuses on opportunities for improvement and positive reinforcement`;
 
         try {
-            return await this.config.aiService.generateResponse(prompt);
+            return await this.errorHandler.executeWithRetry(
+                () => this.config.aiService.generateResponse(prompt),
+                {
+                    operation: 'generate_analysis_summary',
+                    component: 'AnalysisManager',
+                    metadata: { fileCount: files.length, patternCount: analysisResult.patterns.length },
+                    timestamp: Date.now()
+                }
+            );
         } catch (error) {
-            console.error('Failed to generate analysis summary:', error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'generate_analysis_summary_fallback',
+                    component: 'AnalysisManager',
+                    metadata: { fileCount: files.length },
+                    timestamp: Date.now()
+                }
+            );
             return 'Analysis completed but summary generation failed.';
         }
     }
@@ -365,7 +421,15 @@ Please provide a 2-3 paragraph summary that:
                 this.analysisHistory = cached;
             }
         } catch (error) {
-            console.warn('Failed to load analysis history:', error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'load_analysis_history',
+                    component: 'AnalysisManager',
+                    timestamp: Date.now()
+                },
+                { showNotice: false }
+            );
         }
     }
 
@@ -375,7 +439,15 @@ Please provide a 2-3 paragraph summary that:
             const recentHistory = this.analysisHistory.slice(-50);
             await this.config.cacheService.set('analysis_history', recentHistory, { ttl: 30 * 24 * 60 * 60 * 1000 });
         } catch (error) {
-            console.warn('Failed to save analysis history:', error);
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'save_analysis_history',
+                    component: 'AnalysisManager',
+                    timestamp: Date.now()
+                },
+                { showNotice: false }
+            );
         }
     }
 }
