@@ -45,6 +45,7 @@ export class NLPAnalysisService extends BaseService {
 	private blockerDetector: BlockerDetector;
 	private config: NLPAnalysisConfig;
 	private cacheService?: CacheService;
+	private errorHandler?: ErrorHandlingService;
 
 	constructor(app: App, config: NLPAnalysisConfig) {
 		super(app);
@@ -83,7 +84,7 @@ export class NLPAnalysisService extends BaseService {
 		try {
 			// Check cache if available
 			if (this.cacheService?.isReady()) {
-				const cached = await this.cacheService.get(cacheKey);
+				const cached = await this.cacheService.get(cacheKey) as NLPAnalysisResult | null;
 				if (cached) {
 					return {
 						...cached,
@@ -110,7 +111,11 @@ export class NLPAnalysisService extends BaseService {
 				themes,
 				blockers,
 				sentiment,
-				entities: this.config.enableEntityRecognition ? processed.entities : undefined,
+				entities: this.config.enableEntityRecognition && processed.entities ? {
+					people: processed.entities.people,
+					places: processed.entities.places,
+					organizations: processed.entities.organizations
+				} : undefined,
 				keywords: processed.keywords,
 				metadata: {
 					textLength: text.length,
@@ -142,7 +147,7 @@ export class NLPAnalysisService extends BaseService {
 
 		try {
 			if (this.cacheService?.isReady()) {
-				const cached = await this.cacheService.get(cacheKey);
+				const cached = await this.cacheService.get(cacheKey) as ProductivityTheme[] | null;
 				if (cached) return cached;
 			}
 
@@ -157,8 +162,12 @@ export class NLPAnalysisService extends BaseService {
 		} catch (error) {
 			await this.errorHandler?.handleError(
 				error as Error,
-				"Theme extraction",
-				{ textLength: text.length }
+				{
+					operation: "Theme extraction",
+					component: "NLPAnalysisService",
+					metadata: { textLength: text.length },
+					timestamp: Date.now()
+				}
 			);
 			return [];
 		}
@@ -170,7 +179,7 @@ export class NLPAnalysisService extends BaseService {
 
 		try {
 			if (this.cacheService?.isReady()) {
-				const cached = await this.cacheService.get(cacheKey);
+				const cached = await this.cacheService.get(cacheKey) as BlockerPattern[] | null;
 				if (cached) return cached;
 			}
 
@@ -185,8 +194,12 @@ export class NLPAnalysisService extends BaseService {
 		} catch (error) {
 			await this.errorHandler?.handleError(
 				error as Error,
-				"Blocker detection",
-				{ textLength: text.length }
+				{
+					operation: "Blocker detection",
+					component: "NLPAnalysisService",
+					metadata: { textLength: text.length },
+					timestamp: Date.now()
+				}
 			);
 			return [];
 		}
@@ -198,7 +211,7 @@ export class NLPAnalysisService extends BaseService {
 
 		try {
 			if (this.cacheService?.isReady()) {
-				const cached = await this.cacheService.get(cacheKey);
+				const cached = await this.cacheService.get(cacheKey) as SentimentAnalysis | null;
 				if (cached) return cached;
 			}
 
@@ -213,10 +226,32 @@ export class NLPAnalysisService extends BaseService {
 		} catch (error) {
 			await this.errorHandler?.handleError(
 				error as Error,
-				"Sentiment analysis",
-				{ textLength: text.length }
+				{
+					operation: "Sentiment analysis",
+					component: "NLPAnalysisService",
+					metadata: { textLength: text.length },
+					timestamp: Date.now()
+				}
 			);
-			return this.sentimentAnalyzer['getNeutralSentiment']();
+			// Return a default neutral sentiment analysis
+			return {
+				overall: {
+					polarity: 0,
+					subjectivity: 0.5,
+					label: 'neutral'
+				},
+				emotions: {
+					joy: 0,
+					anger: 0,
+					fear: 0,
+					sadness: 0,
+					surprise: 0,
+					trust: 0
+				},
+				arousal: 'moderate',
+				productivity_sentiment: 'neutral',
+				confidence_level: 0.5
+			};
 		}
 	}
 

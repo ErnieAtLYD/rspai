@@ -424,7 +424,8 @@ export class PatternRecognitionService extends BaseService {
             })
         );
 
-        const validCounts = wordCounts.filter(c => c !== null) as Array<{ date: string; value: number }>;
+        // Use proper type guard instead of type assertion
+        const validCounts = wordCounts.filter(this.isValidWordCount);
         if (validCounts.length < 3) return null;
 
         // Simple trend analysis
@@ -688,5 +689,18 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
         }
 
         return insights;
+    }
+
+    /**
+     * Type guard to check if a value is a valid word count object
+     */
+    private isValidWordCount(value: { date: string; value: number } | null): value is { date: string; value: number } {
+        return value !== null && 
+               typeof value === 'object' && 
+               'date' in value && 
+               'value' in value &&
+               typeof value.date === 'string' &&
+               typeof value.value === 'number' &&
+               !isNaN(value.value);
     }
 }

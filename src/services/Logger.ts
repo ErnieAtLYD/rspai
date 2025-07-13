@@ -8,6 +8,8 @@ export interface LogContext {
 	[key: string]: any;
 }
 
+export type LogErrorContext = string | LogContext;
+
 export class Logger {
 	private serviceName: string;
 	private errorHandler?: ErrorHandlingService;
@@ -48,7 +50,7 @@ export class Logger {
 	/**
 	 * Log an error message and optionally use ErrorHandlingService for structured error handling
 	 */
-	async error(message: string, error?: Error, context?: LogContext): Promise<void> {
+	async error(message: string, error?: Error, context?: LogErrorContext): Promise<void> {
 		// Always log to console first
 		const prefix = `[${this.serviceName}]`;
 		if (error) {
@@ -60,7 +62,20 @@ export class Logger {
 		// Use ErrorHandlingService if available and we have an actual Error object
 		if (this.errorHandler && error) {
 			try {
-				await this.errorHandler.handleError(error, message, context);
+				const errorContext = typeof context === 'string' 
+					? {
+						operation: message,
+						component: this.serviceName,
+						metadata: { message: context },
+						timestamp: Date.now()
+					}
+					: {
+						operation: message,
+						component: this.serviceName,
+						metadata: context || {},
+						timestamp: Date.now()
+					};
+				await this.errorHandler.handleError(error, errorContext);
 			} catch (handlerError) {
 				console.error(`${prefix} ErrorHandler failed:`, handlerError);
 			}
@@ -70,7 +85,7 @@ export class Logger {
 	/**
 	 * Log lifecycle events (initialization, disposal, configuration changes)
 	 */
-	lifecycle(event: 'initialized' | 'disposed' | 'configured' | 'error', details?: string): void {
+	lifecycle(event: 'initialized' | 'disposed' | 'configured' | 'error' | 'initialize started' | 'dispose started' | 'configure started' | 'initialize completed' | 'dispose completed' | 'configure completed', details?: string): void {
 		const message = details ? `${event} - ${details}` : event;
 		this.info(message);
 	}

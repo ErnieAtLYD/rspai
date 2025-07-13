@@ -83,6 +83,11 @@ export class NLPAnalysisService extends BaseService {
 	private sentimentAnalyzer: SentimentAnalyzer | null = null;
 	private stemmer: { stem(word: string): string } | null = null;
 	private stopWords: Set<string> | null = null;
+	
+	// TF-IDF instance pooling
+	private tfidfPool: InstanceType<NaturalModule["TfIdf"]>[] = [];
+	private readonly maxPoolSize = 5;
+	private readonly maxDocumentsPerInstance = 100;
 
 	constructor(app: App, config: NLPAnalysisConfig) {
 		super(app);
@@ -128,7 +133,11 @@ export class NLPAnalysisService extends BaseService {
 	}
 
 	protected async onDispose(): Promise<void> {
-		// Clear any cached models or data
+		// Clear TF-IDF pool and cached models
+		this.disposeTfIdfPool();
+		this.sentimentAnalyzer = null;
+		this.stemmer = null;
+		this.stopWords = null;
 		console.log("NLP Analysis Service disposed");
 	}
 
@@ -219,10 +228,9 @@ export class NLPAnalysisService extends BaseService {
 			const preprocessed = await this.preprocessText(text);
 			const themes: ProductivityTheme[] = [];
 
-			// Create isolated TF-IDF instance for this analysis
+			// Get TF-IDF instance from pool for this analysis
 			await this.ensureNLPDependencies();
-			const natural = await getNatural();
-			const tfidf = new natural.TfIdf();
+			const tfidf = await this.getTfIdfInstance();
 			tfidf.addDocument(preprocessed.cleanedText);
 
 			// Define productivity theme categories
@@ -309,6 +317,9 @@ export class NLPAnalysisService extends BaseService {
 			// Sort by confidence
 			themes.sort((a, b) => b.confidence - a.confidence);
 
+			// Return TF-IDF instance to pool and cache results
+			this.returnTfIdfInstance(tfidf);
+			
 			// Cache for 12 hours
 			await this.config.cacheService.set(cacheKey, themes, {
 				ttl: 12 * 60 * 60 * 1000,
@@ -529,10 +540,9 @@ export class NLPAnalysisService extends BaseService {
 	}
 
 	private async extractKeywords(text: string): Promise<string[]> {
-		// Create isolated TF-IDF instance for keyword extraction
+		// Get TF-IDF instance from pool for keyword extraction
 		await this.ensureNLPDependencies();
-		const natural = await getNatural();
-		const tfidf = new natural.TfIdf();
+		const tfidf = await this.getTfIdfInstance();
 		tfidf.addDocument(text);
 
 		const keywords: string[] = [];
@@ -543,6 +553,8 @@ export class NLPAnalysisService extends BaseService {
 				keywords.push(item.term);
 			});
 
+		// Return TF-IDF instance to pool
+		this.returnTfIdfInstance(tfidf);
 		return keywords;
 	}
 
@@ -924,5 +936,73 @@ export class NLPAnalysisService extends BaseService {
 			.map((b) => b.toString(16).padStart(2, "0"))
 			.join("")
 			.substring(0, 16);
+	}
+
+	/**
+	 * TF-IDF Instance Pooling Methods
+	 */
+
+	/**
+	 * Get a TF-IDF instance from the pool or create a new one
+	 */
+	private async getTfIdfInstance(): Promise<InstanceType<NaturalModule["TfIdf"]>> {
+		const natural = await getNatural();
+		
+		// Try to get a clean instance from the pool
+		for (let i = 0; i < this.tfidfPool.length; i++) {
+			const instance = this.tfidfPool[i];
+			if (instance.documents.length < this.maxDocumentsPerInstance) {
+				// Remove from pool and return
+				this.tfidfPool.splice(i, 1);
+				return instance;
+			}
+		}
+		
+		// No suitable instance found, create a new one
+		return new natural.TfIdf();
+	}
+
+	/**
+	 * Return a TF-IDF instance to the pool or dispose if pool is full
+	 */
+	private returnTfIdfInstance(instance: InstanceType<NaturalModule["TfIdf"]>): void {
+		// Check if instance is too full or pool is at capacity
+		if (instance.documents.length >= this.maxDocumentsPerInstance || 
+			this.tfidfPool.length >= this.maxPoolSize) {
+			// Dispose of the instance by clearing its documents
+			this.disposeTfIdfInstance(instance);
+			return;
+		}
+		
+		// Return to pool for reuse
+		this.tfidfPool.push(instance);
+	}
+
+	/**
+	 * Dispose of a single TF-IDF instance by clearing its data
+	 */
+	private disposeTfIdfInstance(instance: InstanceType<NaturalModule["TfIdf"]>): void {
+		try {
+			// Clear documents array to free memory
+			if (instance.documents) {
+				instance.documents.length = 0;
+			}
+			// Clear any internal caches if available (not all TF-IDF implementations have this)
+			if (typeof (instance as any).clearCache === 'function') {
+				(instance as any).clearCache();
+			}
+		} catch (error) {
+			console.warn('Error disposing TF-IDF instance:', error);
+		}
+	}
+
+	/**
+	 * Dispose of all TF-IDF instances in the pool
+	 */
+	private disposeTfIdfPool(): void {
+		for (const instance of this.tfidfPool) {
+			this.disposeTfIdfInstance(instance);
+		}
+		this.tfidfPool.length = 0;
 	}
 }

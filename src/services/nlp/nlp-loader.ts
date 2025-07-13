@@ -25,6 +25,7 @@ export interface NaturalModule {
     TfIdf: new () => {
         addDocument(text: string): void;
         listTerms(docIndex: number): Array<{ term: string; tfidf: number }>;
+        documents: string[];
     };
 }
 
