@@ -15,6 +15,13 @@ const mockCrypto = {
         deriveKey: jest.fn(),
         encrypt: jest.fn(),
         decrypt: jest.fn(),
+        digest: jest.fn().mockImplementation(async (algorithm: string, data: ArrayBuffer) => {
+            // Mock SHA-256 digest for testing
+            const crypto = require('crypto');
+            const hash = crypto.createHash('sha256');
+            hash.update(Buffer.from(data));
+            return hash.digest().buffer;
+        })
     }
 };
 
