@@ -200,7 +200,7 @@ export default class JournalReflectionPlugin extends Plugin {
 					maxBatchSize: 50, // operations
 					writeMode: 'batched'
 				};
-				return new CacheService(this.app, errorHandler, config, this.manifest.dir);
+				return new CacheService(this.app, errorHandler, config, this.manifest.id);
 			},
 			dependencies: ['errorHandlingService'],
 			singleton: true

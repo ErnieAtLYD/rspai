@@ -28,6 +28,7 @@ export enum ErrorCode {
     DECRYPTION_FAILED = "DECRYPTION_FAILED",
     ENCRYPTION_ERROR = "ENCRYPTION_ERROR",
     NO_CONTENT_FOUND = "NO_CONTENT_FOUND",
+    FILE_ALREADY_EXISTS = "FILE_ALREADY_EXISTS",
     SUCCESS = "SUCCESS",
     INFO = "INFO"
 }
@@ -114,6 +115,8 @@ export class RetrospectError extends Error {
                 return "Encryption failed. Please try again";
             case ErrorCode.DECRYPTION_FAILED:
                 return "Decryption failed. Please check your master password";
+            case ErrorCode.FILE_ALREADY_EXISTS:
+                return "File already exists. Please delete the existing file first or choose a different name";
             default:
                 return "An unexpected error occurred";
         }
@@ -265,6 +268,10 @@ export class ErrorHandlingService extends BaseService {
         
         if (message.includes('decryption') && message.includes('failed')) {
             return RetrospectError.fromError(error, ErrorType.VALIDATION, ErrorCode.DECRYPTION_FAILED, context);
+        }
+        
+        if (message.includes('already exists')) {
+            return RetrospectError.fromError(error, ErrorType.USER, ErrorCode.FILE_ALREADY_EXISTS, context);
         }
         
         return RetrospectError.fromError(error, ErrorType.USER, ErrorCode.INVALID_CONFIG, context);

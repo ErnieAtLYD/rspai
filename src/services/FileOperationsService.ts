@@ -176,7 +176,17 @@ ${backlinks}
                     return await this.app.vault.create(summaryPath, summaryContent);
                 } catch (error) {
                     if (error instanceof Error && error.message.includes("already exists")) {
-                        const duplicateError = new Error("Summary for this week already exists. Delete it first or wait for next week.");
+                        // Create a more specific RetrospectError for duplicate summaries
+                        const { RetrospectError, ErrorType, ErrorCode } = await import('./ErrorHandlingService');
+                        const duplicateError = new RetrospectError(
+                            ErrorType.USER,
+                            ErrorCode.FILE_ALREADY_EXISTS,
+                            "Summary for this week already exists. Delete it first or wait for next week.",
+                            "A summary for this week already exists. Please delete the existing summary first or wait for next week to generate a new one.",
+                            context,
+                            true,
+                            false
+                        );
                         await this.errorHandler.handleError(duplicateError, context, { 
                             showNotice: true, 
                             throwAfterHandling: true 

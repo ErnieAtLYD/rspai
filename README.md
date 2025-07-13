@@ -6,6 +6,7 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 
 ## ✨ What it does
 
+### Core Features
 - **📖 One-Click Summaries**: Click the book icon or run a command to generate weekly reflections
 - **🔍 Smart Collection**: Automatically finds notes from the past 7 days (configurable)
 - **🔒 Privacy First**: Skips notes with `#private` tag to protect sensitive content
@@ -13,6 +14,14 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 - **📁 Organized**: Saves summaries in `Summaries/` folder with backlinks to source notes
 - **⚡ Lightning Fast**: Service-based architecture with efficient dependency injection
 - **🔧 Well-Tested**: Comprehensive test suite with 43+ unit tests ensuring reliability
+
+### Advanced Analysis Engine
+- **🧠 Pattern Recognition**: Detect behavioral patterns in mood, activities, sleep, and productivity
+- **📈 Trend Analysis**: Identify trends over time with word count, sentiment, and topic diversity tracking
+- **💡 AI-Powered Insights**: Generate deep semantic insights and actionable recommendations
+- **⚡ High-Performance Caching**: Multi-level caching with TTL and disk persistence for instant results
+- **📊 Comprehensive Reports**: Generate detailed analysis reports with patterns, trends, and insights
+- **🎯 Configurable Analysis**: Adjustable confidence thresholds and analysis preferences
 
 ## 🚀 Quick Start
 
@@ -36,8 +45,13 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 
 ### 4. Use
 - **Ribbon Icon**: Click the 📖 book icon in the left sidebar
-- **Command Palette**: Run "Create Weekly Journal Summary"
-- **Result**: A beautiful reflection appears in your `Summaries/` folder
+- **Command Palette**: Access multiple commands:
+  - "Create Weekly Journal Summary" - Generate AI-powered weekly reflections
+  - "Analyze Patterns" - Detect behavioral patterns in your notes
+  - "Analyze Trends" - Identify trends over 14-day periods
+  - "Comprehensive Analysis" - Full analysis with AI insights and summaries
+  - "Clear Analysis Cache" - Reset cached analysis results
+- **Result**: Beautiful reflections and detailed analysis reports appear in your `Summaries/` folder
 
 ## 🎯 Perfect For
 
@@ -48,6 +62,7 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 
 ## ⚙️ Settings
 
+### Core Settings
 | Setting | Description | Default |
 |---------|-------------|---------|
 | **OpenAI API Key** | Your API key for generating reflections | *Required* |
@@ -57,6 +72,15 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 | **Periodic Note Folders** | Folders to search for journal entries | Daily Notes |
 | **Reflection Output Folder** | Where to save generated summaries | Summaries |
 | **Exclude Private Notes** | Skip notes with #private tag | Enabled |
+
+### Analysis Engine Settings
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Analysis Enabled** | Enable/disable analysis engine features | Enabled |
+| **Pattern Threshold** | Minimum confidence for pattern detection | 0.6 |
+| **Trend Analysis** | Enable trend analysis over time | Enabled |
+| **Semantic Analysis** | Enable AI-powered insight generation | Enabled |
+| **Cache Analysis Results** | Enable caching for better performance | Enabled |
 
 ## 💡 How It Works
 
@@ -71,6 +95,7 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 
 ## 📝 Example Output
 
+### Weekly Reflection
 ```markdown
 # Weekly Reflection - 2024-01-21
 
@@ -100,6 +125,38 @@ Consider exploring how your morning routine impacts...
 *This reflection was generated from 4 journal entries from the past 7 days.*
 ```
 
+### Pattern Analysis Report
+```markdown
+# Pattern Analysis - 2024-01-21
+
+*Generated on 2024-01-21 at 14:30*
+
+## Detected Patterns
+
+### Mood Patterns (Confidence: 0.85)
+- **Positive Mood Indicators**: Frequent mentions of "excited", "happy", "accomplished"
+- **Pattern**: Mood tends to improve throughout the week
+- **Peak Days**: Fridays show consistently positive language
+
+### Activity Patterns (Confidence: 0.92)
+- **Exercise**: Regular morning workouts mentioned 5/7 days
+- **Social Activities**: Weekend social events consistently noted
+- **Work Focus**: Deep work sessions primarily on Tuesday-Thursday
+
+### Productivity Patterns (Confidence: 0.78)
+- **High Productivity**: Mornings after exercise sessions
+- **Low Productivity**: Late afternoons, especially Mondays
+- **Focus Areas**: Creative projects receive most concentrated attention
+
+## AI-Powered Insights
+- Your exercise routine appears to be a key driver of positive mood
+- Social connections on weekends help reset and recharge for the week
+- Consider protecting Tuesday-Thursday deep work time more deliberately
+
+---
+*Analysis based on 7 days of journal entries with 92% confidence.*
+```
+
 ## 🔒 Privacy & Security
 
 - **🔐 Encrypted Storage**: Optional AES-256 encryption for your API key with master password
@@ -125,15 +182,22 @@ Consider exploring how your morning routine impacts...
   - `EncryptionService`: AES-256 encryption with PBKDF2 key derivation
   - `AIService`: OpenAI API integration with error handling
   - `FileOperationsService`: Smart file discovery and content processing
+  - `CacheService`: High-performance caching with TTL and disk persistence
+  - `PatternRecognitionService`: Behavioral pattern detection and trend analysis
+  - `AnalysisManager`: Central orchestrator for comprehensive analysis workflows
 - **TypeScript**: Full type safety with comprehensive interfaces and strict typing
 - **Web Crypto API**: Native browser encryption for maximum security and performance
 - **Comprehensive Testing**: 43+ unit tests with full coverage of encryption functionality
+- **Analysis Engine**: Multi-layered analysis system with pattern recognition, trend analysis, and AI insights
+- **Performance Caching**: Intelligent caching system with 6-24 hour TTL based on analysis type
 
 ### Quality & Reliability
 - **Robust Error Handling**: Graceful degradation and user-friendly error messages
 - **Memory Management**: Proper cleanup and disposal of sensitive data
-- **Performance Optimized**: Lazy initialization and singleton pattern for efficiency
+- **Performance Optimized**: Lazy initialization, singleton pattern, and intelligent caching for efficiency
 - **Security First**: No secrets in logs, secure random generation, password validation
+- **Analysis Pipeline**: Concurrent analysis management with configurable confidence thresholds
+- **Cache Management**: LRU eviction, memory limits, and optional disk persistence for analysis results
 
 ## 🎨 Customization Ideas
 
@@ -144,6 +208,9 @@ The plugin's service-based architecture makes it easy to extend:
 - **EncryptionService**: Implement additional encryption algorithms or key storage methods
 - **FileOperationsService**: Add custom file filters or processing logic
 - **ServiceManager**: Register new services for additional functionality
+- **PatternRecognitionService**: Add custom pattern detection algorithms
+- **AnalysisManager**: Extend analysis workflows and report formats
+- **CacheService**: Implement additional caching strategies or storage backends
 
 ### Feature Ideas
 - Custom reflection templates and styles
@@ -152,6 +219,10 @@ The plugin's service-based architecture makes it easy to extend:
 - Export formats (PDF, markdown, structured data)
 - Scheduled automatic reflections
 - Integration with other Obsidian plugins
+- Custom pattern recognition rules
+- Analysis dashboard with visualizations
+- Historical trend comparison and analysis
+- Machine learning model training on personal patterns
 
 ## 🧪 Development & Testing
 
