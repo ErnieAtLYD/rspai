@@ -40,37 +40,20 @@ export class EncryptionService extends BaseService {
 
         if (!this.isWebCryptoAvailable()) {
             const cryptoError = new Error("Web Crypto API not available. Cannot initialize encryption service.");
-            await this.errorHandler.handleError(cryptoError, context, { 
-                showNotice: true, 
-                throwAfterHandling: true 
-            });
+            console.error('EncryptionService initialization error:', cryptoError.message);
             throw cryptoError;
         }
 
-        // Log successful initialization
-        await this.errorHandler.handleError(
-            new Error("Encryption service initialized successfully"),
-            context,
-            { showNotice: false, logToConsole: true, throwAfterHandling: false }
-        );
+        // Log successful initialization to console during initialization
+        console.log("EncryptionService initialized successfully");
     }
 
     protected async onDispose(): Promise<void> {
-        const context: ErrorContext = {
-            operation: 'dispose',
-            component: 'EncryptionService',
-            timestamp: Date.now()
-        };
-
         // Clear any cached keys or sensitive data
         this.config = { ...this.defaultConfig };
 
-        // Log disposal
-        await this.errorHandler.handleError(
-            new Error("Encryption service disposed"),
-            context,
-            { showNotice: false, logToConsole: true, throwAfterHandling: false }
-        );
+        // Use console logging instead of error handler during disposal
+        console.log("EncryptionService disposed");
     }
 
     /**

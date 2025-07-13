@@ -5,6 +5,7 @@ import { BaseService } from "./BaseService";
 import { CacheService } from "./CacheService";
 import { AIService } from "./AIService";
 import { ErrorHandlingService } from "./ErrorHandlingService";
+import { NLPAnalysisService, ProductivityTheme, BlockerPattern, SentimentAnalysis } from "./NLPAnalysisService";
 
 export interface PatternData {
     type: string;
@@ -12,6 +13,11 @@ export interface PatternData {
     timeRange: string;
     metadata: Record<string, any>;
     description: string;
+    // Enhanced NLP data
+    themes?: ProductivityTheme[];
+    blockers?: BlockerPattern[];
+    sentiment?: SentimentAnalysis;
+    nlpKeywords?: string[];
 }
 
 export interface TrendData {
@@ -33,10 +39,12 @@ export interface PatternRecognitionConfig {
     aiService: AIService;
     cacheService: CacheService;
     errorHandler: ErrorHandlingService;
+    nlpService?: NLPAnalysisService;
     analysisDepth: 'shallow' | 'medium' | 'deep';
     patternThreshold: number;
     enableTrendAnalysis: boolean;
     enableSemanticAnalysis: boolean;
+    enableAdvancedNLP: boolean;
 }
 
 /**
@@ -48,6 +56,7 @@ export class PatternRecognitionService extends BaseService {
     private patterns: Map<string, PatternData[]> = new Map();
     private trends: Map<string, TrendData[]> = new Map();
     private insights: Map<string, InsightData[]> = new Map();
+    private nlpService?: NLPAnalysisService;
 
     constructor(app: App, config: PatternRecognitionConfig) {
         super(app);
@@ -62,31 +71,25 @@ export class PatternRecognitionService extends BaseService {
         if (!this.config.aiService || !this.config.cacheService || !this.config.errorHandler) {
             throw new Error("PatternRecognitionService requires AIService, CacheService, and ErrorHandlingService");
         }
+        // Initialize NLP service if available and enabled
+        if (this.config.enableAdvancedNLP && this.config.nlpService) {
+            this.nlpService = this.config.nlpService;
+            if (!this.nlpService.isReady()) {
+                await this.nlpService.initialize();
+            }
+        }
         
-        await this.errorHandler.handleError(
-            new Error("Pattern recognition service initialized"),
-            {
-                operation: 'initialize',
-                component: 'PatternRecognitionService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        // Use console logging during initialization instead of error handler
+        console.log("PatternRecognitionService initialized");
     }
 
     protected async onDispose(): Promise<void> {
         this.patterns.clear();
         this.trends.clear();
         this.insights.clear();
-        await this.errorHandler.handleError(
-            new Error("Pattern recognition service disposed"),
-            {
-                operation: 'dispose',
-                component: 'PatternRecognitionService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        
+        // Use console logging during disposal instead of error handler
+        console.log("PatternRecognitionService disposed");
     }
 
     /**
@@ -127,19 +130,22 @@ export class PatternRecognitionService extends BaseService {
     async detectBehavioralPatterns(content: string, timeRange: string): Promise<PatternData[]> {
         const patterns: PatternData[] = [];
 
-        // Mood pattern analysis
+        // Enhanced NLP analysis if available
+        if (this.config.enableAdvancedNLP && this.nlpService) {
+            const nlpPatterns = await this.performAdvancedNLPAnalysis(content, timeRange);
+            patterns.push(...nlpPatterns);
+        }
+
+        // Traditional keyword-based analysis (as fallback or supplement)
         const moodPatterns = await this.analyzeMoodPatterns(content);
         patterns.push(...moodPatterns);
 
-        // Activity pattern analysis
         const activityPatterns = await this.analyzeActivityPatterns(content);
         patterns.push(...activityPatterns);
 
-        // Sleep pattern analysis
         const sleepPatterns = await this.analyzeSleepPatterns(content);
         patterns.push(...sleepPatterns);
 
-        // Productivity pattern analysis
         const productivityPatterns = await this.analyzeProductivityPatterns(content);
         patterns.push(...productivityPatterns);
 
@@ -509,6 +515,136 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
                 supportingData: [wordCountTrend],
                 timestamp: Date.now()
             });
+        }
+
+        return insights;
+    }
+
+    /**
+     * Perform advanced NLP analysis using the NLPAnalysisService
+     */
+    private async performAdvancedNLPAnalysis(content: string, timeRange: string): Promise<PatternData[]> {
+        if (!this.nlpService) {
+            return [];
+        }
+
+        try {
+            const patterns: PatternData[] = [];
+
+            // Extract productivity themes
+            const themes = await this.nlpService.extractProductivityThemes(content);
+            if (themes.length > 0) {
+                patterns.push({
+                    type: 'productivity_themes',
+                    confidence: Math.max(...themes.map(t => t.confidence)),
+                    timeRange,
+                    metadata: { themeCount: themes.length },
+                    description: `Identified ${themes.length} productivity themes: ${themes.map(t => t.theme).join(', ')}`,
+                    themes,
+                    nlpKeywords: themes.flatMap(t => t.keywords)
+                });
+            }
+
+            // Detect productivity blockers
+            const blockers = await this.nlpService.detectProductivityBlockers(content);
+            if (blockers.length > 0) {
+                patterns.push({
+                    type: 'productivity_blockers',
+                    confidence: Math.max(...blockers.map(b => b.confidence)),
+                    timeRange,
+                    metadata: { 
+                        blockerCount: blockers.length,
+                        severityLevels: blockers.map(b => b.severity)
+                    },
+                    description: `Detected ${blockers.length} productivity blockers: ${blockers.map(b => b.type).join(', ')}`,
+                    blockers
+                });
+            }
+
+            // Advanced sentiment analysis
+            const sentiment = await this.nlpService.analyzeSentiment(content);
+            patterns.push({
+                type: 'advanced_sentiment',
+                confidence: 0.8,
+                timeRange,
+                metadata: {
+                    overallPolarity: sentiment.overall.polarity,
+                    productivitySentiment: sentiment.productivity_sentiment,
+                    arousal: sentiment.arousal,
+                    confidenceLevel: sentiment.confidence_level
+                },
+                description: `Sentiment: ${sentiment.overall.label} (${sentiment.productivity_sentiment} productivity mood)`,
+                sentiment
+            });
+
+            return patterns;
+        } catch (error) {
+            await this.errorHandler.handleError(
+                error instanceof Error ? error : new Error(String(error)),
+                {
+                    operation: 'advanced_nlp_analysis',
+                    component: 'PatternRecognitionService',
+                    timestamp: Date.now()
+                }
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Generate enhanced insights using NLP data
+     */
+    private async generateEnhancedInsights(patterns: PatternData[], trends: TrendData[], content: string): Promise<InsightData[]> {
+        const insights: InsightData[] = [];
+
+        // Find patterns with NLP data
+        const nlpPatterns = patterns.filter(p => p.themes || p.blockers || p.sentiment);
+        
+        for (const pattern of nlpPatterns) {
+            if (pattern.themes) {
+                // Theme-based insights
+                const dominantTheme = pattern.themes.sort((a, b) => b.confidence - a.confidence)[0];
+                insights.push({
+                    category: 'Productivity Themes',
+                    insight: `Your dominant productivity focus is on ${dominantTheme.theme} with ${dominantTheme.frequency.toFixed(2)} frequency`,
+                    confidence: dominantTheme.confidence,
+                    supportingData: [pattern.themes],
+                    timestamp: Date.now()
+                });
+            }
+
+            if (pattern.blockers) {
+                // Blocker-based insights
+                const highSeverityBlockers = pattern.blockers.filter(b => b.severity === 'high');
+                if (highSeverityBlockers.length > 0) {
+                    insights.push({
+                        category: 'Productivity Blockers',
+                        insight: `High-severity blockers detected: ${highSeverityBlockers.map(b => b.type).join(', ')}. ${highSeverityBlockers[0].suggestions?.join(', ') || 'Consider addressing these systematically.'}`,
+                        confidence: Math.max(...highSeverityBlockers.map(b => b.confidence)),
+                        supportingData: [highSeverityBlockers],
+                        timestamp: Date.now()
+                    });
+                }
+            }
+
+            if (pattern.sentiment) {
+                // Sentiment-based insights
+                const sentiment = pattern.sentiment;
+                if (sentiment.productivity_sentiment !== 'neutral') {
+                    const emotionalContext = Object.entries(sentiment.emotions)
+                        .filter(([_, value]) => value > 0.3)
+                        .map(([emotion, _]) => emotion)
+                        .join(', ');
+                    
+                    insights.push({
+                        category: 'Emotional Well-being',
+                        insight: `Productivity sentiment: ${sentiment.productivity_sentiment}. ${emotionalContext ? `Associated emotions: ${emotionalContext}` : ''}`,
+                        confidence: 0.7,
+                        supportingData: [sentiment],
+                        timestamp: Date.now()
+                    });
+                }
+            }
         }
 
         return insights;
