@@ -193,7 +193,12 @@ export default class JournalReflectionPlugin extends Plugin {
 					defaultTtl: 24 * 60 * 60 * 1000, // 24 hours
 					maxSize: 1000,
 					persistToDisk: true,
-					cleanupInterval: 5 * 60 * 1000 // 5 minutes
+					cleanupInterval: 5 * 60 * 1000, // 5 minutes
+					// Batched write configuration
+					batchWrites: true,
+					batchInterval: 2000, // 2 seconds
+					maxBatchSize: 50, // operations
+					writeMode: 'batched'
 				};
 				return new CacheService(this.app, errorHandler, config, this.manifest.dir);
 			},
