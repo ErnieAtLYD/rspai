@@ -20,6 +20,7 @@ main.js
 
 # obsidian
 data.json
+cache.json
 
 # Archive of old complex version (keep local only)
 archive/
