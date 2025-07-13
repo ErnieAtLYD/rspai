@@ -326,25 +326,25 @@ export class CacheService extends BaseService {
         } catch (error) {
             // Cache file doesn't exist or is corrupted, start fresh
             if (this.errorHandler && this.isReady()) {
-                await this.errorHandler.handleError(
-                    error instanceof Error ? error : new Error(String(error)),
-                    {
-                        operation: 'load_from_disk_fallback',
-                        component: 'CacheService',
-                        metadata: { cacheFilePath: this.cacheFilePath },
-                        timestamp: Date.now()
-                    },
-                    { logToConsole: true, showNotice: false }
-                );
-            } else {
-                // Check if it's just a missing file (normal on first run)
-                if (error instanceof Error && error.message.includes('ENOENT')) {
-                    console.log('CacheService: No existing cache found, starting fresh');
-                } else {
-                    // Other errors (corrupted file, etc.)
-                    console.warn('CacheService: Could not load cache from disk, starting fresh:', error);
-                }
-            }
+                            await this.errorHandler.handleError(
+                                error instanceof Error ? error : new Error(String(error)),
+                                {
+                                    operation: 'load_from_disk_fallback',
+                                    component: 'CacheService',
+                                    metadata: { cacheFilePath: this.cacheFilePath },
+                                    timestamp: Date.now()
+                                },
+                                { logToConsole: true, showNotice: false }
+                            );
+                        }
+            else if (error instanceof Error && error.message.includes('ENOENT')) {
+                                console.log('CacheService: No existing cache found, starting fresh');
+                            }
+            else {
+                                // Other errors (corrupted file, etc.)
+                                console.warn('CacheService: Could not load cache from disk, starting fresh:', error);
+                            }
+
         }
     }
 
