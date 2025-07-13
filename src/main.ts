@@ -2,7 +2,6 @@
 
 import {
 	App,
-	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -25,6 +24,8 @@ import {
 	CacheConfig,
 	PatternRecognitionService,
 	PatternRecognitionConfig,
+	PatternData,
+	TrendData,
 	AnalysisManager,
 	AnalysisManagerConfig,
 	AnalysisResult,
@@ -672,7 +673,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
-	private formatPatternsReport(patterns: any[]): string {
+	private formatPatternsReport(patterns: PatternData[]): string {
 		let report = `# Journal Pattern Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
 		report += `## Detected Patterns (${patterns.length})\n\n`;
@@ -681,7 +682,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			report += `### ${pattern.type.replace('_', ' ').toUpperCase()}\n`;
 			report += `- **Confidence**: ${(pattern.confidence * 100).toFixed(0)}%\n`;
 			report += `- **Description**: ${pattern.description}\n`;
-			if (pattern.metadata?.keywords) {
+			if (pattern.metadata?.keywords && Array.isArray(pattern.metadata.keywords)) {
 				report += `- **Keywords**: ${pattern.metadata.keywords.join(', ')}\n`;
 			}
 			report += `\n`;
@@ -690,7 +691,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		return report;
 	}
 
-	private formatTrendsReport(trends: any[]): string {
+	private formatTrendsReport(trends: TrendData[]): string {
 		let report = `# Journal Trend Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
 		report += `## Detected Trends (${trends.length})\n\n`;

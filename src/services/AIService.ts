@@ -16,6 +16,17 @@ export interface AIServiceConfig {
 }
 
 /**
+ * OpenAI API response structure
+ */
+interface OpenAIResponse {
+    choices: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+}
+
+/**
  * AI service for generating journal summaries
  * Handles all OpenAI API interactions
  */
@@ -205,7 +216,7 @@ Please provide a structured reflection that would be meaningful for weekly revie
      * @param prompt - Prompt to send
      * @returns API response
      */
-    private async callOpenAI(prompt: string): Promise<any> {
+    private async callOpenAI(prompt: string): Promise<OpenAIResponse> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
@@ -316,7 +327,7 @@ Please provide a structured reflection that would be meaningful for weekly revie
      * @param response - OpenAI API response
      * @returns Summary content
      */
-    private extractSummaryFromResponse(response: any): string {
+    private extractSummaryFromResponse(response: OpenAIResponse): string {
         if (!response.choices || response.choices.length === 0) {
             throw new RetrospectError(
                 ErrorType.API,

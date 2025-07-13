@@ -1,6 +1,6 @@
 import { App } from "obsidian";
 import { BaseService } from "./BaseService";
-import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
+import { ErrorHandlingService, ErrorContext } from "./ErrorHandlingService";
 
 export interface EncryptionConfig {
     iterations?: number;
@@ -32,12 +32,6 @@ export class EncryptionService extends BaseService {
     }
 
     protected async onInitialize(): Promise<void> {
-        const context: ErrorContext = {
-            operation: 'initialize',
-            component: 'EncryptionService',
-            timestamp: Date.now()
-        };
-
         if (!this.isWebCryptoAvailable()) {
             const cryptoError = new Error("Web Crypto API not available. Cannot initialize encryption service.");
             console.error('EncryptionService initialization error:', cryptoError.message);
@@ -99,14 +93,14 @@ export class EncryptionService extends BaseService {
         return await crypto.subtle.deriveKey(
             {
                 name: 'PBKDF2',
-                salt: salt,
-                iterations: this.config.iterations!,
+                salt: salt.buffer as ArrayBuffer,
+                iterations: this.config.iterations || 100000,
                 hash: 'SHA-256'
             },
             keyMaterial,
             {
                 name: 'AES-GCM',
-                length: this.config.keyLength!
+                length: this.config.keyLength || 256
             },
             false,
             ['encrypt', 'decrypt']
@@ -156,15 +150,15 @@ export class EncryptionService extends BaseService {
                 const encryptedBuffer = await crypto.subtle.encrypt(
                     {
                         name: 'AES-GCM',
-                        iv: iv
+                        iv: iv.buffer as ArrayBuffer
                     },
                     key,
                     dataBuffer
                 );
 
                 return {
-                    iv: this.arrayBufferToBase64(iv),
-                    salt: this.arrayBufferToBase64(salt),
+                    iv: this.arrayBufferToBase64(iv.buffer as ArrayBuffer),
+                    salt: this.arrayBufferToBase64(salt.buffer as ArrayBuffer),
                     encryptedData: this.arrayBufferToBase64(encryptedBuffer)
                 };
             },
@@ -240,13 +234,13 @@ export class EncryptionService extends BaseService {
     /**
      * Validate if data appears to be encrypted
      */
-    isEncrypted(data: any): data is EncryptedData {
+    isEncrypted(data: unknown): data is EncryptedData {
         return (
             typeof data === 'object' &&
             data !== null &&
-            typeof data.iv === 'string' &&
-            typeof data.salt === 'string' &&
-            typeof data.encryptedData === 'string'
+            typeof (data as Record<string, unknown>).iv === 'string' &&
+            typeof (data as Record<string, unknown>).salt === 'string' &&
+            typeof (data as Record<string, unknown>).encryptedData === 'string'
         );
     }
 
