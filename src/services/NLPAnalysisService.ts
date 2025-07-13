@@ -4,36 +4,10 @@ import { App } from "obsidian";
 import { BaseService } from "./BaseService";
 import { CacheService } from "./CacheService";
 import { ErrorHandlingService } from "./ErrorHandlingService";
+import { getNlp, getSentiment, getNatural, CompromiseDoc, SentimentAnalyzerLib, NaturalModule } from "./nlp/nlp-loader";
 
-// Type definitions for external NLP libraries
-interface CompromiseDoc {
-	sentences(): { out(format: string): string[] };
-	people(): { out(format: string): string[] };
-	places(): { out(format: string): string[] };
-	organizations(): { out(format: string): string[] };
-}
-
-interface SentimentAnalyzer {
-	analyze(text: string): { score: number };
-}
-
-interface NaturalModule {
-	PorterStemmer: { stem(word: string): string };
-	stopwords: string[];
-	WordTokenizer: new () => { tokenize(text: string): string[] };
-	TfIdf: new () => {
-		addDocument(text: string): void;
-		listTerms(docIndex: number): Array<{ term: string; tfidf: number }>;
-	};
-}
-
-// External NLP libraries (using require with type assertions for compatibility)
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const nlp = require("compromise") as (text: string) => CompromiseDoc;
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const Sentiment = require("sentiment") as new () => SentimentAnalyzer;
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const natural = require("natural") as NaturalModule;
+// Alias for compatibility
+interface SentimentAnalyzer extends SentimentAnalyzerLib {}
 
 export interface ProductivityTheme {
 	theme: string;
@@ -106,27 +80,37 @@ export interface NLPAnalysisConfig {
  */
 export class NLPAnalysisService extends BaseService {
 	private config: NLPAnalysisConfig;
-	private sentimentAnalyzer: SentimentAnalyzer;
-	private stemmer: { stem(word: string): string };
-	private stopWords: Set<string>;
+	private sentimentAnalyzer: SentimentAnalyzer | null = null;
+	private stemmer: { stem(word: string): string } | null = null;
+	private stopWords: Set<string> | null = null;
 
 	constructor(app: App, config: NLPAnalysisConfig) {
 		super(app);
 		this.config = config;
-		this.sentimentAnalyzer = new Sentiment();
-		this.stemmer = natural.PorterStemmer;
-		this.stopWords = new Set(natural.stopwords);
+	}
 
-		// Add productivity-specific stop words
-		const productivityStopWords = [
-			"just",
-			"really",
-			"quite",
-			"very",
-			"pretty",
-			"somewhat",
-		];
-		productivityStopWords.forEach((word) => this.stopWords.add(word));
+	private async ensureNLPDependencies(): Promise<void> {
+		if (!this.sentimentAnalyzer || !this.stemmer || !this.stopWords) {
+			const [SentimentClass, natural] = await Promise.all([
+				getSentiment(),
+				getNatural()
+			]);
+			
+			this.sentimentAnalyzer = new SentimentClass();
+			this.stemmer = natural.PorterStemmer;
+			this.stopWords = new Set(natural.stopwords);
+
+			// Add productivity-specific stop words
+			const productivityStopWords = [
+				"just",
+				"really",
+				"quite",
+				"very",
+				"pretty",
+				"somewhat",
+			];
+			productivityStopWords.forEach((word) => this.stopWords!.add(word));
+		}
 	}
 
 	protected async onInitialize(): Promise<void> {
@@ -163,11 +147,13 @@ export class NLPAnalysisService extends BaseService {
 		if (cached) return cached;
 
 		try {
+			await this.ensureNLPDependencies();
+			const nlp = await getNlp();
 			const doc = nlp(text);
 
 			// Clean and tokenize text
 			const cleanedText = this.cleanText(text);
-			const tokens = this.tokenizeText(cleanedText);
+			const tokens = await this.tokenizeText(cleanedText);
 			const sentences = doc.sentences().out("array");
 
 			// Extract entities if enabled
@@ -184,7 +170,7 @@ export class NLPAnalysisService extends BaseService {
 			const posTagged = this.performPOSTagging(tokens);
 
 			// Extract keywords using TF-IDF (create fresh instance for isolation)
-			const keywords = this.extractKeywords(cleanedText);
+			const keywords = await this.extractKeywords(cleanedText);
 
 			const result: TextPreprocessingResult = {
 				originalText: text,
@@ -234,6 +220,8 @@ export class NLPAnalysisService extends BaseService {
 			const themes: ProductivityTheme[] = [];
 
 			// Create isolated TF-IDF instance for this analysis
+			await this.ensureNLPDependencies();
+			const natural = await getNatural();
 			const tfidf = new natural.TfIdf();
 			tfidf.addDocument(preprocessed.cleanedText);
 
@@ -425,10 +413,11 @@ export class NLPAnalysisService extends BaseService {
 		if (cached) return cached;
 
 		try {
+			await this.ensureNLPDependencies();
 			const preprocessed = await this.preprocessText(text);
 
 			// Basic sentiment analysis
-			const basicSentiment = this.sentimentAnalyzer.analyze(
+			const basicSentiment = this.sentimentAnalyzer!.analyze(
 				preprocessed.cleanedText
 			);
 
@@ -481,15 +470,17 @@ export class NLPAnalysisService extends BaseService {
 			.trim();
 	}
 
-	private tokenizeText(text: string): string[] {
+	private async tokenizeText(text: string): Promise<string[]> {
+		await this.ensureNLPDependencies();
+		const natural = await getNatural();
 		const tokenizer = new natural.WordTokenizer();
 		return tokenizer
 			.tokenize(text)
 			.filter(
 				(token: string) =>
-					token.length > 2 && !this.stopWords.has(token)
+					token.length > 2 && !this.stopWords!.has(token)
 			)
-			.map((token: string) => this.stemmer.stem(token));
+			.map((token: string) => this.stemmer!.stem(token));
 	}
 
 	private extractEntities(
@@ -537,8 +528,10 @@ export class NLPAnalysisService extends BaseService {
 		return "NN"; // Default to noun
 	}
 
-	private extractKeywords(text: string): string[] {
+	private async extractKeywords(text: string): Promise<string[]> {
 		// Create isolated TF-IDF instance for keyword extraction
+		await this.ensureNLPDependencies();
+		const natural = await getNatural();
 		const tfidf = new natural.TfIdf();
 		tfidf.addDocument(text);
 

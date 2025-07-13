@@ -67,20 +67,40 @@ export class PatternRecognitionService extends BaseService {
         return this.config.errorHandler;
     }
 
+    /**
+     * Check if NLP analysis is available without triggering initialization
+     */
+    private isNLPAvailable(): boolean {
+        return this.config.enableAdvancedNLP && !!this.config.nlpService;
+    }
+
+    /**
+     * Lazily initialize NLP service on first use to improve startup performance
+     */
+    private async ensureNLPService(): Promise<void> {
+        if (!this.isNLPAvailable()) {
+            return;
+        }
+
+        if (!this.nlpService) {
+            this.logger.debug("Lazy-loading NLP service on first use");
+            this.nlpService = this.config.nlpService!;
+        }
+
+        if (!this.nlpService.isReady()) {
+            this.logger.debug("Initializing NLP service");
+            await this.nlpService.initialize();
+            this.logger.debug("NLP service initialized successfully");
+        }
+    }
+
     protected async onInitialize(): Promise<void> {
         if (!this.config.aiService || !this.config.cacheService || !this.config.errorHandler) {
             throw new Error("PatternRecognitionService requires AIService, CacheService, and ErrorHandlingService");
         }
-        // Initialize NLP service if available and enabled
-        if (this.config.enableAdvancedNLP && this.config.nlpService) {
-            this.nlpService = this.config.nlpService;
-            if (!this.nlpService.isReady()) {
-                await this.nlpService.initialize();
-            }
-        }
         
-        // Use console logging during initialization instead of error handler
-        console.log("PatternRecognitionService initialized");
+        // NLP service will be lazily initialized on first use to improve startup performance
+        this.logger.debug("Initialization complete with lazy NLP loading");
     }
 
     protected async onDispose(): Promise<void> {
@@ -88,8 +108,32 @@ export class PatternRecognitionService extends BaseService {
         this.trends.clear();
         this.insights.clear();
         
-        // Use console logging during disposal instead of error handler
-        console.log("PatternRecognitionService disposed");
+        // Dispose NLP service if it was lazily initialized
+        if (this.nlpService && this.nlpService.isReady()) {
+            this.logger.debug("Disposing lazily-loaded NLP service");
+            await this.nlpService.dispose();
+        }
+        
+        // Disposal complete - BaseService handles lifecycle logging
+    }
+
+    /**
+     * Update configuration and handle NLP service changes
+     */
+    async updateConfig(newConfig: PatternRecognitionConfig): Promise<void> {
+        const oldNLPEnabled = this.config.enableAdvancedNLP;
+        this.config = newConfig;
+        
+        // If NLP was disabled, dispose of the service
+        if (oldNLPEnabled && !this.config.enableAdvancedNLP && this.nlpService) {
+            this.logger.debug("NLP disabled - disposing service");
+            if (this.nlpService.isReady()) {
+                await this.nlpService.dispose();
+            }
+            this.nlpService = undefined;
+        }
+        
+        this.logger.lifecycle('configured', `enableAdvancedNLP: ${this.config.enableAdvancedNLP}`);
     }
 
     /**
@@ -130,8 +174,8 @@ export class PatternRecognitionService extends BaseService {
     async detectBehavioralPatterns(content: string, timeRange: string): Promise<PatternData[]> {
         const patterns: PatternData[] = [];
 
-        // Enhanced NLP analysis if available
-        if (this.config.enableAdvancedNLP && this.nlpService) {
+        // Enhanced NLP analysis if available (lazy-loaded)
+        if (this.isNLPAvailable()) {
             const nlpPatterns = await this.performAdvancedNLPAnalysis(content, timeRange);
             patterns.push(...nlpPatterns);
         }
@@ -224,15 +268,10 @@ export class PatternRecognitionService extends BaseService {
                 const content = await this.app.vault.read(file);
                 contents.push(content);
             } catch (error) {
-                await this.errorHandler.handleError(
+                await this.logger.error(
+                    'Failed to read file for content extraction',
                     error instanceof Error ? error : new Error(String(error)),
-                    {
-                        operation: 'extract_content_read_file',
-                        component: 'PatternRecognitionService',
-                        metadata: { filePath: file.path },
-                        timestamp: Date.now()
-                    },
-                    { showNotice: false }
+                    { filePath: file.path }
                 );
             }
         }
@@ -464,14 +503,10 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
                 }
             }
         } catch (error) {
-            await this.errorHandler.handleError(
+            await this.logger.error(
+                'Failed to generate AI insights',
                 error instanceof Error ? error : new Error(String(error)),
-                {
-                    operation: 'generate_ai_insights',
-                    component: 'PatternRecognitionService',
-                    metadata: { patternCount: patterns.length, trendCount: trends.length },
-                    timestamp: Date.now()
-                }
+                { patternCount: patterns.length, trendCount: trends.length }
             );
         }
 
@@ -524,6 +559,9 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
      * Perform advanced NLP analysis using the NLPAnalysisService
      */
     private async performAdvancedNLPAnalysis(content: string, timeRange: string): Promise<PatternData[]> {
+        // Ensure NLP service is initialized on first use
+        await this.ensureNLPService();
+        
         if (!this.nlpService) {
             return [];
         }
@@ -563,19 +601,21 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
 
             // Advanced sentiment analysis
             const sentiment = await this.nlpService.analyzeSentiment(content);
-            patterns.push({
-                type: 'advanced_sentiment',
-                confidence: 0.8,
-                timeRange,
-                metadata: {
-                    overallPolarity: sentiment.overall.polarity,
-                    productivitySentiment: sentiment.productivity_sentiment,
-                    arousal: sentiment.arousal,
-                    confidenceLevel: sentiment.confidence_level
-                },
-                description: `Sentiment: ${sentiment.overall.label} (${sentiment.productivity_sentiment} productivity mood)`,
-                sentiment
-            });
+            if (sentiment.overall.label !== 'neutral') {
+                patterns.push({
+                    type: 'advanced_sentiment',
+                    confidence: 0.8,
+                    timeRange,
+                    metadata: {
+                        overallPolarity: sentiment.overall.polarity,
+                        productivitySentiment: sentiment.productivity_sentiment,
+                        arousal: sentiment.arousal,
+                        confidenceLevel: sentiment.confidence_level
+                    },
+                    description: `Sentiment: ${sentiment.overall.label} (${sentiment.productivity_sentiment} productivity mood)`,
+                    sentiment
+                });
+            }
 
             return patterns;
         } catch (error) {
@@ -603,7 +643,7 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
         for (const pattern of nlpPatterns) {
             if (pattern.themes) {
                 // Theme-based insights
-                const dominantTheme = pattern.themes.sort((a, b) => b.confidence - a.confidence)[0];
+                const dominantTheme = [...pattern.themes].sort((a, b) => b.confidence - a.confidence)[0];
                 insights.push({
                     category: 'Productivity Themes',
                     insight: `Your dominant productivity focus is on ${dominantTheme.theme} with ${dominantTheme.frequency.toFixed(2)} frequency`,
