@@ -52,6 +52,7 @@ export class AnalysisManager extends BaseService {
     private config: AnalysisManagerConfig;
     private activeAnalyses: Map<string, Promise<AnalysisResult>> = new Map();
     private analysisHistory: AnalysisResult[] = [];
+    private historyLoaded = false;
 
     constructor(app: App, config: AnalysisManagerConfig) {
         super(app);
@@ -63,6 +64,7 @@ export class AnalysisManager extends BaseService {
     }
 
     protected async onInitialize(): Promise<void> {
+        // Check that required services exist (but don't check if they're ready yet)
         const requiredServices = [
             this.config.aiService,
             this.config.fileOperationsService,
@@ -72,54 +74,33 @@ export class AnalysisManager extends BaseService {
         ];
 
         for (const service of requiredServices) {
-            if (!service || !service.isReady()) {
-                throw new Error("AnalysisManager requires all services to be initialized");
+            if (!service) {
+                throw new Error("AnalysisManager requires all services to be provided");
             }
         }
 
-        // Load analysis history from cache
-        await this.loadAnalysisHistory();
+        // Don't load analysis history during initialization - defer until all services are ready
+        // This will be loaded lazily on first use
         
-        await this.errorHandler.handleError(
-            new Error("Analysis Manager initialized"),
-            {
-                operation: 'initialize',
-                component: 'AnalysisManager',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        // Use console logging during initialization instead of error handler
+        console.log("AnalysisManager initialized");
     }
 
     protected async onDispose(): Promise<void> {
         // Cancel active analyses
-        for (const [id] of this.activeAnalyses.entries()) {
-            await this.errorHandler.handleError(
-                new Error(`Cancelling active analysis: ${id}`),
-                {
-                    operation: 'dispose_cancel_analysis',
-                    component: 'AnalysisManager',
-                    metadata: { analysisId: id },
-                    timestamp: Date.now()
-                },
-                { logToConsole: true, showNotice: false }
-            );
+        if (this.activeAnalyses.size > 0) {
+            console.log(`AnalysisManager: Cancelling ${this.activeAnalyses.size} active analyses`);
         }
         this.activeAnalyses.clear();
 
-        // Save analysis history
-        await this.saveAnalysisHistory();
+        // Save analysis history (only if it was loaded)
+        if (this.historyLoaded) {
+            await this.saveAnalysisHistory();
+        }
         
         this.analysisHistory = [];
-        await this.errorHandler.handleError(
-            new Error("Analysis Manager disposed"),
-            {
-                operation: 'dispose',
-                component: 'AnalysisManager',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        this.historyLoaded = false;
+        console.log("AnalysisManager disposed");
     }
 
     /**
@@ -151,6 +132,7 @@ export class AnalysisManager extends BaseService {
 
         try {
             const result = await analysisPromise;
+            await this.ensureHistoryLoaded();
             this.analysisHistory.push(result);
             return result;
         } finally {
@@ -255,7 +237,8 @@ export class AnalysisManager extends BaseService {
     /**
      * Get analysis history
      */
-    getAnalysisHistory(): AnalysisResult[] {
+    async getAnalysisHistory(): Promise<AnalysisResult[]> {
+        await this.ensureHistoryLoaded();
         return [...this.analysisHistory];
     }
 
@@ -414,22 +397,43 @@ Please provide a 2-3 paragraph summary that:
         return `${type}_${timeRange}_${timestamp}`;
     }
 
+    private async ensureHistoryLoaded(): Promise<void> {
+        if (this.historyLoaded) {
+            return;
+        }
+        
+        await this.loadAnalysisHistory();
+        this.historyLoaded = true;
+    }
+
     private async loadAnalysisHistory(): Promise<void> {
         try {
+            // Check if cache service is ready before attempting to load
+            if (!this.config.cacheService.isReady()) {
+                console.log('AnalysisManager: Cache service not ready, skipping history load');
+                return;
+            }
+            
             const cached = await this.config.cacheService.get<AnalysisResult[]>('analysis_history');
             if (cached) {
                 this.analysisHistory = cached;
+                console.log(`AnalysisManager: Loaded ${cached.length} entries from analysis history`);
             }
         } catch (error) {
-            await this.errorHandler.handleError(
-                error instanceof Error ? error : new Error(String(error)),
-                {
-                    operation: 'load_analysis_history',
-                    component: 'AnalysisManager',
-                    timestamp: Date.now()
-                },
-                { showNotice: false }
-            );
+            // Use console logging if error handler is not ready
+            if (this.isReady() && this.errorHandler && this.errorHandler.isReady()) {
+                await this.errorHandler.handleError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                        operation: 'load_analysis_history',
+                        component: 'AnalysisManager',
+                        timestamp: Date.now()
+                    },
+                    { showNotice: false }
+                );
+            } else {
+                console.warn('AnalysisManager: Failed to load analysis history:', error);
+            }
         }
     }
 
@@ -439,15 +443,21 @@ Please provide a 2-3 paragraph summary that:
             const recentHistory = this.analysisHistory.slice(-50);
             await this.config.cacheService.set('analysis_history', recentHistory, { ttl: 30 * 24 * 60 * 60 * 1000 });
         } catch (error) {
-            await this.errorHandler.handleError(
-                error instanceof Error ? error : new Error(String(error)),
-                {
-                    operation: 'save_analysis_history',
-                    component: 'AnalysisManager',
-                    timestamp: Date.now()
-                },
-                { showNotice: false }
-            );
+            // Check if we're in a ready state before using error handler
+            if (this.isReady() && this.errorHandler && this.errorHandler.isReady()) {
+                await this.errorHandler.handleError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                        operation: 'save_analysis_history',
+                        component: 'AnalysisManager',
+                        timestamp: Date.now()
+                    },
+                    { showNotice: false }
+                );
+            } else {
+                // Fallback to console logging during disposal
+                console.warn('AnalysisManager: Failed to save analysis history:', error);
+            }
         }
     }
 }

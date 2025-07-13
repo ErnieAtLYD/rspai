@@ -2,6 +2,7 @@
 
 import { App } from "obsidian";
 import { IService } from "./ServiceManager";
+import { Logger, createLogger } from "./Logger";
 
 /**
  * Error callback type for BaseService
@@ -15,10 +16,12 @@ export type ServiceErrorCallback = (serviceName: string, error: Error, operation
 export abstract class BaseService implements IService {
     protected isInitialized = false;
     protected isDisposed = false;
+    protected logger: Logger;
     private errorCallback?: ServiceErrorCallback;
 
     constructor(protected app: App, errorCallback?: ServiceErrorCallback) {
         this.errorCallback = errorCallback;
+        this.logger = createLogger(this.constructor.name);
     }
 
     /**
@@ -31,10 +34,13 @@ export abstract class BaseService implements IService {
         }
 
         try {
+            this.logger.lifecycle('initialize started');
             await this.onInitialize();
             this.isInitialized = true;
+            this.logger.lifecycle('initialized');
         } catch (error) {
             const serviceError = error instanceof Error ? error : new Error(String(error));
+            await this.logger.error('Initialization failed', serviceError);
             this.handleServiceError(serviceError, 'initialize');
             throw error;
         }
@@ -50,10 +56,13 @@ export abstract class BaseService implements IService {
         }
 
         try {
+            this.logger.lifecycle('dispose started');
             await this.onDispose();
             this.isDisposed = true;
+            this.logger.lifecycle('disposed');
         } catch (error) {
             const serviceError = error instanceof Error ? error : new Error(String(error));
+            await this.logger.error('Disposal failed', serviceError);
             this.handleServiceError(serviceError, 'dispose');
             throw error;
         }

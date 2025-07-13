@@ -23,6 +23,11 @@ export interface CacheConfig {
     maxSize: number;
     persistToDisk: boolean;
     cleanupInterval: number;
+    // Batched write configuration
+    batchWrites: boolean;
+    batchInterval: number; // ms between batch writes
+    maxBatchSize: number; // max operations before forced write
+    writeMode: 'immediate' | 'batched' | 'lazy';
 }
 
 /**
@@ -35,8 +40,14 @@ export class CacheService extends BaseService {
     private config: CacheConfig;
     private cacheFilePath: string;
     private errorHandler: ErrorHandlingService;
+    
+    // Batched write system
+    private batchTimer: NodeJS.Timeout | null = null;
+    private pendingWrites: Set<string> = new Set(); // Track which keys need writing
+    private batchOperationCount = 0;
+    private isDirty = false; // Flag to track if cache has unsaved changes
 
-    constructor(app: App, errorHandler: ErrorHandlingService, config: Partial<CacheConfig> = {}, pluginId: 'retrospect-ai') {
+    constructor(app: App, errorHandler: ErrorHandlingService, config: Partial<CacheConfig> = {}, pluginId = 'retrospect-ai') {
         super(app);
         this.errorHandler = errorHandler;
         this.config = {
@@ -44,10 +55,16 @@ export class CacheService extends BaseService {
             maxSize: 1000,
             persistToDisk: true,
             cleanupInterval: 5 * 60 * 1000, // 5 minutes
+            // Batched write defaults
+            batchWrites: true,
+            batchInterval: 2000, // 2 seconds
+            maxBatchSize: 50, // operations
+            writeMode: 'batched',
             ...config
         };
-        // Derive the cache file path from plugin ID
-        this.cacheFilePath = `.obsidian/plugins/${pluginId}/cache.json`;
+        // Sanitize plugin ID to prevent path traversal attacks
+        const sanitizedPluginId = this.sanitizePluginId(pluginId);
+        this.cacheFilePath = `.obsidian/plugins/${sanitizedPluginId}/cache.json`;
     }
 
     protected async onInitialize(): Promise<void> {
@@ -56,45 +73,33 @@ export class CacheService extends BaseService {
         }
         
         this.startCleanupTimer();
-        await this.errorHandler.handleError(
-            new Error(`Cache service initialized with ${this.cache.size} entries`),
-            {
-                operation: 'initialize',
-                component: 'CacheService',
-                metadata: { cacheSize: this.cache.size },
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        console.log(`Cache service initialized with ${this.cache.size} entries`);
     }
 
     protected async onDispose(): Promise<void> {
+        // Clear timers
         if (this.cleanupTimer) {
             clearInterval(this.cleanupTimer);
             this.cleanupTimer = null;
         }
-
-        if (this.config.persistToDisk) {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'dispose_save_to_disk',
-                    component: 'CacheService',
-                    timestamp: Date.now()
-                }
-            );
+        
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
         }
-
+        
+        // Force final write if there are pending changes
+        if (this.isDirty && this.config.persistToDisk) {
+            try {
+                await this.forceBatchWrite();
+            } catch (error) {
+                console.warn('Failed to save final cache state during disposal:', error);
+            }
+        }
+        
         this.cache.clear();
-        await this.errorHandler.handleError(
-            new Error("Cache service disposed"),
-            {
-                operation: 'dispose',
-                component: 'CacheService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        this.pendingWrites.clear();
+        console.log("Cache service disposed");
     }
 
     /**
@@ -139,16 +144,9 @@ export class CacheService extends BaseService {
 
         this.cache.set(key, entry);
         
+        // Handle disk persistence based on write mode
         if (this.config.persistToDisk) {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'set_save_to_disk',
-                    component: 'CacheService',
-                    metadata: { key, hasValue: !!value },
-                    timestamp: Date.now()
-                }
-            );
+            await this.handleDiskWrite('set', key);
         }
     }
 
@@ -161,15 +159,7 @@ export class CacheService extends BaseService {
         const deleted = this.cache.delete(key);
         
         if (deleted && this.config.persistToDisk) {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'delete_save_to_disk',
-                    component: 'CacheService',
-                    metadata: { key, deleted },
-                    timestamp: Date.now()
-                }
-            );
+            await this.handleDiskWrite('delete', key);
         }
         
         return deleted;
@@ -184,14 +174,7 @@ export class CacheService extends BaseService {
         this.cache.clear();
         
         if (this.config.persistToDisk) {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'clear_save_to_disk',
-                    component: 'CacheService',
-                    timestamp: Date.now()
-                }
-            );
+            await this.handleDiskWrite('clear');
         }
     }
 
@@ -317,39 +300,60 @@ export class CacheService extends BaseService {
     }
 
     private async loadFromDisk(): Promise<void> {
-        await this.errorHandler.executeWithRetry(
-            async () => {
-                const data = await this.app.vault.adapter.read(this.cacheFilePath);
-                const cacheData = JSON.parse(data);
-                
-                // Restore cache entries
-                for (const entry of cacheData.entries || []) {
-                    // Skip expired entries
-                    if (Date.now() <= entry.timestamp + entry.ttl) {
-                        this.cache.set(entry.key, entry);
-                    }
-                }
-            },
-            {
-                operation: 'load_from_disk',
-                component: 'CacheService',
-                metadata: { cacheFilePath: this.cacheFilePath },
-                timestamp: Date.now()
-            },
-            { showNotice: false }
-        ).catch(async (error) => {
+        try {
+            // Always attempt to load cache, regardless of error handler state
+            // If error handler is available and ready, use it for retry logic
+            if (this.errorHandler && this.isReady()) {
+                await this.errorHandler.executeWithRetry(
+                    () => this.loadFromDiskDirect(),
+                    {
+                        operation: 'load_from_disk',
+                        component: 'CacheService',
+                        metadata: { cacheFilePath: this.cacheFilePath },
+                        timestamp: Date.now()
+                    },
+                    { showNotice: false }
+                );
+            } else {
+                // Direct load without error handler (during initialization)
+                await this.loadFromDiskDirect();
+            }
+        } catch (error) {
             // Cache file doesn't exist or is corrupted, start fresh
-            await this.errorHandler.handleError(
-                error,
-                {
-                    operation: 'load_from_disk_fallback',
-                    component: 'CacheService',
-                    metadata: { cacheFilePath: this.cacheFilePath },
-                    timestamp: Date.now()
-                },
-                { logToConsole: true, showNotice: false }
-            );
-        });
+            if (this.errorHandler && this.isReady()) {
+                            await this.errorHandler.handleError(
+                                error instanceof Error ? error : new Error(String(error)),
+                                {
+                                    operation: 'load_from_disk_fallback',
+                                    component: 'CacheService',
+                                    metadata: { cacheFilePath: this.cacheFilePath },
+                                    timestamp: Date.now()
+                                },
+                                { logToConsole: true, showNotice: false }
+                            );
+                        }
+            else if (error instanceof Error && error.message.includes('ENOENT')) {
+                                console.log('CacheService: No existing cache found, starting fresh');
+                            }
+            else {
+                                // Other errors (corrupted file, etc.)
+                                console.warn('CacheService: Could not load cache from disk, starting fresh:', error);
+                            }
+
+        }
+    }
+
+    private async loadFromDiskDirect(): Promise<void> {
+        const data = await this.app.vault.adapter.read(this.cacheFilePath);
+        const cacheData = JSON.parse(data);
+        
+        // Restore cache entries
+        for (const entry of cacheData.entries || []) {
+            // Skip expired entries
+            if (Date.now() <= entry.timestamp + entry.ttl) {
+                this.cache.set(entry.key, entry);
+            }
+        }
     }
 
     private async saveToDisk(): Promise<void> {
@@ -381,5 +385,197 @@ export class CacheService extends BaseService {
             size += JSON.stringify(entry).length * 2; // Rough estimate
         }
         return size;
+    }
+
+    /**
+     * Sanitize plugin ID to prevent path traversal attacks
+     * @param pluginId - The plugin ID to sanitize
+     * @returns A sanitized plugin ID safe for file path construction
+     */
+    private sanitizePluginId(pluginId: string): string {
+        if (!pluginId || typeof pluginId !== 'string') {
+            throw new Error('Plugin ID must be a non-empty string');
+        }
+
+        // Remove any path traversal sequences and normalize path separators
+        let sanitized = pluginId
+            .replace(/\.\./g, '')  // Remove ".." sequences
+            .replace(/[\/\\]/g, '-')  // Replace path separators with hyphens
+            .replace(/[^a-zA-Z0-9_-]/g, '')  // Remove any non-alphanumeric characters except underscore and hyphen
+            .toLowerCase();  // Convert to lowercase for consistency
+
+        // Ensure the sanitized ID is not empty and starts with an alphanumeric character
+        if (!sanitized || sanitized.length === 0) {
+            throw new Error('Plugin ID contains only invalid characters');
+        }
+
+        // Ensure it starts with an alphanumeric character
+        if (!/^[a-zA-Z0-9]/.test(sanitized)) {
+            sanitized = 'plugin-' + sanitized;
+        }
+
+        // Limit length to prevent excessively long directory names
+        if (sanitized.length > 50) {
+            sanitized = sanitized.substring(0, 50);
+        }
+
+        return sanitized;
+    }
+
+    /**
+     * Batched Write System Methods
+     */
+
+    /**
+     * Handle disk write based on the configured write mode
+     */
+    private async handleDiskWrite(operation: 'set' | 'delete' | 'clear', key?: string): Promise<void> {
+        this.isDirty = true;
+        
+        if (key) {
+            this.pendingWrites.add(key);
+        }
+        
+        this.batchOperationCount++;
+
+        switch (this.config.writeMode) {
+            case 'immediate':
+                await this.immediateWrite(operation, key);
+                break;
+                
+            case 'batched':
+                await this.scheduleOrForceBatchWrite();
+                break;
+                
+            case 'lazy':
+                this.scheduleBatchWrite();
+                break;
+                
+            default:
+                // Default to batched mode if config is invalid
+                await this.scheduleOrForceBatchWrite();
+        }
+    }
+
+    /**
+     * Immediate write mode - write to disk right away
+     */
+    private async immediateWrite(operation: string, key?: string): Promise<void> {
+        await this.errorHandler.executeWithRetry(
+            () => this.saveToDisk(),
+            {
+                operation: `${operation}_immediate_write`,
+                component: 'CacheService',
+                metadata: { key, operation },
+                timestamp: Date.now()
+            }
+        );
+        this.markWriteComplete();
+    }
+
+    /**
+     * Schedule a batch write or force it if batch size exceeded
+     */
+    private async scheduleOrForceBatchWrite(): Promise<void> {
+        // Force write if batch size exceeded
+        if (this.batchOperationCount >= this.config.maxBatchSize) {
+            await this.forceBatchWrite();
+            return;
+        }
+        
+        // Otherwise, schedule a batch write
+        this.scheduleBatchWrite();
+    }
+
+    /**
+     * Schedule a batch write (lazy scheduling)
+     */
+    private scheduleBatchWrite(): void {
+        // Clear existing timer if any
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+        }
+        
+        // Schedule new batch write
+        this.batchTimer = setTimeout(async () => {
+            await this.executeBatchWrite();
+        }, this.config.batchInterval);
+    }
+
+    /**
+     * Force an immediate batch write
+     */
+    private async forceBatchWrite(): Promise<void> {
+        // Clear any pending timer
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
+        
+        await this.executeBatchWrite();
+    }
+
+    /**
+     * Execute the actual batch write
+     */
+    private async executeBatchWrite(): Promise<void> {
+        if (!this.isDirty) {
+            return; // No changes to write
+        }
+        
+        try {
+            await this.errorHandler.executeWithRetry(
+                () => this.saveToDisk(),
+                {
+                    operation: 'batch_write',
+                    component: 'CacheService',
+                    metadata: { 
+                        operationCount: this.batchOperationCount,
+                        pendingKeys: this.pendingWrites.size,
+                        mode: this.config.writeMode
+                    },
+                    timestamp: Date.now()
+                }
+            );
+            
+            this.markWriteComplete();
+        } catch (error) {
+            // Don't reset counters on error - allow retry
+            throw error;
+        }
+    }
+
+    /**
+     * Mark write operation as complete and reset counters
+     */
+    private markWriteComplete(): void {
+        this.isDirty = false;
+        this.batchOperationCount = 0;
+        this.pendingWrites.clear();
+        this.batchTimer = null;
+    }
+
+    /**
+     * Force flush all pending writes (useful for testing or explicit saves)
+     */
+    async flushPendingWrites(): Promise<void> {
+        if (this.isDirty) {
+            await this.forceBatchWrite();
+        }
+    }
+
+    /**
+     * Get current batch write statistics
+     */
+    getBatchStats() {
+        return {
+            isDirty: this.isDirty,
+            pendingOperations: this.batchOperationCount,
+            pendingKeys: this.pendingWrites.size,
+            batchTimerActive: !!this.batchTimer,
+            writeMode: this.config.writeMode,
+            batchInterval: this.config.batchInterval,
+            maxBatchSize: this.config.maxBatchSize
+        };
     }
 }

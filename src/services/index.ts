@@ -18,3 +18,5 @@ export type { AnalysisRequest, AnalysisOptions, AnalysisResult, AnalysisManagerC
 export { ErrorHandlingService } from "./ErrorHandlingService";
 export type { ErrorHandlingConfig, ErrorContext, ErrorHandlerOptions } from "./ErrorHandlingService";
 export { RetrospectError, ErrorType, ErrorCode } from "./ErrorHandlingService";
+export { NLPAnalysisService } from "./NLPAnalysisService";
+export type { ProductivityTheme, BlockerPattern, SentimentAnalysis, TextPreprocessingResult, NLPAnalysisConfig } from "./NLPAnalysisService";
