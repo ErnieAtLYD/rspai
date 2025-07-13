@@ -276,11 +276,13 @@ export class ErrorHandlingService extends BaseService {
             this.errorHistory.set(key, []);
         }
         
-        const history = this.errorHistory.get(key)!;
-        history.push(error);
-        
-        if (history.length > 50) {
-            history.shift();
+        const history = this.errorHistory.get(key);
+        if (history) {
+            history.push(error);
+            
+            if (history.length > 50) {
+                history.shift();
+            }
         }
     }
 
