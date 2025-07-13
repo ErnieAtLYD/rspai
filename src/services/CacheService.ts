@@ -306,23 +306,23 @@ export class CacheService extends BaseService {
 
     private async loadFromDisk(): Promise<void> {
         try {
-            // During initialization, the ErrorHandlingService may not be ready yet
-            // Use direct try/catch without error handler
-            if (!this.errorHandler || !this.isReady()) {
+            // Always attempt to load cache, regardless of error handler state
+            // If error handler is available and ready, use it for retry logic
+            if (this.errorHandler && this.isReady()) {
+                await this.errorHandler.executeWithRetry(
+                    () => this.loadFromDiskDirect(),
+                    {
+                        operation: 'load_from_disk',
+                        component: 'CacheService',
+                        metadata: { cacheFilePath: this.cacheFilePath },
+                        timestamp: Date.now()
+                    },
+                    { showNotice: false }
+                );
+            } else {
+                // Direct load without error handler (during initialization)
                 await this.loadFromDiskDirect();
-                return;
             }
-
-            await this.errorHandler.executeWithRetry(
-                () => this.loadFromDiskDirect(),
-                {
-                    operation: 'load_from_disk',
-                    component: 'CacheService',
-                    metadata: { cacheFilePath: this.cacheFilePath },
-                    timestamp: Date.now()
-                },
-                { showNotice: false }
-            );
         } catch (error) {
             // Cache file doesn't exist or is corrupted, start fresh
             if (this.errorHandler && this.isReady()) {
