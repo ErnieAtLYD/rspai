@@ -40,8 +40,8 @@
 		"typescript": "^4.9.0"
 	},
 	"dependencies": {
-		"compromise": "^14.14.4",
-		"natural": "^8.1.0",
-		"sentiment": "^5.0.2"
+		"compromise": "14.14.4",
+		"natural": "8.1.0",
+		"sentiment": "5.0.2"
 	}
 }
