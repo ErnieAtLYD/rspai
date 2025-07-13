@@ -36,7 +36,7 @@ export class CacheService extends BaseService {
     private cacheFilePath: string;
     private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, errorHandler: ErrorHandlingService, config: Partial<CacheConfig> = {}, pluginId: 'retrospect-ai') {
+    constructor(app: App, errorHandler: ErrorHandlingService, config: Partial<CacheConfig> = {}, pluginId = 'retrospect-ai') {
         super(app);
         this.errorHandler = errorHandler;
         this.config = {
@@ -47,7 +47,12 @@ export class CacheService extends BaseService {
             ...config
         };
         // Derive the cache file path from plugin ID
-        this.cacheFilePath = `.obsidian/plugins/${pluginId}/cache.json`;
+        // If pluginId contains path separators, use it directly; otherwise construct the path
+        if (pluginId.includes('/') || pluginId.includes('\\')) {
+            this.cacheFilePath = `${pluginId}/cache.json`;
+        } else {
+            this.cacheFilePath = `.obsidian/plugins/${pluginId}/cache.json`;
+        }
     }
 
     protected async onInitialize(): Promise<void> {
@@ -56,16 +61,7 @@ export class CacheService extends BaseService {
         }
         
         this.startCleanupTimer();
-        await this.errorHandler.handleError(
-            new Error(`Cache service initialized with ${this.cache.size} entries`),
-            {
-                operation: 'initialize',
-                component: 'CacheService',
-                metadata: { cacheSize: this.cache.size },
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        console.log(`Cache service initialized with ${this.cache.size} entries`);
     }
 
     protected async onDispose(): Promise<void> {
@@ -75,26 +71,18 @@ export class CacheService extends BaseService {
         }
 
         if (this.config.persistToDisk) {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'dispose_save_to_disk',
-                    component: 'CacheService',
-                    timestamp: Date.now()
-                }
-            );
+            try {
+                // During disposal, ErrorHandlingService may already be disposed
+                // Use direct approach without error handling service
+                await this.saveToDisk();
+            } catch (error) {
+                // Just log to console during disposal - don't use error handler
+                console.warn('CacheService: Failed to save cache during disposal:', error);
+            }
         }
 
         this.cache.clear();
-        await this.errorHandler.handleError(
-            new Error("Cache service disposed"),
-            {
-                operation: 'dispose',
-                component: 'CacheService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        console.log("Cache service disposed");
     }
 
     /**
@@ -317,39 +305,60 @@ export class CacheService extends BaseService {
     }
 
     private async loadFromDisk(): Promise<void> {
-        await this.errorHandler.executeWithRetry(
-            async () => {
-                const data = await this.app.vault.adapter.read(this.cacheFilePath);
-                const cacheData = JSON.parse(data);
-                
-                // Restore cache entries
-                for (const entry of cacheData.entries || []) {
-                    // Skip expired entries
-                    if (Date.now() <= entry.timestamp + entry.ttl) {
-                        this.cache.set(entry.key, entry);
-                    }
-                }
-            },
-            {
-                operation: 'load_from_disk',
-                component: 'CacheService',
-                metadata: { cacheFilePath: this.cacheFilePath },
-                timestamp: Date.now()
-            },
-            { showNotice: false }
-        ).catch(async (error) => {
-            // Cache file doesn't exist or is corrupted, start fresh
-            await this.errorHandler.handleError(
-                error,
+        try {
+            // During initialization, the ErrorHandlingService may not be ready yet
+            // Use direct try/catch without error handler
+            if (!this.errorHandler || !this.isReady()) {
+                await this.loadFromDiskDirect();
+                return;
+            }
+
+            await this.errorHandler.executeWithRetry(
+                () => this.loadFromDiskDirect(),
                 {
-                    operation: 'load_from_disk_fallback',
+                    operation: 'load_from_disk',
                     component: 'CacheService',
                     metadata: { cacheFilePath: this.cacheFilePath },
                     timestamp: Date.now()
                 },
-                { logToConsole: true, showNotice: false }
+                { showNotice: false }
             );
-        });
+        } catch (error) {
+            // Cache file doesn't exist or is corrupted, start fresh
+            if (this.errorHandler && this.isReady()) {
+                await this.errorHandler.handleError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                        operation: 'load_from_disk_fallback',
+                        component: 'CacheService',
+                        metadata: { cacheFilePath: this.cacheFilePath },
+                        timestamp: Date.now()
+                    },
+                    { logToConsole: true, showNotice: false }
+                );
+            } else {
+                // Check if it's just a missing file (normal on first run)
+                if (error instanceof Error && error.message.includes('ENOENT')) {
+                    console.log('CacheService: No existing cache found, starting fresh');
+                } else {
+                    // Other errors (corrupted file, etc.)
+                    console.warn('CacheService: Could not load cache from disk, starting fresh:', error);
+                }
+            }
+        }
+    }
+
+    private async loadFromDiskDirect(): Promise<void> {
+        const data = await this.app.vault.adapter.read(this.cacheFilePath);
+        const cacheData = JSON.parse(data);
+        
+        // Restore cache entries
+        for (const entry of cacheData.entries || []) {
+            // Skip expired entries
+            if (Date.now() <= entry.timestamp + entry.ttl) {
+                this.cache.set(entry.key, entry);
+            }
+        }
     }
 
     private async saveToDisk(): Promise<void> {

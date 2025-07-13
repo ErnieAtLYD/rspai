@@ -71,7 +71,6 @@ export class PatternRecognitionService extends BaseService {
         if (!this.config.aiService || !this.config.cacheService || !this.config.errorHandler) {
             throw new Error("PatternRecognitionService requires AIService, CacheService, and ErrorHandlingService");
         }
-        
         // Initialize NLP service if available and enabled
         if (this.config.enableAdvancedNLP && this.config.nlpService) {
             this.nlpService = this.config.nlpService;
@@ -80,30 +79,17 @@ export class PatternRecognitionService extends BaseService {
             }
         }
         
-        await this.errorHandler.handleError(
-            new Error("Pattern recognition service initialized"),
-            {
-                operation: 'initialize',
-                component: 'PatternRecognitionService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        // Use console logging during initialization instead of error handler
+        console.log("PatternRecognitionService initialized");
     }
 
     protected async onDispose(): Promise<void> {
         this.patterns.clear();
         this.trends.clear();
         this.insights.clear();
-        await this.errorHandler.handleError(
-            new Error("Pattern recognition service disposed"),
-            {
-                operation: 'dispose',
-                component: 'PatternRecognitionService',
-                timestamp: Date.now()
-            },
-            { logToConsole: true, showNotice: false }
-        );
+        
+        // Use console logging during disposal instead of error handler
+        console.log("PatternRecognitionService disposed");
     }
 
     /**

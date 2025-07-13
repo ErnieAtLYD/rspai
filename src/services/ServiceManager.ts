@@ -192,9 +192,8 @@ export class ServiceManager {
                 this.instances.set(key, instance);
             }
 
-            // Initialize the service
-            this.initializeService(instance);
-
+            // Don't initialize during construction - wait for initializeAll()
+            
             return instance;
         } finally {
             // Remove from initializing set
@@ -226,9 +225,29 @@ export class ServiceManager {
      * Useful for plugin startup
      */
     async initializeAll(): Promise<void> {
-        const promises: Promise<void>[] = [];
+        // Initialize ErrorHandlingService first since other services depend on it
+        if (this.services.has('errorHandlingService')) {
+            try {
+                const errorHandlingService = this.resolve('errorHandlingService');
+                if (errorHandlingService.initialize) {
+                    await errorHandlingService.initialize();
+                }
+                // Set error handler for service manager once it's initialized
+                this.errorHandler = errorHandlingService as ErrorHandlingService;
+            } catch (error) {
+                console.error('Failed to initialize ErrorHandlingService:', error);
+                throw error; // Don't continue if error handling service fails
+            }
+        }
 
+        // Initialize all other services (excluding ErrorHandlingService which is already done)
+        const promises: Promise<void>[] = [];
+        
         for (const key of this.services.keys()) {
+            if (key === 'errorHandlingService') {
+                continue; // Already initialized
+            }
+            
             try {
                 const service = this.resolve(key);
                 if (service.initialize) {

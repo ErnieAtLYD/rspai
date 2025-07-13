@@ -433,35 +433,20 @@ ${backlinks}
             // Validate configuration
             if (!this.config.reflectionFolder) {
                 const configError = new Error("Reflection folder is not configured");
-                await this.errorHandler.handleError(configError, context, { 
-                    showNotice: true, 
-                    throwAfterHandling: true 
-                });
+                console.error('FileOperationsService initialization error:', configError.message);
                 throw configError;
             }
 
             if (this.config.daysToInclude < 1) {
                 const configError = new Error("Days to include must be at least 1");
-                await this.errorHandler.handleError(configError, context, { 
-                    showNotice: true, 
-                    throwAfterHandling: true 
-                });
+                console.error('FileOperationsService initialization error:', configError.message);
                 throw configError;
             }
 
-            // Log successful initialization through error handler (info level)
-            await this.errorHandler.handleError(
-                new Error(`File operations service initialized - scanning ${this.config.daysToInclude} days`),
-                context,
-                { showNotice: false, logToConsole: true, throwAfterHandling: false }
-            );
+            // Log successful initialization to console during initialization
+            console.log(`FileOperationsService initialized - scanning ${this.config.daysToInclude} days`);
         } catch (error) {
-            if (error instanceof Error && !error.message.includes("File operations service initialized")) {
-                await this.errorHandler.handleError(error, context, { 
-                    showNotice: true, 
-                    throwAfterHandling: true 
-                });
-            }
+            console.error('FileOperationsService initialization failed:', error);
             throw error;
         }
     }
@@ -470,17 +455,8 @@ ${backlinks}
      * Dispose the file operations service
      */
     protected async onDispose(): Promise<void> {
-        const context: ErrorContext = {
-            operation: 'dispose',
-            component: 'FileOperationsService',
-            timestamp: Date.now()
-        };
-
-        // Log disposal through error handler (info level)
-        await this.errorHandler.handleError(
-            new Error("File operations service disposed"),
-            context,
-            { showNotice: false, logToConsole: true, throwAfterHandling: false }
-        );
+        // Use console logging instead of error handler during disposal
+        // since the ErrorHandlingService may be disposed first
+        console.log("FileOperationsService disposed");
     }
 }

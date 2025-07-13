@@ -107,6 +107,9 @@ export default class JournalReflectionPlugin extends Plugin {
 		// Initialize service manager
 		this.serviceManager = new ServiceManager(this.app);
 		await this.registerServices();
+		
+		// Update service configurations with loaded settings
+		await this.updateServiceConfigurations();
 
 		// Add ribbon icon
 		this.addRibbonIcon("book-open", "Create Weekly Journal Summary", () => {
@@ -191,7 +194,7 @@ export default class JournalReflectionPlugin extends Plugin {
 					persistToDisk: true,
 					cleanupInterval: 5 * 60 * 1000 // 5 minutes
 				};
-				return new CacheService(this.app, errorHandler, config, "retrospect-ai");
+				return new CacheService(this.app, errorHandler, config, this.manifest.dir);
 			},
 			dependencies: ['errorHandlingService'],
 			singleton: true
@@ -307,9 +310,8 @@ export default class JournalReflectionPlugin extends Plugin {
 		// Initialize all services
 		await this.serviceManager.initializeAll();
 		
-		// Get error handler reference for easy access and configure ServiceManager to use it
+		// Get error handler reference for easy access (already set in ServiceManager during initializeAll)
 		this.errorHandler = this.serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
-		this.serviceManager.setErrorHandler(this.errorHandler);
 	}
 
 	/**
@@ -517,7 +519,8 @@ export default class JournalReflectionPlugin extends Plugin {
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
-				{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() },
+				{ showNotice: true }
 			);
 		}
 	}
