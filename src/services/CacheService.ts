@@ -46,13 +46,9 @@ export class CacheService extends BaseService {
             cleanupInterval: 5 * 60 * 1000, // 5 minutes
             ...config
         };
-        // Derive the cache file path from plugin ID
-        // If pluginId contains path separators, use it directly; otherwise construct the path
-        if (pluginId.includes('/') || pluginId.includes('\\')) {
-            this.cacheFilePath = `${pluginId}/cache.json`;
-        } else {
-            this.cacheFilePath = `.obsidian/plugins/${pluginId}/cache.json`;
-        }
+        // Sanitize plugin ID to prevent path traversal attacks
+        const sanitizedPluginId = this.sanitizePluginId(pluginId);
+        this.cacheFilePath = `.obsidian/plugins/${sanitizedPluginId}/cache.json`;
     }
 
     protected async onInitialize(): Promise<void> {
@@ -390,5 +386,40 @@ export class CacheService extends BaseService {
             size += JSON.stringify(entry).length * 2; // Rough estimate
         }
         return size;
+    }
+
+    /**
+     * Sanitize plugin ID to prevent path traversal attacks
+     * @param pluginId - The plugin ID to sanitize
+     * @returns A sanitized plugin ID safe for file path construction
+     */
+    private sanitizePluginId(pluginId: string): string {
+        if (!pluginId || typeof pluginId !== 'string') {
+            throw new Error('Plugin ID must be a non-empty string');
+        }
+
+        // Remove any path traversal sequences and normalize path separators
+        let sanitized = pluginId
+            .replace(/\.\./g, '')  // Remove ".." sequences
+            .replace(/[\/\\]/g, '-')  // Replace path separators with hyphens
+            .replace(/[^a-zA-Z0-9_-]/g, '')  // Remove any non-alphanumeric characters except underscore and hyphen
+            .toLowerCase();  // Convert to lowercase for consistency
+
+        // Ensure the sanitized ID is not empty and starts with an alphanumeric character
+        if (!sanitized || sanitized.length === 0) {
+            throw new Error('Plugin ID contains only invalid characters');
+        }
+
+        // Ensure it starts with an alphanumeric character
+        if (!/^[a-zA-Z0-9]/.test(sanitized)) {
+            sanitized = 'plugin-' + sanitized;
+        }
+
+        // Limit length to prevent excessively long directory names
+        if (sanitized.length > 50) {
+            sanitized = sanitized.substring(0, 50);
+        }
+
+        return sanitized;
     }
 }
