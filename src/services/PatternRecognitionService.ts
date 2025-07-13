@@ -11,7 +11,7 @@ export interface PatternData {
     type: string;
     confidence: number;
     timeRange: string;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
     description: string;
     // Enhanced NLP data
     themes?: ProductivityTheme[];
@@ -31,7 +31,7 @@ export interface InsightData {
     category: string;
     insight: string;
     confidence: number;
-    supportingData: any[];
+    supportingData: unknown[];
     timestamp: number;
 }
 
@@ -389,7 +389,7 @@ export class PatternRecognitionService extends BaseService {
         if (validCounts.length < 3) return null;
 
         // Simple trend analysis
-        const values = validCounts.map(c => c!.value);
+        const values = validCounts.map(c => c.value);
         const avgFirst = values.slice(0, Math.floor(values.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(values.length / 2);
         const avgLast = values.slice(Math.floor(values.length / 2)).reduce((a, b) => a + b, 0) / (values.length - Math.floor(values.length / 2));
         
