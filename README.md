@@ -26,7 +26,16 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 ## 🚀 Quick Start
 
 ### 1. Install
-- Download the latest release
+
+#### Option A: Using BRAT (Recommended for beta versions)
+1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat) from Obsidian's Community Plugins
+2. Enable BRAT in your plugin settings
+3. Open Command Palette (`Ctrl/Cmd + P`) and run "BRAT: Add a beta plugin for testing"
+4. Enter this repository URL: `https://github.com/ErnieAtLYD/retrospect-ai`
+5. Click "Add Plugin" and enable "Journal Reflection" in Community Plugins settings
+
+#### Option B: Manual Installation
+- Download the latest release from GitHub
 - Extract to your `.obsidian/plugins/retrospect-ai/` folder
 - Enable "Journal Reflection" in Community Plugins settings
 
