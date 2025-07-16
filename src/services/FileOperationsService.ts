@@ -536,11 +536,10 @@ ${backlinks}
         const workTagsPattern = new RegExp(`#(${workTags.join('|')})\\b`, 'i');
         const hasWorkTags = workTagsPattern.test(content);
 
-        // Check if file is in work-related folders
-        const isInWorkFolder = filePathLower.includes('work') || 
-                              filePathLower.includes('job') || 
-                              filePathLower.includes('project') ||
-                              filePathLower.includes('business');
+        // Check if file is in work-related folders (exact match on folder names)
+        const workFolders = ['work', 'job', 'project', 'business'];
+        const pathSegments = filePathLower.split(/[\\/]/); // Handles both '/' and '\' as separators
+        const isInWorkFolder = pathSegments.some(segment => workFolders.includes(segment));
 
         return hasWorkKeywords || hasWorkTags || isInWorkFolder;
     }
