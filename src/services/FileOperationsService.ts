@@ -564,9 +564,16 @@ ${backlinks}
 
         // Check folder inclusion/exclusion
         if (customScope.includeFolders.length > 0) {
-            const isInIncludedFolder = customScope.includeFolders.some(folder => 
-                filePathLower.includes(folder.toLowerCase())
-            );
+            const filePathSegments = file.path.split(/[\\/]/).map(seg => seg.toLowerCase());
+            const isInIncludedFolder = customScope.includeFolders.some(folder => {
+                const folderSegments = folder.split(/[\\/]/).map(seg => seg.toLowerCase());
+                // Check if folderSegments is a prefix of filePathSegments
+                if (folderSegments.length > filePathSegments.length) return false;
+                for (let i = 0; i < folderSegments.length; i++) {
+                    if (filePathSegments[i] !== folderSegments[i]) return false;
+                }
+                return true;
+            });
             if (!isInIncludedFolder) {
                 return false;
             }
