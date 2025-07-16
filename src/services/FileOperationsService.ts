@@ -532,10 +532,9 @@ ${backlinks}
             contentLower.includes(keyword)
         );
 
-        // Check for work tags
-        const hasWorkTags = workTags.some(tag => 
-            contentLower.includes(`#${tag}`)
-        );
+        // Check for work tags using regex to match whole tags
+        const workTagsPattern = new RegExp(`#(${workTags.join('|')})\\b`, 'i');
+        const hasWorkTags = workTagsPattern.test(content);
 
         // Check if file is in work-related folders
         const isInWorkFolder = filePathLower.includes('work') || 
