@@ -578,9 +578,16 @@ ${backlinks}
         }
 
         if (customScope.excludeFolders.length > 0) {
-            const isInExcludedFolder = customScope.excludeFolders.some(folder => 
-                filePathLower.includes(folder.toLowerCase())
-            );
+            const filePathSegments = file.path.split(/[\/]/).map(seg => seg.toLowerCase());
+            const isInExcludedFolder = customScope.excludeFolders.some(folder => {
+                const folderSegments = folder.split(/[\/]/).map(seg => seg.toLowerCase());
+                // Check if folderSegments is a prefix of filePathSegments
+                if (folderSegments.length > filePathSegments.length) return false;
+                for (let i = 0; i < folderSegments.length; i++) {
+                    if (filePathSegments[i] !== folderSegments[i]) return false;
+                }
+                return true;
+            });
             if (isInExcludedFolder) {
                 return false;
             }
@@ -598,9 +605,10 @@ ${backlinks}
         }
 
         if (customScope.excludeTags.length > 0) {
-            const hasExcludedTag = customScope.excludeTags.some(tag => 
-                contentLower.includes(`#${tag.toLowerCase()}`)
-            );
+            const hasExcludedTag = customScope.excludeTags.some(tag => {
+                const tagPattern = new RegExp(`\\B#${tag}\\b`, 'i');
+                return tagPattern.test(content);
+            });
             if (hasExcludedTag) {
                 return false;
             }
