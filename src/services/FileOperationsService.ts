@@ -12,6 +12,18 @@ export interface FileOperationsConfig {
     excludePrivate: boolean;
     periodicNoteFolders: string[];
     reflectionFolder: string;
+    // Analysis scope settings
+    enabledAnalysisScopes?: boolean;
+    analysisScope?: 'whole-life' | 'work-only' | 'custom';
+    customAnalysisScope?: {
+        name: string;
+        includeKeywords: string[];
+        excludeKeywords: string[];
+        includeFolders: string[];
+        excludeFolders: string[];
+        includeTags: string[];
+        excludeTags: string[];
+    };
 }
 
 /**
@@ -96,6 +108,11 @@ export class FileOperationsService extends BaseService {
 
                         // Skip if private (contains #private tag)
                         if (this.config.excludePrivate && content.includes("#private")) {
+                            continue;
+                        }
+
+                        // Apply analysis scope filtering if enabled
+                        if (this.config.enabledAnalysisScopes && !this.isFileInAnalysisScope(file, content)) {
                             continue;
                         }
 
@@ -459,6 +476,172 @@ ${backlinks}
             console.error('FileOperationsService initialization failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Check if a file and its content should be included in analysis scope
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if the file should be included in analysis
+     */
+    private isFileInAnalysisScope(file: TFile, content: string): boolean {
+        if (!this.config.enabledAnalysisScopes) {
+            return true; // No scope filtering
+        }
+
+        const scope = this.config.analysisScope || 'whole-life';
+
+        switch (scope) {
+            case 'whole-life':
+                return true;
+            
+            case 'work-only':
+                return this.isWorkRelatedContent(file, content);
+            
+            case 'custom':
+                return this.isCustomScopeContent(file, content);
+            
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Check if content is work-related (for work-only scope)
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if content is work-related
+     */
+    private isWorkRelatedContent(file: TFile, content: string): boolean {
+        const workKeywords = [
+            'work', 'job', 'project', 'meeting', 'task', 'deadline',
+            'client', 'team', 'boss', 'colleague', 'office', 'business',
+            'development', 'coding', 'programming', 'bug', 'feature',
+            'review', 'standup', 'sprint', 'agile', 'scrum'
+        ];
+
+        const workTags = ['work', 'job', 'project', 'meeting', 'task', 'business'];
+        
+        const contentLower = content.toLowerCase();
+        const filePathLower = file.path.toLowerCase();
+
+        // Check for work keywords in content
+        const hasWorkKeywords = workKeywords.some(keyword => 
+            contentLower.includes(keyword)
+        );
+
+        // Check for work tags using regex to match whole tags
+        const workTagsPattern = new RegExp(`#(${workTags.join('|')})\\b`, 'i');
+        const hasWorkTags = workTagsPattern.test(content);
+
+        // Check if file is in work-related folders (exact match on folder names)
+        const workFolders = ['work', 'job', 'project', 'business'];
+        const pathSegments = filePathLower.split(/[\\/]/); // Handles both '/' and '\' as separators
+        const isInWorkFolder = pathSegments.some(segment => workFolders.includes(segment));
+
+        return hasWorkKeywords || hasWorkTags || isInWorkFolder;
+    }
+
+    /**
+     * Check if content matches custom scope criteria
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if content matches custom scope
+     */
+    private isCustomScopeContent(file: TFile, content: string): boolean {
+        const customScope = this.config.customAnalysisScope;
+        if (!customScope) {
+            return true; // No custom scope defined, include all
+        }
+
+        const contentLower = content.toLowerCase();
+        const filePathLower = file.path.toLowerCase();
+
+        // Check folder inclusion/exclusion
+        if (customScope.includeFolders.length > 0) {
+            const filePathSegments = file.path.split(/[\\/]/).map(seg => seg.toLowerCase());
+            const isInIncludedFolder = customScope.includeFolders.some(folder => {
+                const folderSegments = folder.split(/[\\/]/).map(seg => seg.toLowerCase());
+                // Check if folderSegments is a prefix of filePathSegments
+                if (folderSegments.length > filePathSegments.length) return false;
+                for (let i = 0; i < folderSegments.length; i++) {
+                    if (filePathSegments[i] !== folderSegments[i]) return false;
+                }
+                return true;
+            });
+            if (!isInIncludedFolder) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeFolders.length > 0) {
+            const filePathSegments = file.path.split(/[\/]/).map(seg => seg.toLowerCase());
+            const isInExcludedFolder = customScope.excludeFolders.some(folder => {
+                const folderSegments = folder.split(/[\/]/).map(seg => seg.toLowerCase());
+                // Check if folderSegments is a prefix of filePathSegments
+                if (folderSegments.length > filePathSegments.length) return false;
+                for (let i = 0; i < folderSegments.length; i++) {
+                    if (filePathSegments[i] !== folderSegments[i]) return false;
+                }
+                return true;
+            });
+            if (isInExcludedFolder) {
+                return false;
+            }
+        }
+
+        // Check tag inclusion/exclusion
+        if (customScope.includeTags.length > 0) {
+            const hasIncludedTag = customScope.includeTags.some(tag => {
+                const tagPattern = new RegExp(`\\B#${tag}\\b`, 'i');
+                return tagPattern.test(content);
+            });
+            if (!hasIncludedTag) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeTags.length > 0) {
+            const hasExcludedTag = customScope.excludeTags.some(tag => {
+                const tagPattern = new RegExp(`\\B#${tag}\\b`, 'i');
+                return tagPattern.test(content);
+            });
+            if (hasExcludedTag) {
+                return false;
+            }
+        }
+
+        // Check keyword inclusion/exclusion
+        if (customScope.includeKeywords.length > 0) {
+            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex to match the whole word, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(content);
+            });
+            if (!hasIncludedKeyword) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeKeywords.length > 0) {
+            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex with word boundaries, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(contentLower);
+            });
+            if (hasExcludedKeyword) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
