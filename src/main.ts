@@ -1052,13 +1052,19 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 		
-		this.autoScanInterval = this.registerInterval(
-			window.setInterval(async () => {
-				if (this.shouldRunAutoScan()) {
-					await this.runAutoScan();
-				}
-			}, intervalMs)
-		);
+		this.autoScanInterval = this.registerInterval(async () => {
+			if (this.shouldRunAutoScan()) {
+				await this.runAutoScan();
+			}
+		}, intervalMs);
+		
+		// Trigger immediate scan on setup if conditions are met
+		if (this.shouldRunAutoScan()) {
+			// Use setTimeout to avoid blocking the plugin load
+			setTimeout(() => {
+				this.runAutoScan();
+			}, 5000); // Wait 5 seconds after plugin load
+		}
 	}
 
 	/**
@@ -1066,7 +1072,6 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private clearAutoScan(): void {
 		if (this.autoScanInterval) {
-			window.clearInterval(this.autoScanInterval);
 			this.autoScanInterval = null;
 		}
 	}
@@ -1686,6 +1691,12 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.enableAutoScan = value;
 							await this.plugin.saveSettings();
+							
+							// If enabling auto-scan, trigger an immediate scan
+							if (value && this.plugin.settings.scanFrequency !== 'manual') {
+								this.plugin.runAutoScan();
+							}
+							
 							// Refresh to show/hide scan frequency setting
 							this.display();
 						})
@@ -1703,8 +1714,14 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.addOption("weekly", "Weekly")
 							.setValue(this.plugin.settings.scanFrequency ?? "manual")
 							.onChange(async (value) => {
+								const oldValue = this.plugin.settings.scanFrequency;
 								this.plugin.settings.scanFrequency = value as 'manual' | 'daily' | 'weekly';
 								await this.plugin.saveSettings();
+								
+								// If changing from manual to scheduled, trigger immediate scan
+								if (oldValue === 'manual' && value !== 'manual') {
+									this.plugin.runAutoScan();
+								}
 							})
 					);
 					
