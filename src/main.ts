@@ -1042,6 +1042,24 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Helper function to ensure customAnalysisScope is initialized
+	 * Reduces duplication in the settings UI
+	 */
+	private ensureCustomAnalysisScope(): void {
+		if (!this.plugin.settings.customAnalysisScope) {
+			this.plugin.settings.customAnalysisScope = {
+				name: DEFAULT_SETTINGS.customAnalysisScope!.name,
+				includeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.includeKeywords],
+				excludeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeKeywords],
+				includeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.includeFolders],
+				excludeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeFolders],
+				includeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.includeTags],
+				excludeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeTags]
+			};
+		}
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -1297,7 +1315,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 			// Custom Scope Settings (only show if custom is selected)
 			if (this.plugin.settings.analysisScope === 'custom') {
-				const customScope = this.plugin.settings.customAnalysisScope || DEFAULT_SETTINGS.customAnalysisScope;
+				this.ensureCustomAnalysisScope();
+				const customScope = this.plugin.settings.customAnalysisScope!;
 
 				// Custom Scope Name
 				new Setting(containerEl)
@@ -1307,10 +1326,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("e.g., Health & Wellness, Creative Projects")
 							.setValue(customScope.name)
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.name = value;
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.name = value;
 								await this.plugin.saveSettings();
 							});
 					});
@@ -1323,10 +1340,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("work, project, meeting, deadline")
 							.setValue(customScope.includeKeywords.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.includeKeywords = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.includeKeywords = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1342,10 +1357,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("personal, private, family")
 							.setValue(customScope.excludeKeywords.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.excludeKeywords = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.excludeKeywords = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1361,10 +1374,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("work, project, meeting")
 							.setValue(customScope.includeTags.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.includeTags = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.includeTags = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1380,10 +1391,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("personal, private, family")
 							.setValue(customScope.excludeTags.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.excludeTags = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.excludeTags = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1399,10 +1408,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("Work Notes, Projects, Meetings")
 							.setValue(customScope.includeFolders.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.includeFolders = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.includeFolders = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1418,10 +1425,8 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						text.setPlaceholder("Personal, Private, Family")
 							.setValue(customScope.excludeFolders.join(', '))
 							.onChange(async (value) => {
-								if (!this.plugin.settings.customAnalysisScope) {
-									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
-								}
-								this.plugin.settings.customAnalysisScope.excludeFolders = value
+								this.ensureCustomAnalysisScope();
+								this.plugin.settings.customAnalysisScope!.excludeFolders = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
