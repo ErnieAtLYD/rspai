@@ -1041,6 +1041,18 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
+
+	/**
+	 * Get the interval in milliseconds for the auto-scan
+	 * @returns {number}
+	 * @description
+	 * This function returns the interval in milliseconds for the auto-scan.
+	 * It returns 24 hours for daily scans and 7 days for weekly scans.
+	 */
+	private getAutoScanIntervalMs(): number {
+		return this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+	}
+
 	/**
 	 * Setup automatic scanning based on settings
 	 */
@@ -1051,7 +1063,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			return;
 		}
 
-		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+		const intervalMs = this.getAutoScanIntervalMs();
 		
 		this.autoScanInterval = setInterval(async () => {
 			if (this.shouldRunAutoScan()) {
@@ -1158,14 +1170,15 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 	 */
 	private ensureCustomAnalysisScope(): void {
 		if (!this.plugin.settings.customAnalysisScope) {
+			const defaultScope = DEFAULT_SETTINGS.customAnalysisScope;
 			this.plugin.settings.customAnalysisScope = {
-				name: DEFAULT_SETTINGS.customAnalysisScope!.name,
-				includeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.includeKeywords],
-				excludeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeKeywords],
-				includeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.includeFolders],
-				excludeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeFolders],
-				includeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.includeTags],
-				excludeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeTags]
+				name: defaultScope.name,
+				includeKeywords: [...defaultScope.includeKeywords],
+				excludeKeywords: [...defaultScope.excludeKeywords],
+				includeFolders: [...defaultScope.includeFolders],
+				excludeFolders: [...defaultScope.excludeFolders],
+				includeTags: [...defaultScope.includeTags],
+				excludeTags: [...defaultScope.excludeTags]
 			};
 		}
 	}
