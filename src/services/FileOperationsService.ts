@@ -532,16 +532,14 @@ ${backlinks}
             contentLower.includes(keyword)
         );
 
-        // Check for work tags
-        const hasWorkTags = workTags.some(tag => 
-            contentLower.includes(`#${tag}`)
-        );
+        // Check for work tags using regex to match whole tags
+        const workTagsPattern = new RegExp(`#(${workTags.join('|')})\\b`, 'i');
+        const hasWorkTags = workTagsPattern.test(content);
 
-        // Check if file is in work-related folders
-        const isInWorkFolder = filePathLower.includes('work') || 
-                              filePathLower.includes('job') || 
-                              filePathLower.includes('project') ||
-                              filePathLower.includes('business');
+        // Check if file is in work-related folders (exact match on folder names)
+        const workFolders = ['work', 'job', 'project', 'business'];
+        const pathSegments = filePathLower.split(/[\\/]/); // Handles both '/' and '\' as separators
+        const isInWorkFolder = pathSegments.some(segment => workFolders.includes(segment));
 
         return hasWorkKeywords || hasWorkTags || isInWorkFolder;
     }
@@ -564,9 +562,16 @@ ${backlinks}
 
         // Check folder inclusion/exclusion
         if (customScope.includeFolders.length > 0) {
-            const isInIncludedFolder = customScope.includeFolders.some(folder => 
-                filePathLower.includes(folder.toLowerCase())
-            );
+            const filePathSegments = file.path.split(/[\\/]/).map(seg => seg.toLowerCase());
+            const isInIncludedFolder = customScope.includeFolders.some(folder => {
+                const folderSegments = folder.split(/[\\/]/).map(seg => seg.toLowerCase());
+                // Check if folderSegments is a prefix of filePathSegments
+                if (folderSegments.length > filePathSegments.length) return false;
+                for (let i = 0; i < folderSegments.length; i++) {
+                    if (filePathSegments[i] !== folderSegments[i]) return false;
+                }
+                return true;
+            });
             if (!isInIncludedFolder) {
                 return false;
             }
@@ -583,9 +588,10 @@ ${backlinks}
 
         // Check tag inclusion/exclusion
         if (customScope.includeTags.length > 0) {
-            const hasIncludedTag = customScope.includeTags.some(tag => 
-                contentLower.includes(`#${tag.toLowerCase()}`)
-            );
+            const hasIncludedTag = customScope.includeTags.some(tag => {
+                const tagPattern = new RegExp(`\\B#${tag}\\b`, 'i');
+                return tagPattern.test(content);
+            });
             if (!hasIncludedTag) {
                 return false;
             }
@@ -602,18 +608,26 @@ ${backlinks}
 
         // Check keyword inclusion/exclusion
         if (customScope.includeKeywords.length > 0) {
-            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => 
-                contentLower.includes(keyword.toLowerCase())
-            );
+            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex to match the whole word, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(content);
+            });
             if (!hasIncludedKeyword) {
                 return false;
             }
         }
 
         if (customScope.excludeKeywords.length > 0) {
-            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => 
-                contentLower.includes(keyword.toLowerCase())
-            );
+            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex with word boundaries, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(contentLower);
+            });
             if (hasExcludedKeyword) {
                 return false;
             }
