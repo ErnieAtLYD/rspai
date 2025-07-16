@@ -610,9 +610,13 @@ ${backlinks}
 
         // Check keyword inclusion/exclusion
         if (customScope.includeKeywords.length > 0) {
-            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => 
-                contentLower.includes(keyword.toLowerCase())
-            );
+            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex to match the whole word, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(content);
+            });
             if (!hasIncludedKeyword) {
                 return false;
             }
