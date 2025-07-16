@@ -611,9 +611,13 @@ ${backlinks}
         }
 
         if (customScope.excludeKeywords.length > 0) {
-            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => 
-                contentLower.includes(keyword.toLowerCase())
-            );
+            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => {
+                // Escape special regex characters in the keyword
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Create a regex with word boundaries, case-insensitive
+                const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+                return regex.test(contentLower);
+            });
             if (hasExcludedKeyword) {
                 return false;
             }
