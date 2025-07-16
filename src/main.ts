@@ -1114,7 +1114,9 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		if (!this.plugin.settings.encryptionEnabled) {
 			const warningEl = containerEl.createDiv({ cls: "setting-item-description" });
 			warningEl.style.color = "var(--text-warning)";
-			warningEl.innerHTML = "⚠️ <strong>Security Warning:</strong> Your API key is stored in plain text. Consider enabling encryption for better security.";
+			warningEl.createSpan({ text: "⚠️ " });
+			warningEl.createEl("strong", { text: "Security Warning:" });
+			warningEl.createSpan({ text: " Your API key is stored in plain text. Consider enabling encryption for better security." });
 		}
 		
 		containerEl.createEl("h3", { text: "AI Configuration" });
@@ -1436,16 +1438,35 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 				// Scope Preview
 				const scopePreview = containerEl.createDiv({ cls: "setting-item-description" });
-				scopePreview.innerHTML = `
-					<strong>Custom Scope Preview:</strong><br>
-					<strong>Name:</strong> ${customScope.name || 'Unnamed'}<br>
-					<strong>Include Keywords:</strong> ${customScope.includeKeywords.length > 0 ? customScope.includeKeywords.join(', ') : 'None'}<br>
-					<strong>Exclude Keywords:</strong> ${customScope.excludeKeywords.length > 0 ? customScope.excludeKeywords.join(', ') : 'None'}<br>
-					<strong>Include Tags:</strong> ${customScope.includeTags.length > 0 ? customScope.includeTags.map(t => '#' + t).join(', ') : 'None'}<br>
-					<strong>Exclude Tags:</strong> ${customScope.excludeTags.length > 0 ? customScope.excludeTags.map(t => '#' + t).join(', ') : 'None'}<br>
-					<strong>Include Folders:</strong> ${customScope.includeFolders.length > 0 ? customScope.includeFolders.join(', ') : 'None'}<br>
-					<strong>Exclude Folders:</strong> ${customScope.excludeFolders.length > 0 ? customScope.excludeFolders.join(', ') : 'None'}
-				`;
+				scopePreview.createEl("strong", { text: "Custom Scope Preview:" });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Name: " });
+				scopePreview.createSpan({ text: customScope.name || 'Unnamed' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Include Keywords: " });
+				scopePreview.createSpan({ text: customScope.includeKeywords.length > 0 ? customScope.includeKeywords.join(', ') : 'None' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Exclude Keywords: " });
+				scopePreview.createSpan({ text: customScope.excludeKeywords.length > 0 ? customScope.excludeKeywords.join(', ') : 'None' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Include Tags: " });
+				scopePreview.createSpan({ text: customScope.includeTags.length > 0 ? customScope.includeTags.map(t => '#' + t).join(', ') : 'None' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Exclude Tags: " });
+				scopePreview.createSpan({ text: customScope.excludeTags.length > 0 ? customScope.excludeTags.map(t => '#' + t).join(', ') : 'None' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Include Folders: " });
+				scopePreview.createSpan({ text: customScope.includeFolders.length > 0 ? customScope.includeFolders.join(', ') : 'None' });
+				scopePreview.createEl("br");
+				
+				scopePreview.createEl("strong", { text: "Exclude Folders: " });
+				scopePreview.createSpan({ text: customScope.excludeFolders.length > 0 ? customScope.excludeFolders.join(', ') : 'None' });
 			}
 		}
 
@@ -1571,14 +1592,27 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 			// NLP Features Info
 			const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
-			infoEl.innerHTML = `
-				<strong>Advanced NLP Features:</strong><br>
-				• <strong>Productivity Theme Extraction:</strong> Identifies recurring themes in your work<br>
-				• <strong>Blocker Detection:</strong> Spots procrastination, time management, and workflow issues<br>
-				• <strong>Multi-dimensional Sentiment:</strong> Analyzes emotions, arousal levels, and productivity mood<br>
-				• <strong>Context-aware Analysis:</strong> Understands the nuances of your writing style<br>
-				• <strong>Pattern Correlation:</strong> Connects productivity patterns with mood and activities
-			`;
+			infoEl.createEl("strong", { text: "Advanced NLP Features:" });
+			infoEl.createEl("br");
+			infoEl.createSpan({ text: "• " });
+			infoEl.createEl("strong", { text: "Productivity Theme Extraction:" });
+			infoEl.createSpan({ text: " Identifies recurring themes in your work" });
+			infoEl.createEl("br");
+			infoEl.createSpan({ text: "• " });
+			infoEl.createEl("strong", { text: "Blocker Detection:" });
+			infoEl.createSpan({ text: " Spots procrastination, time management, and workflow issues" });
+			infoEl.createEl("br");
+			infoEl.createSpan({ text: "• " });
+			infoEl.createEl("strong", { text: "Multi-dimensional Sentiment:" });
+			infoEl.createSpan({ text: " Analyzes emotions, arousal levels, and productivity mood" });
+			infoEl.createEl("br");
+			infoEl.createSpan({ text: "• " });
+			infoEl.createEl("strong", { text: "Context-aware Analysis:" });
+			infoEl.createSpan({ text: " Understands the nuances of your writing style" });
+			infoEl.createEl("br");
+			infoEl.createSpan({ text: "• " });
+			infoEl.createEl("strong", { text: "Pattern Correlation:" });
+			infoEl.createSpan({ text: " Connects productivity patterns with mood and activities" });
 		}
 	}
 
