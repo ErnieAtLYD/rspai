@@ -12,6 +12,18 @@ export interface FileOperationsConfig {
     excludePrivate: boolean;
     periodicNoteFolders: string[];
     reflectionFolder: string;
+    // Analysis scope settings
+    enabledAnalysisScopes?: boolean;
+    analysisScope?: 'whole-life' | 'work-only' | 'custom';
+    customAnalysisScope?: {
+        name: string;
+        includeKeywords: string[];
+        excludeKeywords: string[];
+        includeFolders: string[];
+        excludeFolders: string[];
+        includeTags: string[];
+        excludeTags: string[];
+    };
 }
 
 /**
@@ -96,6 +108,11 @@ export class FileOperationsService extends BaseService {
 
                         // Skip if private (contains #private tag)
                         if (this.config.excludePrivate && content.includes("#private")) {
+                            continue;
+                        }
+
+                        // Apply analysis scope filtering if enabled
+                        if (this.config.enabledAnalysisScopes && !this.isFileInAnalysisScope(file, content)) {
                             continue;
                         }
 
@@ -459,6 +476,150 @@ ${backlinks}
             console.error('FileOperationsService initialization failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Check if a file and its content should be included in analysis scope
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if the file should be included in analysis
+     */
+    private isFileInAnalysisScope(file: TFile, content: string): boolean {
+        if (!this.config.enabledAnalysisScopes) {
+            return true; // No scope filtering
+        }
+
+        const scope = this.config.analysisScope || 'whole-life';
+
+        switch (scope) {
+            case 'whole-life':
+                return true;
+            
+            case 'work-only':
+                return this.isWorkRelatedContent(file, content);
+            
+            case 'custom':
+                return this.isCustomScopeContent(file, content);
+            
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Check if content is work-related (for work-only scope)
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if content is work-related
+     */
+    private isWorkRelatedContent(file: TFile, content: string): boolean {
+        const workKeywords = [
+            'work', 'job', 'project', 'meeting', 'task', 'deadline',
+            'client', 'team', 'boss', 'colleague', 'office', 'business',
+            'development', 'coding', 'programming', 'bug', 'feature',
+            'review', 'standup', 'sprint', 'agile', 'scrum'
+        ];
+
+        const workTags = ['work', 'job', 'project', 'meeting', 'task', 'business'];
+        
+        const contentLower = content.toLowerCase();
+        const filePathLower = file.path.toLowerCase();
+
+        // Check for work keywords in content
+        const hasWorkKeywords = workKeywords.some(keyword => 
+            contentLower.includes(keyword)
+        );
+
+        // Check for work tags
+        const hasWorkTags = workTags.some(tag => 
+            contentLower.includes(`#${tag}`)
+        );
+
+        // Check if file is in work-related folders
+        const isInWorkFolder = filePathLower.includes('work') || 
+                              filePathLower.includes('job') || 
+                              filePathLower.includes('project') ||
+                              filePathLower.includes('business');
+
+        return hasWorkKeywords || hasWorkTags || isInWorkFolder;
+    }
+
+    /**
+     * Check if content matches custom scope criteria
+     * 
+     * @param file - The file to check
+     * @param content - The file content
+     * @returns True if content matches custom scope
+     */
+    private isCustomScopeContent(file: TFile, content: string): boolean {
+        const customScope = this.config.customAnalysisScope;
+        if (!customScope) {
+            return true; // No custom scope defined, include all
+        }
+
+        const contentLower = content.toLowerCase();
+        const filePathLower = file.path.toLowerCase();
+
+        // Check folder inclusion/exclusion
+        if (customScope.includeFolders.length > 0) {
+            const isInIncludedFolder = customScope.includeFolders.some(folder => 
+                filePathLower.includes(folder.toLowerCase())
+            );
+            if (!isInIncludedFolder) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeFolders.length > 0) {
+            const isInExcludedFolder = customScope.excludeFolders.some(folder => 
+                filePathLower.includes(folder.toLowerCase())
+            );
+            if (isInExcludedFolder) {
+                return false;
+            }
+        }
+
+        // Check tag inclusion/exclusion
+        if (customScope.includeTags.length > 0) {
+            const hasIncludedTag = customScope.includeTags.some(tag => 
+                contentLower.includes(`#${tag.toLowerCase()}`)
+            );
+            if (!hasIncludedTag) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeTags.length > 0) {
+            const hasExcludedTag = customScope.excludeTags.some(tag => 
+                contentLower.includes(`#${tag.toLowerCase()}`)
+            );
+            if (hasExcludedTag) {
+                return false;
+            }
+        }
+
+        // Check keyword inclusion/exclusion
+        if (customScope.includeKeywords.length > 0) {
+            const hasIncludedKeyword = customScope.includeKeywords.some(keyword => 
+                contentLower.includes(keyword.toLowerCase())
+            );
+            if (!hasIncludedKeyword) {
+                return false;
+            }
+        }
+
+        if (customScope.excludeKeywords.length > 0) {
+            const hasExcludedKeyword = customScope.excludeKeywords.some(keyword => 
+                contentLower.includes(keyword.toLowerCase())
+            );
+            if (hasExcludedKeyword) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

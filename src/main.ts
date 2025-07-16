@@ -55,6 +55,18 @@ interface JournalReflectionSettings {
 	enableAdvancedNLP?: boolean;
 	nlpAnalysisDepth?: 'basic' | 'moderate' | 'deep';
 	blockerDetectionSensitivity?: 'low' | 'medium' | 'high';
+	// Analysis Scope Settings
+	enabledAnalysisScopes?: boolean;
+	analysisScope?: 'whole-life' | 'work-only' | 'custom';
+	customAnalysisScope?: {
+		name: string;
+		includeKeywords: string[];
+		excludeKeywords: string[];
+		includeFolders: string[];
+		excludeFolders: string[];
+		includeTags: string[];
+		excludeTags: string[];
+	};
 }
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -79,6 +91,18 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	enableAdvancedNLP: true,
 	nlpAnalysisDepth: 'moderate',
 	blockerDetectionSensitivity: 'medium',
+	// Analysis Scope Settings
+	enabledAnalysisScopes: false,
+	analysisScope: 'whole-life',
+	customAnalysisScope: {
+		name: '',
+		includeKeywords: [],
+		excludeKeywords: [],
+		includeFolders: [],
+		excludeFolders: [],
+		includeTags: [],
+		excludeTags: []
+	}
 };
 
 /**
@@ -231,7 +255,10 @@ export default class JournalReflectionPlugin extends Plugin {
 					daysToInclude: this.settings.daysToInclude,
 					excludePrivate: this.settings.excludePrivate,
 					periodicNoteFolders: this.settings.periodicNoteFolders,
-					reflectionFolder: this.settings.reflectionFolder
+					reflectionFolder: this.settings.reflectionFolder,
+					enabledAnalysisScopes: this.settings.enabledAnalysisScopes,
+					analysisScope: this.settings.analysisScope,
+					customAnalysisScope: this.settings.customAnalysisScope
 				};
 				return new FileOperationsService(this.app, config, errorHandler);
 			},
@@ -345,7 +372,10 @@ export default class JournalReflectionPlugin extends Plugin {
 				daysToInclude: this.settings.daysToInclude,
 				excludePrivate: this.settings.excludePrivate,
 				periodicNoteFolders: this.settings.periodicNoteFolders,
-				reflectionFolder: this.settings.reflectionFolder
+				reflectionFolder: this.settings.reflectionFolder,
+				enabledAnalysisScopes: this.settings.enabledAnalysisScopes,
+				analysisScope: this.settings.analysisScope,
+				customAnalysisScope: this.settings.customAnalysisScope
 			});
 		}
 	}
@@ -1243,8 +1273,194 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Analysis Scope Section (Feature Flag)
+		if (this.plugin.settings.enabledAnalysisScopes) {
+			containerEl.createEl("h3", { text: "Analysis Scope" });
+
+			// Analysis Scope Selection
+			new Setting(containerEl)
+				.setName("Analysis Scope")
+				.setDesc("Choose the scope of analysis to focus on specific areas of your journal")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("whole-life", "Whole Life - Analyze all entries")
+						.addOption("work-only", "Work Only - Focus on work-related entries")
+						.addOption("custom", "Custom - Define your own scope")
+						.setValue(this.plugin.settings.analysisScope || 'whole-life')
+						.onChange(async (value: 'whole-life' | 'work-only' | 'custom') => {
+							this.plugin.settings.analysisScope = value;
+							await this.plugin.saveSettings();
+							// Refresh to show/hide custom scope settings
+							this.display();
+						})
+				);
+
+			// Custom Scope Settings (only show if custom is selected)
+			if (this.plugin.settings.analysisScope === 'custom') {
+				const customScope = this.plugin.settings.customAnalysisScope || DEFAULT_SETTINGS.customAnalysisScope;
+
+				// Custom Scope Name
+				new Setting(containerEl)
+					.setName("Custom Scope Name")
+					.setDesc("A descriptive name for your custom analysis scope")
+					.addText((text) => {
+						text.setPlaceholder("e.g., Health & Wellness, Creative Projects")
+							.setValue(customScope.name)
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.name = value;
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Include Keywords
+				new Setting(containerEl)
+					.setName("Include Keywords")
+					.setDesc("Comma-separated keywords to include in analysis (e.g., work, project, meeting)")
+					.addText((text) => {
+						text.setPlaceholder("work, project, meeting, deadline")
+							.setValue(customScope.includeKeywords.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.includeKeywords = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Exclude Keywords
+				new Setting(containerEl)
+					.setName("Exclude Keywords")
+					.setDesc("Comma-separated keywords to exclude from analysis (e.g., personal, private)")
+					.addText((text) => {
+						text.setPlaceholder("personal, private, family")
+							.setValue(customScope.excludeKeywords.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.excludeKeywords = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Include Tags
+				new Setting(containerEl)
+					.setName("Include Tags")
+					.setDesc("Comma-separated tags to include in analysis (without #, e.g., work, project)")
+					.addText((text) => {
+						text.setPlaceholder("work, project, meeting")
+							.setValue(customScope.includeTags.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.includeTags = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Exclude Tags
+				new Setting(containerEl)
+					.setName("Exclude Tags")
+					.setDesc("Comma-separated tags to exclude from analysis (without #, e.g., personal, private)")
+					.addText((text) => {
+						text.setPlaceholder("personal, private, family")
+							.setValue(customScope.excludeTags.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.excludeTags = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Include Folders
+				new Setting(containerEl)
+					.setName("Include Folders")
+					.setDesc("Comma-separated folder paths to include in analysis (e.g., Work Notes, Projects)")
+					.addText((text) => {
+						text.setPlaceholder("Work Notes, Projects, Meetings")
+							.setValue(customScope.includeFolders.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.includeFolders = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Exclude Folders
+				new Setting(containerEl)
+					.setName("Exclude Folders")
+					.setDesc("Comma-separated folder paths to exclude from analysis (e.g., Personal, Private)")
+					.addText((text) => {
+						text.setPlaceholder("Personal, Private, Family")
+							.setValue(customScope.excludeFolders.join(', '))
+							.onChange(async (value) => {
+								if (!this.plugin.settings.customAnalysisScope) {
+									this.plugin.settings.customAnalysisScope = { ...DEFAULT_SETTINGS.customAnalysisScope };
+								}
+								this.plugin.settings.customAnalysisScope.excludeFolders = value
+									.split(',')
+									.map(k => k.trim())
+									.filter(k => k.length > 0);
+								await this.plugin.saveSettings();
+							});
+					});
+
+				// Scope Preview
+				const scopePreview = containerEl.createDiv({ cls: "setting-item-description" });
+				scopePreview.innerHTML = `
+					<strong>Custom Scope Preview:</strong><br>
+					<strong>Name:</strong> ${customScope.name || 'Unnamed'}<br>
+					<strong>Include Keywords:</strong> ${customScope.includeKeywords.length > 0 ? customScope.includeKeywords.join(', ') : 'None'}<br>
+					<strong>Exclude Keywords:</strong> ${customScope.excludeKeywords.length > 0 ? customScope.excludeKeywords.join(', ') : 'None'}<br>
+					<strong>Include Tags:</strong> ${customScope.includeTags.length > 0 ? customScope.includeTags.map(t => '#' + t).join(', ') : 'None'}<br>
+					<strong>Exclude Tags:</strong> ${customScope.excludeTags.length > 0 ? customScope.excludeTags.map(t => '#' + t).join(', ') : 'None'}<br>
+					<strong>Include Folders:</strong> ${customScope.includeFolders.length > 0 ? customScope.includeFolders.join(', ') : 'None'}<br>
+					<strong>Exclude Folders:</strong> ${customScope.excludeFolders.length > 0 ? customScope.excludeFolders.join(', ') : 'None'}
+				`;
+			}
+		}
+
 		// Advanced NLP Analysis Section
 		containerEl.createEl("h3", { text: "Advanced NLP Analysis" });
+
+		// Enable Analysis Scopes Feature Flag
+		new Setting(containerEl)
+			.setName("Enable Analysis Scopes (Beta)")
+			.setDesc("Enable analysis scope settings to focus on specific areas of your journal (work-only, custom filters, etc.)")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enabledAnalysisScopes ?? false)
+					.onChange(async (value) => {
+						this.plugin.settings.enabledAnalysisScopes = value;
+						await this.plugin.saveSettings();
+						// Refresh to show/hide analysis scope settings
+						this.display();
+					})
+			);
 
 		// Enable Advanced NLP
 		new Setting(containerEl)
