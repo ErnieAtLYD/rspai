@@ -583,9 +583,10 @@ ${backlinks}
 
         // Check tag inclusion/exclusion
         if (customScope.includeTags.length > 0) {
-            const hasIncludedTag = customScope.includeTags.some(tag => 
-                contentLower.includes(`#${tag.toLowerCase()}`)
-            );
+            const hasIncludedTag = customScope.includeTags.some(tag => {
+                const tagPattern = new RegExp(`\\B#${tag}\\b`, 'i');
+                return tagPattern.test(content);
+            });
             if (!hasIncludedTag) {
                 return false;
             }
