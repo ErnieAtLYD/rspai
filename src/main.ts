@@ -144,6 +144,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	private masterPassword: string | null = null;
 	public errorHandler: ErrorHandlingService;
 	private autoScanInterval: ReturnType<typeof setInterval> | null = null;
+	private isAutoScanRunning = false;
 
 	/**
 	 * Load the plugin
@@ -1075,11 +1076,14 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 		
-		this.autoScanInterval = this.registerInterval(async () => {
+		this.autoScanInterval = setInterval(async () => {
 			if (this.shouldRunAutoScan()) {
 				await this.runAutoScan();
 			}
 		}, intervalMs);
+		
+		// Register the interval for cleanup
+		this.registerInterval(this.autoScanInterval as unknown as number);
 		
 		// Trigger immediate scan on setup if conditions are met
 		if (this.shouldRunAutoScan()) {
@@ -1095,6 +1099,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private clearAutoScan(): void {
 		if (this.autoScanInterval) {
+			clearInterval(this.autoScanInterval);
 			this.autoScanInterval = null;
 		}
 	}
@@ -1115,8 +1120,18 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Run automatic scan
+	 * @returns {Promise<void>}
+	 * @description
+	 * This function runs the automatic scan.
+	 * It checks if the auto-scan is already running and returns if it is.
+	 * It then saves the last auto-scan time and runs the comprehensive analysis.
+	 * It finally sets the auto-scan running flag to false.
 	 */
-	private async runAutoScan(): Promise<void> {
+	public async runAutoScan(): Promise<void> {
+		if (this.isAutoScanRunning) { 
+			return; 
+		}
+		this.isAutoScanRunning = true;
 		try {
 			this.settings.lastAutoScan = Date.now();
 			await this.saveSettings();
@@ -1136,6 +1151,8 @@ export default class JournalReflectionPlugin extends Plugin {
 				),
 				{ operation: 'Auto-scan', component: 'JournalReflectionPlugin', timestamp: Date.now() }
 			);
+		} finally {
+			this.isAutoScanRunning = false;
 		}
 	}
 }
