@@ -6,7 +6,8 @@ import {
 	PluginSettingTab,
 	Setting,
 	moment,
-	TFolder
+	TFolder,
+	Notice
 } from "obsidian";
 
 import { MasterPasswordModal, EncryptionSetupModal, EncryptionManagementModal } from "./modals";
@@ -67,6 +68,10 @@ interface JournalReflectionSettings {
 		includeTags: string[];
 		excludeTags: string[];
 	};
+	// Scan Frequency Settings
+	enableAutoScan?: boolean;
+	scanFrequency?: 'manual' | 'daily' | 'weekly';
+	lastAutoScan?: number;
 }
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -92,7 +97,7 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	nlpAnalysisDepth: 'moderate',
 	blockerDetectionSensitivity: 'medium',
 	// Analysis Scope Settings
-	enabledAnalysisScopes: false,
+	enabledAnalysisScopes: true,
 	analysisScope: 'whole-life',
 	customAnalysisScope: {
 		name: '',
@@ -102,7 +107,11 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
 		excludeFolders: [],
 		includeTags: [],
 		excludeTags: []
-	}
+	},
+	// Scan Frequency Settings
+	enableAutoScan: false,
+	scanFrequency: 'manual',
+	lastAutoScan: 0
 };
 
 /**
@@ -118,6 +127,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	private serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
 	public errorHandler: ErrorHandlingService;
+	private autoScanInterval: number | null = null;
 
 	/**
 	 * Load the plugin
@@ -174,6 +184,9 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		// Add settings tab
 		this.addSettingTab(new JournalReflectionSettingTab(this.app, this));
+		
+		// Setup auto-scan if enabled
+		this.setupAutoScan();
 	}
 
 	/**
@@ -384,6 +397,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * Cleanup when plugin unloads
 	 */
 	async onunload() {
+		this.clearAutoScan();
 		if (this.serviceManager) {
 			await this.serviceManager.disposeAll();
 		}
@@ -860,6 +874,9 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		// Update service configurations with new settings
 		await this.updateServiceConfigurations();
+		
+		// Reconfigure auto-scan when settings change
+		this.setupAutoScan();
 	}
 
 	/**
@@ -1020,6 +1037,72 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.masterPassword = null;
 			await this.saveSettings();
 			await this.showInfo("Encryption disabled. API key is now stored in plain text.", 'disableEncryption');
+		}
+	}
+
+	/**
+	 * Setup automatic scanning based on settings
+	 */
+	private setupAutoScan(): void {
+		this.clearAutoScan();
+		
+		if (!this.settings.enableAutoScan || this.settings.scanFrequency === 'manual') {
+			return;
+		}
+
+		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+		
+		this.autoScanInterval = this.registerInterval(
+			window.setInterval(async () => {
+				if (this.shouldRunAutoScan()) {
+					await this.runAutoScan();
+				}
+			}, intervalMs)
+		);
+	}
+
+	/**
+	 * Clear automatic scanning
+	 */
+	private clearAutoScan(): void {
+		if (this.autoScanInterval) {
+			window.clearInterval(this.autoScanInterval);
+			this.autoScanInterval = null;
+		}
+	}
+
+	/**
+	 * Check if auto-scan should run
+	 */
+	private shouldRunAutoScan(): boolean {
+		const now = Date.now();
+		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+		return now - (this.settings.lastAutoScan || 0) >= intervalMs;
+	}
+
+	/**
+	 * Run automatic scan
+	 */
+	private async runAutoScan(): Promise<void> {
+		try {
+			this.settings.lastAutoScan = Date.now();
+			await this.saveSettings();
+			
+			// Run comprehensive analysis by default
+			await this.performComprehensiveAnalysis();
+			
+			new Notice("Auto-scan completed successfully");
+		} catch (error) {
+			await this.errorHandler?.handleError(
+				new RetrospectError(
+					ErrorType.USER,
+					ErrorCode.API_RESPONSE_ERROR,
+					"Auto-scan failed",
+					"Auto-scan failed. Please check your settings and try again.",
+					{ operation: 'Auto-scan', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				),
+				{ operation: 'Auto-scan', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+			);
 		}
 	}
 }
@@ -1589,6 +1672,67 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+				
+			// Scan Frequency Section
+			containerEl.createEl("h4", { text: "Automatic Scanning" });
+			
+			// Enable Auto-scan
+			new Setting(containerEl)
+				.setName("Enable Auto-scan")
+				.setDesc("Automatically run analysis at specified intervals")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.enableAutoScan ?? false)
+						.onChange(async (value) => {
+							this.plugin.settings.enableAutoScan = value;
+							await this.plugin.saveSettings();
+							// Refresh to show/hide scan frequency setting
+							this.display();
+						})
+				);
+				
+			// Scan Frequency (only show if auto-scan is enabled)
+			if (this.plugin.settings.enableAutoScan) {
+				new Setting(containerEl)
+					.setName("Scan Frequency")
+					.setDesc("How often to run automatic analysis")
+					.addDropdown((dropdown) =>
+						dropdown
+							.addOption("manual", "Manual only")
+							.addOption("daily", "Daily")
+							.addOption("weekly", "Weekly")
+							.setValue(this.plugin.settings.scanFrequency ?? "manual")
+							.onChange(async (value) => {
+								this.plugin.settings.scanFrequency = value as 'manual' | 'daily' | 'weekly';
+								await this.plugin.saveSettings();
+							})
+					);
+					
+				// Show last scan time if available
+				if (this.plugin.settings.lastAutoScan && this.plugin.settings.lastAutoScan > 0) {
+					const lastScanDate = new Date(this.plugin.settings.lastAutoScan);
+					const lastScanSetting = new Setting(containerEl)
+						.setName("Last Auto-scan")
+						.setDesc(`Last automatic scan: ${lastScanDate.toLocaleString()}`);
+					
+					// Add a manual scan trigger button
+					lastScanSetting.addButton((button) =>
+						button
+							.setButtonText("Run Now")
+							.setTooltip("Run analysis immediately")
+							.onClick(async () => {
+								try {
+									await this.plugin.performComprehensiveAnalysis();
+									new Notice("Manual scan completed successfully");
+									this.display(); // Refresh to update last scan time
+								} catch (error) {
+									new Notice("Manual scan failed. Check console for details.");
+									console.error("Manual scan error:", error);
+								}
+							})
+					);
+				}
+			}
 
 			// NLP Features Info
 			const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
