@@ -127,7 +127,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	private serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
 	public errorHandler: ErrorHandlingService;
-	private autoScanInterval: number | null = null;
+	private autoScanInterval: ReturnType<typeof setInterval> | null = null;
 
 	/**
 	 * Load the plugin
@@ -1082,7 +1082,12 @@ export default class JournalReflectionPlugin extends Plugin {
 	private shouldRunAutoScan(): boolean {
 		const now = Date.now();
 		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-		return now - (this.settings.lastAutoScan || 0) >= intervalMs;
+		// If lastAutoScan is not set, initialize it and skip the first scan
+		if (!this.settings.lastAutoScan) {
+			this.settings.lastAutoScan = now;
+			return false;
+		}
+		return now - this.settings.lastAutoScan >= intervalMs;
 	}
 
 	/**
