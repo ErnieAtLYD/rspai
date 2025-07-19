@@ -2,25 +2,67 @@
 
 import {
     App,
+    Plugin,
     PluginSettingTab,
     Setting,
     TFolder,
     Notice,
 } from "obsidian";
 
-import {
-    EncryptionManagementModal,
-} from "../modals";
+import { EncryptionManagementModal } from "../modals";
 
-import { JournalReflectionSettings } from "../types";
+import { ErrorHandlingService } from "../services";
+
+
+
+interface PluginSettings {
+    openaiApiKey: string | object;
+    openaiModel: string;
+    daysToInclude: number;
+    excludePrivate: boolean;
+    periodicNoteFolders: string[];
+    reflectionFolder: string;
+    encryptionEnabled: boolean;
+    encryptionSetup: boolean;
+    analysisScope: string;
+    customAnalysisScope: {
+        name: string;
+        includeKeywords: string[];
+        excludeKeywords: string[];
+        includeFolders: string[];
+        excludeFolders: string[];
+        includeTags: string[];
+        excludeTags: string[];
+    };
+    enabledAnalysisScopes: boolean;
+    enableAdvancedNLP: boolean;
+    nlpAnalysisDepth: string;
+    blockerDetectionSensitivity: string;
+    patternThreshold: number;
+    enableTrendAnalysis: boolean;
+    enableSemanticAnalysis: boolean;
+    cacheAnalysisResults: boolean;
+    enableAutoScan: boolean;
+    scanFrequency: string;
+    lastAutoScan: number;
+}
+
+export interface PluginInterface {
+    settings: PluginSettings;
+    saveSettings(): Promise<void>;
+    getDefaultSettings(): PluginSettings;
+    errorHandler: ErrorHandlingService;
+    performComprehensiveAnalysis(): Promise<void>;
+    runAutoScan(): Promise<void>;
+}
 
 export class JournalReflectionSettingTab extends PluginSettingTab {
-    plugin: any; // We'll use any to avoid circular dependency
+    plugin: PluginInterface;
     private journalFolderSetting: Setting | null = null;
     private reflectionFolderSetting: Setting | null = null;
 
-    constructor(app: App, plugin: any) {
-        super(app, plugin);
+    constructor(app: App, plugin: PluginInterface) {
+        super(app, plugin as unknown as Plugin);
         this.plugin = plugin;
     }
 
@@ -346,7 +388,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 
     private renderCustomScopeSettings(containerEl: HTMLElement): void {
         this.ensureCustomAnalysisScope();
-        const customScope = this.plugin.settings.customAnalysisScope!;
+        const customScope = this.plugin.settings.customAnalysisScope;
 
         // Custom Scope Name
         new Setting(containerEl)
@@ -361,7 +403,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.name)
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.name =
+                        this.plugin.settings.customAnalysisScope.name =
                             value;
                         await this.plugin.saveSettings();
                     });
@@ -378,7 +420,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.includeKeywords.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.includeKeywords =
+                        this.plugin.settings.customAnalysisScope.includeKeywords =
                             value
                                 .split(",")
                                 .map((k) => k.trim())
@@ -398,7 +440,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.excludeKeywords.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.excludeKeywords =
+                        this.plugin.settings.customAnalysisScope.excludeKeywords =
                             value
                                 .split(",")
                                 .map((k) => k.trim())
@@ -418,7 +460,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.includeTags.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.includeTags =
+                        this.plugin.settings.customAnalysisScope.includeTags =
                             value
                                 .split(",")
                                 .map((k) => k.trim())
@@ -438,7 +480,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.excludeTags.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.excludeTags =
+                        this.plugin.settings.customAnalysisScope.excludeTags =
                             value
                                 .split(",")
                                 .map((k) => k.trim())
@@ -458,7 +500,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.includeFolders.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.includeFolders =
+                        this.plugin.settings.customAnalysisScope.includeFolders =
                             value
                                 .split(",")
                                 .map((k) => k.trim())
@@ -478,7 +520,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     .setValue(customScope.excludeFolders.join(", "))
                     .onChange(async (value) => {
                         this.ensureCustomAnalysisScope();
-                        this.plugin.settings.customAnalysisScope!.excludeFolders =
+                        this.plugin.settings.customAnalysisScope.excludeFolders =
                             value
                                 .split(",")
                                 .map((k) => k.trim())

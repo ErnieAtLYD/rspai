@@ -1,7 +1,7 @@
 // src/services/nlp/ThemeExtractor.ts
 
 import { TextProcessor } from './TextProcessor';
-import { getNatural, NaturalModule } from './nlp-loader';
+import { getNatural } from './nlp-loader';
 
 export interface ProductivityTheme {
 	theme: string;
@@ -57,7 +57,7 @@ export class ThemeExtractor {
 		this.themeModels.set("planning", {
 			keywords: [
 				"plan", "strateg", "organ", "schedul", "priorit", "structur",
-				"roadmap", "goal", "object", "timelinee", "agenda", "framework"
+				"roadmap", "goal", "object", "timeline", "agenda", "framework"
 			],
 			weight: 0.9
 		});

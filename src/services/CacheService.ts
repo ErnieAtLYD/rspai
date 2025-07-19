@@ -2,14 +2,14 @@
 
 import { App } from "obsidian";
 import { BaseService } from "./BaseService";
-import { ErrorHandlingService, ErrorType, ErrorCode } from "./ErrorHandlingService";
+import { ErrorHandlingService } from "./ErrorHandlingService";
 
 export interface CacheEntry<T> {
     key: string;
     value: T;
     timestamp: number;
     ttl: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 export interface CacheOptions {
@@ -35,7 +35,7 @@ export interface CacheConfig {
  * Supports in-memory caching with optional disk persistence
  */
 export class CacheService extends BaseService {
-    private cache: Map<string, CacheEntry<any>> = new Map();
+    private cache: Map<string, CacheEntry<unknown>> = new Map();
     private cleanupTimer: NodeJS.Timeout | null = null;
     private config: CacheConfig;
     private cacheFilePath: string;
@@ -226,7 +226,7 @@ export class CacheService extends BaseService {
     /**
      * Generate cache key for analysis results
      */
-    generateAnalysisKey(type: string, params: Record<string, any>): string {
+    generateAnalysisKey(type: string, params: Record<string, unknown>): string {
         const paramsHash = this.hashObject(params);
         return `analysis:${type}:${paramsHash}`;
     }
@@ -368,7 +368,7 @@ export class CacheService extends BaseService {
         );
     }
 
-    private hashObject(obj: Record<string, any>): string {
+    private hashObject(obj: Record<string, unknown>): string {
         const str = JSON.stringify(obj, Object.keys(obj).sort());
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -400,7 +400,7 @@ export class CacheService extends BaseService {
         // Remove any path traversal sequences and normalize path separators
         let sanitized = pluginId
             .replace(/\.\./g, '')  // Remove ".." sequences
-            .replace(/[\/\\]/g, '-')  // Replace path separators with hyphens
+            .replace(/[/\\]/g, '-')  // Replace path separators with hyphens
             .replace(/[^a-zA-Z0-9_-]/g, '')  // Remove any non-alphanumeric characters except underscore and hyphen
             .toLowerCase();  // Convert to lowercase for consistency
 
@@ -523,26 +523,21 @@ export class CacheService extends BaseService {
             return; // No changes to write
         }
         
-        try {
-            await this.errorHandler.executeWithRetry(
-                () => this.saveToDisk(),
-                {
-                    operation: 'batch_write',
-                    component: 'CacheService',
-                    metadata: { 
-                        operationCount: this.batchOperationCount,
-                        pendingKeys: this.pendingWrites.size,
-                        mode: this.config.writeMode
-                    },
-                    timestamp: Date.now()
-                }
-            );
-            
-            this.markWriteComplete();
-        } catch (error) {
-            // Don't reset counters on error - allow retry
-            throw error;
-        }
+        await this.errorHandler.executeWithRetry(
+            () => this.saveToDisk(),
+            {
+                operation: 'batch_write',
+                component: 'CacheService',
+                metadata: { 
+                    operationCount: this.batchOperationCount,
+                    pendingKeys: this.pendingWrites.size,
+                    mode: this.config.writeMode
+                },
+                timestamp: Date.now()
+            }
+        );
+        
+        this.markWriteComplete();
     }
 
     /**

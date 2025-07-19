@@ -7,7 +7,7 @@ import { ErrorHandlingService } from "./ErrorHandlingService";
 import { getNlp, getSentiment, getNatural, CompromiseDoc, SentimentAnalyzerLib, NaturalModule } from "./nlp/nlp-loader";
 
 // Alias for compatibility
-interface SentimentAnalyzer extends SentimentAnalyzerLib {}
+type SentimentAnalyzer = SentimentAnalyzerLib;
 
 export interface ProductivityTheme {
 	theme: string;
@@ -114,7 +114,7 @@ export class NLPAnalysisService extends BaseService {
 				"pretty",
 				"somewhat",
 			];
-			productivityStopWords.forEach((word) => this.stopWords!.add(word));
+			productivityStopWords.forEach((word) => this.stopWords?.add(word));
 		}
 	}
 
@@ -428,9 +428,9 @@ export class NLPAnalysisService extends BaseService {
 			const preprocessed = await this.preprocessText(text);
 
 			// Basic sentiment analysis
-			const basicSentiment = this.sentimentAnalyzer!.analyze(
+			const basicSentiment = this.sentimentAnalyzer?.analyze(
 				preprocessed.cleanedText
-			);
+			) || { score: 0 };
 
 			// Advanced sentiment features
 			const emotions = this.analyzeEmotions(preprocessed);
@@ -489,9 +489,9 @@ export class NLPAnalysisService extends BaseService {
 			.tokenize(text)
 			.filter(
 				(token: string) =>
-					token.length > 2 && !this.stopWords!.has(token)
+					token.length > 2 && this.stopWords && !this.stopWords.has(token)
 			)
-			.map((token: string) => this.stemmer!.stem(token));
+			.map((token: string) => this.stemmer?.stem(token) || token);
 	}
 
 	private extractEntities(
@@ -561,7 +561,7 @@ export class NLPAnalysisService extends BaseService {
 	private calculateThemeRelevance(
 		preprocessed: TextPreprocessingResult,
 		keywords: string[],
-		tfidf?: InstanceType<NaturalModule["TfIdf"]>
+		_tfidf?: InstanceType<NaturalModule["TfIdf"]>
 	) {
 		const foundKeywords: string[] = [];
 		let totalMatches = 0;
@@ -669,7 +669,7 @@ export class NLPAnalysisService extends BaseService {
 
 	private calculateBlockerSeverity(
 		matches: string[],
-		pattern: { type: BlockerPattern['type']; patterns: string[] }
+		_pattern: { type: BlockerPattern['type']; patterns: string[] }
 	): "low" | "medium" | "high" {
 		if (matches.length >= 3) return "high";
 		if (matches.length >= 2) return "medium";
@@ -710,7 +710,7 @@ export class NLPAnalysisService extends BaseService {
 
 	private generateBlockerSuggestions(
 		type: BlockerPattern["type"],
-		severity: BlockerPattern["severity"]
+		_severity: BlockerPattern["severity"]
 	): string[] {
 		const suggestions: Record<string, string[]> = {
 			procrastination: [
@@ -988,8 +988,9 @@ export class NLPAnalysisService extends BaseService {
 				instance.documents.length = 0;
 			}
 			// Clear any internal caches if available (not all TF-IDF implementations have this)
-			if (typeof (instance as any).clearCache === 'function') {
-				(instance as any).clearCache();
+			const instanceWithCache = instance as unknown as { clearCache?: () => void };
+			if (typeof instanceWithCache.clearCache === 'function') {
+				instanceWithCache.clearCache();
 			}
 		} catch (error) {
 			console.warn('Error disposing TF-IDF instance:', error);

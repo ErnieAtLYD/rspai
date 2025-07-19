@@ -4,8 +4,10 @@ import { ErrorHandlingService } from "./ErrorHandlingService";
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+type LogEvent = 'initialized' | 'disposed' | 'configured' | 'error' | 'initialize started' | 'dispose started' | 'configure started' | 'initialize completed' | 'dispose completed' | 'configure completed';
+
 export interface LogContext {
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 export type LogErrorContext = string | LogContext;
@@ -21,6 +23,10 @@ export class Logger {
 
 	/**
 	 * Update the error handler reference (useful for late binding during service initialization)
+	 * @param errorHandler - The ErrorHandlingService instance
+	 * @returns A promise that resolves when the error handler is set
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	setErrorHandler(errorHandler: ErrorHandlingService): void {
 		this.errorHandler = errorHandler;
@@ -28,6 +34,11 @@ export class Logger {
 
 	/**
 	 * Log a debug message
+	 * @param message - The message to log
+	 * @param context - The context of the log
+	 * @returns A promise that resolves when the log is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	debug(message: string, context?: LogContext): void {
 		this.log('debug', message, context);
@@ -35,6 +46,11 @@ export class Logger {
 
 	/**
 	 * Log an info message
+	 * @param message - The message to log
+	 * @param context - The context of the log
+	 * @returns A promise that resolves when the log is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	info(message: string, context?: LogContext): void {
 		this.log('info', message, context);
@@ -42,6 +58,11 @@ export class Logger {
 
 	/**
 	 * Log a warning message
+	 * @param message - The message to log
+	 * @param context - The context of the log
+	 * @returns A promise that resolves when the log is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	warn(message: string, context?: LogContext): void {
 		this.log('warn', message, context);
@@ -49,6 +70,12 @@ export class Logger {
 
 	/**
 	 * Log an error message and optionally use ErrorHandlingService for structured error handling
+	 * @param message - The error message to log
+	 * @param error - The error object to log
+	 * @param context - The context of the error
+	 * @returns A promise that resolves when the error is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	async error(message: string, error?: Error, context?: LogErrorContext): Promise<void> {
 		// Always log to console first
@@ -84,18 +111,28 @@ export class Logger {
 
 	/**
 	 * Log lifecycle events (initialization, disposal, configuration changes)
+	 * @param event - The lifecycle event to log
+	 * @param details - Additional details about the event
+	 * @returns A promise that resolves when the lifecycle event is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
-	lifecycle(event: 'initialized' | 'disposed' | 'configured' | 'error' | 'initialize started' | 'dispose started' | 'configure started' | 'initialize completed' | 'dispose completed' | 'configure completed', details?: string): void {
+	lifecycle(event: LogEvent, details?: string): void {
 		const message = details ? `${event} - ${details}` : event;
 		this.info(message);
 	}
 
 	/**
 	 * Core logging method that handles console output with consistent formatting
+	 * @param level - The log level
+	 * @param message - The message to log
+	 * @param context - The context of the log
+	 * @returns A promise that resolves when the log is logged
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	private log(level: LogLevel, message: string, context?: LogContext): void {
 		const prefix = `[${this.serviceName}]`;
-		const timestamp = new Date().toISOString();
 		const contextStr = context ? JSON.stringify(context) : '';
 
 		switch (level) {
@@ -116,6 +153,10 @@ export class Logger {
 
 	/**
 	 * Create a child logger for a sub-component
+	 * @param subComponent - The sub-component name
+	 * @returns A new Logger instance
+	 * @throws If the ErrorHandlingService fails to handle the error
+	 * @throws If the error is not an Error object
 	 */
 	child(subComponent: string): Logger {
 		return new Logger(`${this.serviceName}:${subComponent}`, this.errorHandler);
@@ -124,6 +165,11 @@ export class Logger {
 
 /**
  * Factory function to create loggers with consistent naming
+ * @param serviceName - The name of the service
+ * @param errorHandler - The ErrorHandlingService instance
+ * @returns A new Logger instance
+ * @throws If the ErrorHandlingService fails to handle the error
+ * @throws If the error is not an Error object
  */
 export function createLogger(serviceName: string, errorHandler?: ErrorHandlingService): Logger {
 	return new Logger(serviceName, errorHandler);
@@ -131,6 +177,14 @@ export function createLogger(serviceName: string, errorHandler?: ErrorHandlingSe
 
 /**
  * Utility function for services that need consistent lifecycle logging
+ * @param logger - The Logger instance
+ * @param phase - The lifecycle phase
+ * @param serviceName - The name of the service
+ * @param operation - The operation to log
+ * @param context - The context of the operation
+ * @returns A promise that resolves when the lifecycle event is logged
+ * @throws If the ErrorHandlingService fails to handle the error
+ * @throws If the error is not an Error object
  */
 export async function logServiceLifecycle(
 	logger: Logger,

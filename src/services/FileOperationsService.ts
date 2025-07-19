@@ -2,7 +2,7 @@
 
 import { App, TFile, TFolder, moment } from "obsidian";
 import { BaseService } from "./BaseService";
-import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
+import { ErrorHandlingService, ErrorContext } from "./ErrorHandlingService";
 
 /**
  * File operations service configuration
@@ -449,12 +449,6 @@ ${backlinks}
      * Initialize the file operations service
      */
     protected async onInitialize(): Promise<void> {
-        const context: ErrorContext = {
-            operation: 'initialize',
-            component: 'FileOperationsService',
-            timestamp: Date.now(),
-            metadata: { config: this.config }
-        };
 
         try {
             // Validate configuration
@@ -558,7 +552,6 @@ ${backlinks}
         }
 
         const contentLower = content.toLowerCase();
-        const filePathLower = file.path.toLowerCase();
 
         // Check folder inclusion/exclusion
         if (customScope.includeFolders.length > 0) {
@@ -578,9 +571,9 @@ ${backlinks}
         }
 
         if (customScope.excludeFolders.length > 0) {
-            const filePathSegments = file.path.split(/[\/]/).map(seg => seg.toLowerCase());
+            const filePathSegments = file.path.split(/[/\\]/).map(seg => seg.toLowerCase());
             const isInExcludedFolder = customScope.excludeFolders.some(folder => {
-                const folderSegments = folder.split(/[\/]/).map(seg => seg.toLowerCase());
+                const folderSegments = folder.split(/[/\\]/).map(seg => seg.toLowerCase());
                 // Check if folderSegments is a prefix of filePathSegments
                 if (folderSegments.length > filePathSegments.length) return false;
                 for (let i = 0; i < folderSegments.length; i++) {

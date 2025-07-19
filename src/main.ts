@@ -1,20 +1,8 @@
 // src/main.ts
 
-import {
-	App,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	moment,
-	TFolder,
-	Notice,
-} from "obsidian";
+import { Plugin, moment, Notice } from "obsidian";
 
-import {
-	MasterPasswordModal,
-	EncryptionSetupModal,
-	EncryptionManagementModal,
-} from "./modals";
+import { MasterPasswordModal, EncryptionSetupModal } from "./modals";
 
 import {
 	ServiceManager,
@@ -44,7 +32,7 @@ import {
 } from "./services";
 
 import { JournalReflectionSettings } from "./types";
-import { JournalReflectionSettingTab } from "./ui/SettingsUI";
+import { JournalReflectionSettingTab, PluginInterface } from "./ui/SettingsUI";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL = "gpt-4o-mini";
@@ -156,7 +144,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		});
 
 		// Add settings tab
-		this.addSettingTab(new JournalReflectionSettingTab(this.app, this));
+		this.addSettingTab(new JournalReflectionSettingTab(this.app, this as unknown as PluginInterface));
 
 		// Setup auto-scan if enabled
 		this.setupAutoScan();
@@ -310,9 +298,7 @@ export default class JournalReflectionPlugin extends Plugin {
 						"errorHandlingService"
 					);
 				const nlpService = this.settings.enableAdvancedNLP
-					? serviceManager.resolve<NLPAnalysisService>(
-							"nlpAnalysisService"
-					  )
+					? serviceManager.resolve<NLPAnalysisService>("nlpAnalysisService")
 					: undefined;
 				const config: PatternRecognitionConfig = {
 					aiService,
@@ -335,7 +321,7 @@ export default class JournalReflectionPlugin extends Plugin {
 						"cacheService",
 						"errorHandlingService",
 						"nlpAnalysisService",
-				  ]
+					]
 				: ["aiService", "cacheService", "errorHandlingService"],
 			singleton: true,
 		});

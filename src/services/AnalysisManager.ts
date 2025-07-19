@@ -32,7 +32,7 @@ export interface AnalysisResult {
     insights: InsightData[];
     summary?: string;
     confidence: number;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
 }
 
 export interface AnalysisManagerConfig {
@@ -59,10 +59,20 @@ export class AnalysisManager extends BaseService {
         this.config = config;
     }
 
+    /**
+     * Get the error handler
+     * @returns The error handler
+     * @throws If the analysis fails
+     */
     private get errorHandler(): ErrorHandlingService {
         return this.config.errorHandler;
     }
 
+    /**
+     * Initialize the analysis manager
+     * @returns A promise that resolves when the analysis manager is initialized
+     * @throws If the analysis fails
+     */
     protected async onInitialize(): Promise<void> {
         // Check that required services exist (but don't check if they're ready yet)
         const requiredServices = [
@@ -86,6 +96,11 @@ export class AnalysisManager extends BaseService {
         console.log("AnalysisManager initialized");
     }
 
+    /**
+     * Dispose the analysis manager
+     * @returns A promise that resolves when the analysis manager is disposed
+     * @throws If the analysis fails
+     */
     protected async onDispose(): Promise<void> {
         // Cancel active analyses
         if (this.activeAnalyses.size > 0) {
@@ -105,6 +120,10 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Perform comprehensive analysis
+     * @param daysBack - The number of days back to analyze
+     * @param options - The analysis options
+     * @returns The analysis result
+     * @throws If the analysis fails
      */
     async analyzeJournalEntries(
         daysBack = 7,
@@ -118,7 +137,10 @@ export class AnalysisManager extends BaseService {
 
         // Check if analysis is already running
         if (this.activeAnalyses.has(analysisId)) {
-            return await this.activeAnalyses.get(analysisId)!;
+            const existingAnalysis = this.activeAnalyses.get(analysisId);
+            if (existingAnalysis) {
+                return await existingAnalysis;
+            }
         }
 
         // Start new analysis
@@ -142,6 +164,10 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Perform pattern analysis only
+     * @param daysBack - The number of days back to analyze
+     * @param options - The analysis options
+     * @returns The analysis result
+     * @throws If the analysis fails
      */
     async analyzePatterns(
         daysBack = 7,
@@ -181,10 +207,14 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Perform trend analysis only
+     * @param daysBack - The number of days back to analyze
+     * @param _options - The analysis options
+     * @returns The analysis result
+     * @throws If the analysis fails
      */
     async analyzeTrends(
         daysBack = 14,
-        options: AnalysisOptions = {}
+        _options: AnalysisOptions = {}
     ): Promise<TrendData[]> {
         this.ensureReady();
 
@@ -197,6 +227,11 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Generate insights based on patterns and trends
+     * @param patterns - The patterns to analyze
+     * @param trends - The trends to analyze
+     * @param additionalContext - Additional context for the analysis
+     * @returns The insights
+     * @throws If the analysis fails
      */
     async generateInsights(
         patterns: PatternData[],
@@ -226,6 +261,9 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Get analysis summary for time period
+     * @param daysBack - The number of days back to analyze
+     * @returns The analysis summary
+     * @throws If the analysis fails
      */
     async getAnalysisSummary(daysBack = 7): Promise<string> {
         this.ensureReady();
@@ -236,6 +274,8 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Get analysis history
+     * @returns The analysis history
+     * @throws If the analysis fails
      */
     async getAnalysisHistory(): Promise<AnalysisResult[]> {
         await this.ensureHistoryLoaded();
@@ -244,6 +284,7 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Clear analysis cache
+     * @throws If the analysis fails
      */
     async clearAnalysisCache(): Promise<void> {
         this.ensureReady();
@@ -260,11 +301,26 @@ export class AnalysisManager extends BaseService {
 
     /**
      * Get cache statistics
+     * @returns The cache statistics
+     * @throws If the analysis fails
      */
-    getCacheStats(): any {
+    getCacheStats(): {
+        size: number;
+        maxSize: number;
+        hitRatio: number;
+        memoryUsage: number;
+    } {
         return this.config.cacheService.getStats();
     }
 
+    /**
+     * Perform comprehensive analysis
+     * @param daysBack - The number of days back to analyze
+     * @param timeRange - The time range to analyze
+     * @param options - The analysis options
+     * @returns The analysis result
+     * @throws If the analysis fails
+     */
     private async performComprehensiveAnalysis(
         daysBack: number,
         timeRange: string,
@@ -325,6 +381,12 @@ export class AnalysisManager extends BaseService {
         }
     }
 
+    /**
+     * Get the files to analyze
+     * @param daysBack - The number of days back to analyze
+     * @returns The files to analyze
+     * @throws If the analysis fails
+     */
     private async getAnalysisFiles(daysBack: number): Promise<TFile[]> {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - daysBack);
@@ -332,6 +394,13 @@ export class AnalysisManager extends BaseService {
         return await this.config.fileOperationsService.findRecentNotes();
     }
 
+    /**
+     * Generate an analysis summary
+     * @param analysisResult - The analysis result
+     * @param files - The files analyzed
+     * @returns The analysis summary
+     * @throws If the analysis fails
+     */
     private async generateAnalysisSummary(
         analysisResult: { patterns: PatternData[]; trends: TrendData[]; insights: InsightData[] },
         files: TFile[]
@@ -379,6 +448,12 @@ Please provide a 2-3 paragraph summary that:
         }
     }
 
+    /**
+     * Calculate the overall confidence of the analysis
+     * @param analysisResult - The analysis result
+     * @returns The overall confidence
+     * @throws If the analysis fails
+     */
     private calculateOverallConfidence(analysisResult: { patterns: PatternData[]; trends: TrendData[]; insights: InsightData[] }): number {
         const allConfidences = [
             ...analysisResult.patterns.map(p => p.confidence),
@@ -392,11 +467,23 @@ Please provide a 2-3 paragraph summary that:
         return Math.round(averageConfidence * 100) / 100;
     }
 
+    /**
+     * Generate an analysis ID
+     * @param type - The type of analysis
+     * @param timeRange - The time range to analyze
+     * @returns The analysis ID
+     * @throws If the analysis fails
+     */
     private generateAnalysisId(type: string, timeRange: string): string {
         const timestamp = Date.now();
         return `${type}_${timeRange}_${timestamp}`;
     }
 
+    /**
+     * Ensure the analysis history is loaded
+     * @returns A promise that resolves when the history is loaded
+     * @throws If the analysis fails
+     */
     private async ensureHistoryLoaded(): Promise<void> {
         if (this.historyLoaded) {
             return;
@@ -406,6 +493,11 @@ Please provide a 2-3 paragraph summary that:
         this.historyLoaded = true;
     }
 
+    /**
+     * Load the analysis history
+     * @returns A promise that resolves when the history is loaded
+     * @throws If the analysis fails
+     */
     private async loadAnalysisHistory(): Promise<void> {
         try {
             // Check if cache service is ready before attempting to load
@@ -437,6 +529,11 @@ Please provide a 2-3 paragraph summary that:
         }
     }
 
+    /**
+     * Save the analysis history
+     * @returns A promise that resolves when the history is saved
+     * @throws If the analysis fails
+     */
     private async saveAnalysisHistory(): Promise<void> {
         try {
             // Keep only last 50 analyses

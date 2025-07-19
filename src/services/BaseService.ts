@@ -6,12 +6,17 @@ import { Logger, createLogger } from "./Logger";
 
 /**
  * Error callback type for BaseService
+ * @param serviceName - The name of the service
+ * @param error - The error to handle
+ * @param operation - The operation that caused the error
  */
 export type ServiceErrorCallback = (serviceName: string, error: Error, operation: string) => void;
 
 /**
  * Base service class providing common functionality
  * All services should extend this class
+ * @param app - The Obsidian app instance
+ * @param errorCallback - The error callback function
  */
 export abstract class BaseService implements IService {
     protected isInitialized = false;
@@ -27,6 +32,8 @@ export abstract class BaseService implements IService {
     /**
      * Initialize the service
      * Override this method to add custom initialization logic
+     * @returns A promise that resolves when the service is initialized
+     * @throws If the service fails to initialize
      */
     async initialize(): Promise<void> {
         if (this.isInitialized) {
@@ -49,6 +56,8 @@ export abstract class BaseService implements IService {
     /**
      * Dispose the service
      * Override this method to add custom cleanup logic
+     * @returns A promise that resolves when the service is disposed
+     * @throws If the service fails to dispose
      */
     async dispose(): Promise<void> {
         if (this.isDisposed) {
@@ -70,6 +79,8 @@ export abstract class BaseService implements IService {
 
     /**
      * Check if service is ready to use
+     * @returns True if service is ready to use, false otherwise
+     * @throws If the service is not ready
      */
     isReady(): boolean {
         return this.isInitialized && !this.isDisposed;
@@ -77,6 +88,9 @@ export abstract class BaseService implements IService {
 
     /**
      * Override this method to add custom initialization logic
+     * @returns A promise that resolves when the service is initialized
+     * @throws If the service fails to initialize
+     * @throws If the service is not ready
      */
     protected async onInitialize(): Promise<void> {
         // Default implementation does nothing
@@ -84,6 +98,9 @@ export abstract class BaseService implements IService {
 
     /**
      * Override this method to add custom cleanup logic
+     * @returns A promise that resolves when the service is disposed
+     * @throws If the service fails to dispose
+     * @throws If the service is not ready
      */
     protected async onDispose(): Promise<void> {
         // Default implementation does nothing
@@ -92,6 +109,8 @@ export abstract class BaseService implements IService {
     /**
      * Ensure service is ready before use
      * Throws error if service is not ready
+     * @throws If the service is not ready
+     * @throws If the service is disposed
      */
     protected ensureReady(): void {
         if (!this.isReady()) {
@@ -101,6 +120,9 @@ export abstract class BaseService implements IService {
 
     /**
      * Handle service errors using callback or fallback to console
+     * @param error - The error to handle
+     * @param operation - The operation that caused the error
+     * @throws If the error is not an Error object
      */
     private handleServiceError(error: Error, operation: string): void {
         const serviceName = this.constructor.name;
@@ -122,6 +144,7 @@ export abstract class BaseService implements IService {
     /**
      * Ensure service is not disposed
      * Throws error if service is disposed
+     * @throws If the service is disposed
      */
     protected ensureNotDisposed(): void {
         if (this.isDisposed) {

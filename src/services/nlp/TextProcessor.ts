@@ -1,6 +1,6 @@
 // src/services/nlp/TextProcessor.ts
 
-import { getNlp, getNatural, CompromiseDoc, NaturalModule } from './nlp-loader';
+import { getNlp, getNatural, CompromiseDoc } from './nlp-loader';
 
 export interface EntityData {
 	people: string[];
