@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly journal summaries and comprehensive behavioral analysis. The plugin analyzes journal entries to generate thoughtful reflections, detect patterns, identify trends, and provide actionable insights using OpenAI's API.
+This is **Retrospect AI**, an Obsidian plugin that creates AI-powered weekly journal summaries and comprehensive behavioral analysis. The plugin analyzes journal entries to generate thoughtful reflections, detect patterns, identify trends, and provide actionable insights using either OpenAI's API or local Ollama models for enhanced privacy.
 
 ## Architectural Evolution
 
@@ -68,7 +68,7 @@ The added complexity is justified by the security-critical nature of the encrypt
 **Service Architecture** (`src/services/`)
 - **ServiceManager**: Dependency injection container for managing services
 - **BaseService**: Abstract base class providing common service functionality
-- **AIService**: Handles OpenAI API interactions and prompt generation
+- **AIService**: Handles LLM interactions with support for OpenAI API and local Ollama models
 - **FileOperationsService**: Manages file discovery, content extraction, and summary creation
 - **EncryptionService**: Provides AES-256 encryption for secure API key storage
 - **CacheService**: High-performance caching with TTL and disk persistence for analysis results
@@ -81,7 +81,7 @@ The added complexity is justified by the security-critical nature of the encrypt
 - **EncryptionManagementModal**: Manages encryption settings and testing
 
 **Key Features:**
-- **Weekly Summary Generation**: Scans recent notes, filters private content, sends to OpenAI
+- **Weekly Summary Generation**: Scans recent notes, filters private content, sends to configured LLM provider
 - **Advanced Pattern Recognition**: Detects mood, activity, sleep, and productivity patterns
 - **Trend Analysis**: Identifies behavioral trends and changes over time
 - **AI-Powered Insights**: Generates actionable insights for personal growth
@@ -114,8 +114,12 @@ The added complexity is justified by the security-critical nature of the encrypt
 ### Settings System
 
 **Settings Interface** (`JournalReflectionSettings`)
+- `llmProvider`: LLM provider selection ('openai' | 'ollama', default: 'openai')
 - `openaiApiKey`: User's OpenAI API key (string or encrypted data)
 - `openaiModel`: Selected OpenAI model (default: gpt-4o-mini)
+- `ollamaBaseUrl`: Ollama server URL (default: http://localhost:11434)
+- `ollamaModel`: Ollama model name (default: llama3.1:8b)
+- `ollamaTimeout`: Request timeout for Ollama in milliseconds (default: 30000)
 - `daysToInclude`: Number of days to look back (default: 7)
 - `excludePrivate`: Whether to skip #private tagged notes
 - `periodicNoteFolders`: Array of folder paths to search for journal entries
@@ -154,11 +158,22 @@ The added complexity is justified by the security-critical nature of the encrypt
 
 ### AI Service
 
-**API Configuration:**
+**Provider Architecture:**
+- Supports multiple LLM providers through abstract provider interface
+- Dynamic provider switching based on user configuration
+- Consistent API across different providers
+
+**OpenAI Provider:**
 - Endpoint: `https://api.openai.com/v1/chat/completions`
 - Default model: `gpt-4o-mini`
-- Max tokens: 1000
-- Temperature: 0.7
+- Requires API key authentication
+- Max tokens: 1000, Temperature: 0.7
+
+**Ollama Provider:**
+- Endpoint: `{baseUrl}/api/generate`
+- Default model: `llama3.1:8b`
+- Local inference, no API key required
+- Configurable timeout (default: 30 seconds)
 
 **Prompt Structure:**
 - Focuses on themes, emotional journey, insights, and future reflection areas
@@ -166,9 +181,9 @@ The added complexity is justified by the security-critical nature of the encrypt
 - Includes all filtered note content for comprehensive analysis
 
 **Error Handling:**
-- Robust error handling for API failures
-- User-friendly error messages
-- Fallback strategies for network issues
+- Provider-specific error handling (API key validation, model availability)
+- User-friendly error messages with troubleshooting guidance
+- Fallback strategies for network issues and timeouts
 
 ### Encryption Service
 
@@ -281,7 +296,7 @@ src/
     ├── index.ts           # Service exports
     ├── ServiceManager.ts  # Dependency injection container
     ├── BaseService.ts     # Abstract base service class
-    ├── AIService.ts       # OpenAI API integration
+    ├── AIService.ts       # Multi-provider LLM integration (OpenAI/Ollama)
     ├── FileOperationsService.ts # File discovery and processing
     ├── EncryptionService.ts # AES-256 encryption implementation
     ├── CacheService.ts    # High-performance caching with TTL and persistence
@@ -336,12 +351,43 @@ root/
 - `versions.json` tracks version history
 - Uses semantic versioning via `version-bump.mjs`
 
+## Ollama Setup and Configuration
+
+**Installation:**
+1. Download and install Ollama from [ollama.com](https://ollama.com)
+2. Start the Ollama service (usually runs automatically on installation)
+3. Download a model: `ollama pull llama3.1:8b` (or your preferred model)
+
+**Recommended Models:**
+- **llama3.1:8b** - Good balance of performance and quality (default)
+- **llama3.1:7b** - Smaller, faster option
+- **mistral:7b** - Alternative high-quality model
+- **codellama:7b** - Specialized for code-related tasks
+
+**Configuration:**
+- **Base URL**: Default is `http://localhost:11434` (change if Ollama runs elsewhere)
+- **Model**: Must match exactly with installed model name
+- **Timeout**: Increase for slower hardware or larger models
+
+**Troubleshooting:**
+- **Connection Failed**: Ensure Ollama is running (`ollama serve`)
+- **Model Not Found**: Verify model is installed (`ollama list`)
+- **Slow Responses**: Increase timeout or use smaller model
+- **Memory Issues**: Close other applications or use quantized models
+
+**Benefits of Ollama:**
+- **Complete Privacy**: All processing happens locally
+- **No API Costs**: Free inference after initial setup
+- **Offline Operation**: Works without internet connection
+- **Customization**: Fine-tune models for specific journal analysis needs
+
 ## Security Considerations
 
 - **API Key Storage**: Choose between plain text (default) or AES-256 encrypted storage
 - **Master Password Protection**: Optional encryption with user-defined master passwords
 - **Privacy Filtering**: Prevents accidental sharing of sensitive notes tagged with #private
-- **No Data Persistence**: No local storage of API responses beyond OpenAI API calls
+- **No Data Persistence**: No local storage of API responses beyond LLM provider calls
+- **Local Processing**: Ollama option keeps all data on-device for maximum privacy
 - **Path Validation**: Validates folder paths to prevent directory traversal attacks
 - **Secure Cryptography**: Uses Web Crypto API for all encryption operations
 - **Memory Safety**: Sensitive data is handled securely and not logged
