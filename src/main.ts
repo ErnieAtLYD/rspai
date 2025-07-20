@@ -143,7 +143,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
 	public errorHandler: ErrorHandlingService;
-	private autoScanInterval: ReturnType<typeof setInterval> | null = null;
+	private autoScanInterval: number | null = null;
 	private isAutoScanRunning = false;
 
 	/**
@@ -465,6 +465,7 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Validate prerequisites for analysis commands
+	 * @description
 	 */
 	private async validateAnalysisPrerequisites(): Promise<boolean> {
 		if (!this.serviceManager) {
@@ -522,6 +523,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It uses the OpenAI API to generate a summary of the journal entries.
 	 * It then creates a summary note in the configured reflection folder.
 	 * It also creates backlinks to the source notes.
+	 * It is called when the user creates a weekly summary.
 	 */
 	async createWeeklySummary() {
 		const apiKey = await this.getDecryptedApiKey();
@@ -601,6 +603,14 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Analyze journal patterns
+	 * @description
+	 * This function analyzes the journal patterns.
+	 * It uses the analysis manager to analyze the journal entries.
+	 * It then formats the analysis result and creates a report.
+	 * It also opens the report in the workspace.
+	 * It is called when the user performs a pattern analysis.
+	 * @returns {Promise<void>} - A promise that resolves when the analysis is complete
+	 * @throws {RetrospectError} - If the analysis fails
 	 */
 	async analyzePatterns(): Promise<void> {
 		if (!await this.validateAnalysisPrerequisites()) {
@@ -651,6 +661,12 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Analyze journal trends
+	 * @description
+	 * This function analyzes the journal trends.
+	 * It uses the analysis manager to analyze the journal entries.
+	 * It then formats the analysis result and creates a report.
+	 * It also opens the report in the workspace.
+	 * It is called when the user performs a trend analysis.
 	 */
 	async analyzeTrends(): Promise<void> {
 		if (!await this.validateAnalysisPrerequisites()) {
@@ -686,6 +702,12 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Perform comprehensive analysis
+	 * @description
+	 * This function performs a comprehensive analysis of the journal entries.
+	 * It uses the analysis manager to analyze the journal entries.
+	 * It then formats the analysis result and creates a report.
+	 * It also opens the report in the workspace.
+	 * It is called when the user performs a comprehensive analysis.
 	 */
 	async performComprehensiveAnalysis(): Promise<void> {
 		if (!await this.validateAnalysisPrerequisites()) {
@@ -719,6 +741,10 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Clear analysis cache
+	 * @description
+	 * This function clears the analysis cache.
+	 * It is called when the user wants to clear the analysis cache.
+	 * It also shows a notification when the cache is cleared.
 	 */
 	async clearAnalysisCache(): Promise<void> {
 		if (!this.serviceManager) {
@@ -746,6 +772,15 @@ export default class JournalReflectionPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Format patterns report
+	 * @param patterns - The patterns data
+	 * @returns {string} - The formatted report
+	 * @description
+	 * This function formats the patterns report.
+	 * It formats the patterns data.
+	 * It is called when the user performs a pattern analysis.
+	 */
 	private formatPatternsReport(patterns: PatternData[]): string {
 		let report = `# Journal Pattern Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
@@ -764,6 +799,15 @@ export default class JournalReflectionPlugin extends Plugin {
 		return report;
 	}
 
+	/**
+	 * Format trends report
+	 * @param trends - The trends data
+	 * @returns {string} - The formatted report
+	 * @description
+	 * This function formats the trends report.
+	 * It formats the trends data.
+	 * It is called when the user performs a trend analysis.
+	 */
 	private formatTrendsReport(trends: TrendData[]): string {
 		let report = `# Journal Trend Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
@@ -780,6 +824,15 @@ export default class JournalReflectionPlugin extends Plugin {
 		return report;
 	}
 
+	/**
+	 * Format comprehensive report
+	 * @param result - The analysis result
+	 * @returns {string} - The formatted report
+	 * @description
+	 * This function formats the comprehensive report.
+	 * It formats the summary, patterns, trends, and insights.
+	 * It is called when the user performs a comprehensive analysis.
+	 */
 	private formatComprehensiveReport(result: AnalysisResult): string {
 		let report = `# Comprehensive Journal Analysis\n\n`;
 		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n`;
@@ -819,6 +872,10 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Load settings from storage
+	 * @description
+	 * This function loads the settings from storage.
+	 * It also migrates the settings for existing users.
+	 * It is called when the plugin is loaded.
 	 */
 	async loadSettings() {
 		const loadedData = await this.loadData();
@@ -838,6 +895,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	/**
 	 * Migrate settings for existing users
 	 * @param loadedData - The raw data loaded from storage
+	 * @description
+	 * This function migrates the settings for existing users.
+	 * It converts the old journalFolder to the new periodicNoteFolders array.
+	 * It also ensures that the periodicNoteFolders is always an array.
+	 * It is called when the user loads the settings.
 	 */
 	private async migrateSettings(
 		loadedData: Record<string, unknown>
@@ -889,6 +951,11 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Save settings to storage
+	 * @description
+	 * This function saves the settings to storage.
+	 * It validates and cleans the settings before saving.
+	 * It also updates the service configurations and reconfigures the auto-scan.
+	 * It is called when the user saves the settings.
 	 */
 	async saveSettings() {
 		// Validate and clean settings before saving
@@ -905,6 +972,11 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Validate and clean settings before saving
+	 * @description
+	 * This function validates and cleans the settings before saving.
+	 * It ensures that the periodicNoteFolders is always an array.
+	 * It also ensures that the other required settings have defaults.
+	 * It is called when the user saves the settings.
 	 */
 	private validateSettings(): void {
 		// Ensure periodicNoteFolders is always an array
@@ -944,6 +1016,14 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Get decrypted API key
+	 * @description
+	 * This function gets the decrypted API key from the settings.
+	 * It also prompts the user for a master password if the encryption is enabled but no master password is set.
+	 * It then decrypts the API key and returns it.
+	 * It is called when the user enables the encryption.
+	 * @returns {Promise<string>} - The decrypted API key
+	 * @throws {RetrospectError} - If the decryption fails
+	 * @throws {Error} - If the decryption fails
 	 */
 	private async getDecryptedApiKey(): Promise<string> {
 		if (!this.settings.openaiApiKey) {
@@ -987,6 +1067,10 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Encrypt and store API key
+	 * @description
+	 * This function encrypts the API key and stores it in the settings.
+	 * It also saves the settings and shows a notification.
+	 * It is called when the user enables the encryption.
 	 */
 	private async encryptAndStoreApiKey(apiKey: string, masterPassword: string): Promise<void> {
 		if (!apiKey) {
@@ -1019,6 +1103,12 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Setup encryption for the first time
+	 * @description
+	 * This function sets up the encryption for the first time.
+	 * It prompts the user for a master password and an API key.
+	 * It then encrypts the API key and stores it in the settings.
+	 * It also saves the settings and shows a notification.
+	 * It is called when the user enables the encryption.
 	 */
 	async setupEncryption(): Promise<boolean> {
 		return new Promise((resolve) => {
@@ -1048,6 +1138,10 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Disable encryption and convert to plain text
+	 * @description
+	 * This function disables the encryption and converts the API key to plain text.
+	 * It also saves the settings and shows a notification.
+	 * It is called when the user disables the encryption.
 	 */
 	async disableEncryption(): Promise<void> {
 		if (!this.settings.encryptionEnabled) {
@@ -1066,6 +1160,11 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Setup automatic scanning based on settings
+	 * @description
+	 * This function sets up the automatic scanning based on the settings.
+	 * It clears any existing auto-scan interval and sets up a new one based on the scan frequency.
+	 * It then runs the auto-scan.
+	 * It finally registers the interval for cleanup.
 	 */
 	private setupAutoScan(): void {
 		this.clearAutoScan();
@@ -1076,46 +1175,33 @@ export default class JournalReflectionPlugin extends Plugin {
 
 		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 		
-		this.autoScanInterval = setInterval(async () => {
-			if (this.shouldRunAutoScan()) {
-				await this.runAutoScan();
+		this.autoScanInterval = window.setInterval(() => {
+			try {
+				this.runAutoScan();
+			} catch (error) {
+				this.errorHandler?.handleError(error, { 
+					operation: 'setupAutoScan',
+					component: 'JournalReflectionPlugin',
+					timestamp: Date.now() 
+				});
 			}
 		}, intervalMs);
-		
-		// Register the interval for cleanup
-		this.registerInterval(this.autoScanInterval as unknown as number);
-		
-		// Trigger immediate scan on setup if conditions are met
-		if (this.shouldRunAutoScan()) {
-			// Use setTimeout to avoid blocking the plugin load
-			setTimeout(() => {
-				this.runAutoScan();
-			}, 5000); // Wait 5 seconds after plugin load
-		}
+
+		this.registerInterval(this.autoScanInterval);
 	}
 
 	/**
 	 * Clear automatic scanning
+	 * @description
+	 * This function clears the automatic scanning interval.
+	 * It also sets the auto-scan interval to null.
+	 * It is called when the plugin is unloaded or when the auto-scan is disabled.
 	 */
 	private clearAutoScan(): void {
 		if (this.autoScanInterval) {
 			clearInterval(this.autoScanInterval);
 			this.autoScanInterval = null;
 		}
-	}
-
-	/**
-	 * Check if auto-scan should run
-	 */
-	private shouldRunAutoScan(): boolean {
-		const now = Date.now();
-		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-		// If lastAutoScan is not set, initialize it and skip the first scan
-		if (!this.settings.lastAutoScan) {
-			this.settings.lastAutoScan = now;
-			return false;
-		}
-		return now - this.settings.lastAutoScan >= intervalMs;
 	}
 
 	/**
