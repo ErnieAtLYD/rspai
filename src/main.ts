@@ -39,8 +39,16 @@ import {
 } from "./services";
 
 interface JournalReflectionSettings {
+	// LLM Provider Settings
+	llmProvider: 'openai' | 'ollama';
+	// OpenAI Settings
 	openaiApiKey: string | EncryptedData;
 	openaiModel: string;
+	// Ollama Settings
+	ollamaBaseUrl: string;
+	ollamaModel: string;
+	ollamaTimeout: number;
+	// General Settings
 	daysToInclude: number;
 	excludePrivate: boolean;
 	periodicNoteFolders: string[];
@@ -75,8 +83,16 @@ const OPENAI_MAX_TOKENS = 1000;
 const OPENAI_TEMPERATURE = 0.7;
 
 const DEFAULT_SETTINGS: JournalReflectionSettings = {
+	// LLM Provider Settings
+	llmProvider: 'openai',
+	// OpenAI Settings
 	openaiApiKey: "",
 	openaiModel: OPENAI_MODEL,
+	// Ollama Settings
+	ollamaBaseUrl: "http://localhost:11434",
+	ollamaModel: "llama3.1:8b",
+	ollamaTimeout: 30000,
+	// General Settings
 	daysToInclude: 7,
 	excludePrivate: true,
 	periodicNoteFolders: ["Daily Notes"],
@@ -115,7 +131,7 @@ const DEFAULT_SETTINGS: JournalReflectionSettings = {
  */
 export default class JournalReflectionPlugin extends Plugin {
 	settings: JournalReflectionSettings;
-	private serviceManager: ServiceManager;
+	serviceManager: ServiceManager;
 	private masterPassword: string | null = null;
 	public errorHandler: ErrorHandlingService;
 
@@ -235,11 +251,13 @@ export default class JournalReflectionPlugin extends Plugin {
 			implementation: (serviceManager: ServiceManager) => {
 				const errorHandler = serviceManager.resolve<ErrorHandlingService>('errorHandlingService');
 				const config: AIServiceConfig = {
+					provider: this.settings.llmProvider,
 					apiKey: "", // Will be set when needed
-					model: this.settings.openaiModel,
+					model: this.settings.llmProvider === 'openai' ? this.settings.openaiModel : this.settings.ollamaModel,
 					maxTokens: OPENAI_MAX_TOKENS,
 					temperature: OPENAI_TEMPERATURE,
-					apiUrl: OPENAI_API_URL
+					apiUrl: this.settings.llmProvider === 'openai' ? OPENAI_API_URL : this.settings.ollamaBaseUrl,
+					timeout: this.settings.llmProvider === 'ollama' ? this.settings.ollamaTimeout : undefined
 				};
 				return new AIService(this.app, config, errorHandler);
 			},
@@ -350,19 +368,22 @@ export default class JournalReflectionPlugin extends Plugin {
 	/**
 	 * Update service configurations when settings change
 	 */
-	private async updateServiceConfigurations(): Promise<void> {
+	async updateServiceConfigurations(): Promise<void> {
 		if (!this.serviceManager) return;
 
 		// Update AI service configuration
 		if (this.serviceManager.has('aiService')) {
 			const aiService = this.serviceManager.resolve<AIService>('aiService');
-			aiService.updateConfig({
+			const config: AIServiceConfig = {
+				provider: this.settings.llmProvider,
 				apiKey: await this.getDecryptedApiKey(),
-				model: this.settings.openaiModel,
+				model: this.settings.llmProvider === 'openai' ? this.settings.openaiModel : this.settings.ollamaModel,
 				maxTokens: OPENAI_MAX_TOKENS,
 				temperature: OPENAI_TEMPERATURE,
-				apiUrl: OPENAI_API_URL
-			});
+				apiUrl: this.settings.llmProvider === 'openai' ? OPENAI_API_URL : this.settings.ollamaBaseUrl,
+				timeout: this.settings.llmProvider === 'ollama' ? this.settings.ollamaTimeout : undefined
+			};
+			aiService.updateConfig(config);
 		}
 
 		// Update file operations service configuration
@@ -1085,12 +1106,13 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					});
 			});
 
-		// OpenAI API Key
-		const apiKeySetting = new Setting(containerEl)
-			.setName("OpenAI API Key")
-			.setDesc(this.plugin.settings.encryptionEnabled ? 
-				"Your API key is encrypted. Use 'Manage Encryption' to modify." : 
-				"Your OpenAI API key for generating reflections (stored in plain text)");
+		// API Key (only show for OpenAI)
+		if (this.plugin.settings.llmProvider === 'openai') {
+			const apiKeySetting = new Setting(containerEl)
+				.setName("OpenAI API Key")
+				.setDesc(this.plugin.settings.encryptionEnabled ? 
+					"Your API key is encrypted. Use 'Manage Encryption' to modify." : 
+					"Your OpenAI API key for generating reflections (stored in plain text)");
 			
 		if (!this.plugin.settings.encryptionEnabled) {
 			apiKeySetting.addText((text) => {
@@ -1118,24 +1140,152 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 			warningEl.createEl("strong", { text: "Security Warning:" });
 			warningEl.createSpan({ text: " Your API key is stored in plain text. Consider enabling encryption for better security." });
 		}
+	}
 		
 		containerEl.createEl("h3", { text: "AI Configuration" });
 
-		// Model selection
+		// LLM Provider selection
 		new Setting(containerEl)
-			.setName("OpenAI Model")
-			.setDesc("Which OpenAI model to use")
+			.setName("LLM Provider")
+			.setDesc("Choose your preferred AI provider. OpenAI requires an API key, Ollama runs locally for privacy.")
 			.addDropdown((dropdown) =>
 				dropdown
-					.addOption("gpt-4o-mini", "GPT-4o Mini (Recommended)")
-					.addOption("gpt-4o", "GPT-4o")
-					.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo")
-					.setValue(this.plugin.settings.openaiModel)
-					.onChange(async (value) => {
+					.addOption("openai", "OpenAI (Remote)")
+					.addOption("ollama", "Ollama (Local)")
+					.setValue(this.plugin.settings.llmProvider)
+					.onChange(async (value: 'openai' | 'ollama') => {
+						this.plugin.settings.llmProvider = value;
+						await this.plugin.saveSettings();
+						await this.plugin.updateServiceConfigurations();
+						this.display(); // Refresh UI to show/hide relevant settings
+					})
+			);
+
+		// OpenAI Settings (show only when OpenAI is selected)
+		if (this.plugin.settings.llmProvider === 'openai') {
+			containerEl.createEl("h4", { text: "OpenAI Settings" });
+
+			// Model selection
+			new Setting(containerEl)
+				.setName("OpenAI Model")
+				.setDesc("Which OpenAI model to use")
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("gpt-4o-mini", "GPT-4o Mini (Recommended)")
+						.addOption("gpt-4o", "GPT-4o")
+						.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo")
+						.setValue(this.plugin.settings.openaiModel)
+						.onChange(async (value) => {
 						this.plugin.settings.openaiModel = value;
 						await this.plugin.saveSettings();
 					})
 			);
+		}
+
+		// Ollama Settings (show only when Ollama is selected)
+		if (this.plugin.settings.llmProvider === 'ollama') {
+			containerEl.createEl("h4", { text: "Ollama Settings" });
+
+			// Ollama base URL
+			new Setting(containerEl)
+				.setName("Ollama Base URL")
+				.setDesc("The base URL where Ollama is running (usually http://localhost:11434)")
+				.addText((text) =>
+					text
+						.setPlaceholder("http://localhost:11434")
+						.setValue(this.plugin.settings.ollamaBaseUrl)
+						.onChange(async (value) => {
+							this.plugin.settings.ollamaBaseUrl = value;
+							await this.plugin.saveSettings();
+							await this.plugin.updateServiceConfigurations();
+						})
+				);
+
+			// Ollama model selection
+			new Setting(containerEl)
+				.setName("Ollama Model")
+				.setDesc("The Ollama model to use (ensure it's downloaded first with 'ollama pull <model>')")
+				.addText((text) =>
+					text
+						.setPlaceholder("llama3.1:8b")
+						.setValue(this.plugin.settings.ollamaModel)
+						.onChange(async (value) => {
+							this.plugin.settings.ollamaModel = value;
+							await this.plugin.saveSettings();
+							await this.plugin.updateServiceConfigurations();
+						})
+				);
+
+			// Ollama timeout
+			new Setting(containerEl)
+				.setName("Request Timeout")
+				.setDesc("Timeout for Ollama requests in milliseconds (30000 = 30 seconds)")
+				.addText((text) =>
+					text
+						.setPlaceholder("30000")
+						.setValue(this.plugin.settings.ollamaTimeout.toString())
+						.onChange(async (value) => {
+							const timeout = parseInt(value);
+							if (!isNaN(timeout) && timeout > 0) {
+								this.plugin.settings.ollamaTimeout = timeout;
+								await this.plugin.saveSettings();
+								await this.plugin.updateServiceConfigurations();
+							}
+						})
+				);
+
+			// Ollama connection test
+			new Setting(containerEl)
+				.setName("Test Ollama Connection")
+				.setDesc("Test if Ollama is running and the model is available")
+				.addButton((btn) =>
+					btn
+						.setButtonText("Test Connection")
+						.onClick(async () => {
+							btn.setDisabled(true);
+							btn.setButtonText("Testing...");
+							
+							try {
+								const aiService = this.plugin.serviceManager.resolve<AIService>('aiService');
+								const success = await aiService.testConnection();
+								if (success) {
+									btn.setButtonText("✅ Success");
+									setTimeout(() => {
+										btn.setButtonText("Test Connection");
+										btn.setDisabled(false);
+									}, 2000);
+								} else {
+									btn.setButtonText("❌ Failed");
+									setTimeout(() => {
+										btn.setButtonText("Test Connection");
+										btn.setDisabled(false);
+									}, 2000);
+								}
+							} catch (error) {
+								btn.setButtonText("❌ Error");
+								setTimeout(() => {
+									btn.setButtonText("Test Connection");
+									btn.setDisabled(false);
+								}, 2000);
+							}
+						})
+				);
+
+			// Ollama setup instructions
+			const ollamaInfoEl = containerEl.createDiv({ cls: "setting-item-description" });
+			ollamaInfoEl.style.color = "var(--text-muted)";
+			ollamaInfoEl.createSpan({ text: "💡 " });
+			ollamaInfoEl.createEl("strong", { text: "Ollama Setup:" });
+			ollamaInfoEl.createSpan({ text: " Download Ollama from " });
+			ollamaInfoEl.createEl("a", { 
+				text: "ollama.com", 
+				href: "https://ollama.com",
+				attr: { target: "_blank" }
+			});
+			ollamaInfoEl.createSpan({ text: ", then run 'ollama pull " + this.plugin.settings.ollamaModel + "' to download the model." });
+		}
+
+		containerEl.createEl("h3", { text: "Content Settings" });
 
 		// Periodic note folders path
 		this.journalFolderSetting = new Setting(containerEl)
