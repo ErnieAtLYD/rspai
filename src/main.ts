@@ -66,7 +66,7 @@ interface JournalReflectionSettings {
 	// Analysis Scope Settings
 	enabledAnalysisScopes?: boolean;
 	analysisScope?: 'whole-life' | 'work-only' | 'custom';
-	customAnalysisScope?: {
+	customAnalysisScope: {
 		name: string;
 		includeKeywords: string[];
 		excludeKeywords: string[];
@@ -466,7 +466,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			return false;
 		}
 
-		if (!await this.validateApiKey()) {
+		if (this.settings.llmProvider === 'openai' && (!await this.validateApiKey())) {
 			await this.errorHandler?.handleError(
 				new RetrospectError(
 					ErrorType.USER,
@@ -478,6 +478,8 @@ export default class JournalReflectionPlugin extends Plugin {
 				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
 			);
 			return false;
+		} else if (this.settings.llmProvider === 'ollama') {
+			// TODO: Validate Ollama model
 		}
 
 		// Check if critical services are available
@@ -1070,13 +1072,13 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 	private ensureCustomAnalysisScope(): void {
 		if (!this.plugin.settings.customAnalysisScope) {
 			this.plugin.settings.customAnalysisScope = {
-				name: DEFAULT_SETTINGS.customAnalysisScope!.name,
-				includeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.includeKeywords],
-				excludeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeKeywords],
-				includeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.includeFolders],
-				excludeFolders: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeFolders],
-				includeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.includeTags],
-				excludeTags: [...DEFAULT_SETTINGS.customAnalysisScope!.excludeTags]
+				name: DEFAULT_SETTINGS.customAnalysisScope.name,
+				includeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope.includeKeywords],
+				excludeKeywords: [...DEFAULT_SETTINGS.customAnalysisScope.excludeKeywords],
+				includeFolders: [...DEFAULT_SETTINGS.customAnalysisScope.includeFolders],
+				excludeFolders: [...DEFAULT_SETTINGS.customAnalysisScope.excludeFolders],
+				includeTags: [...DEFAULT_SETTINGS.customAnalysisScope.includeTags],
+				excludeTags: [...DEFAULT_SETTINGS.customAnalysisScope.excludeTags]
 			};
 		}
 	}
@@ -1468,7 +1470,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 			// Custom Scope Settings (only show if custom is selected)
 			if (this.plugin.settings.analysisScope === 'custom') {
 				this.ensureCustomAnalysisScope();
-				const customScope = this.plugin.settings.customAnalysisScope!;
+				const customScope = this.plugin.settings.customAnalysisScope;
 
 				// Custom Scope Name
 				new Setting(containerEl)
@@ -1479,7 +1481,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.name)
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.name = value;
+							this.plugin.settings.customAnalysisScope.name = value;
 								await this.plugin.saveSettings();
 							});
 					});
@@ -1493,7 +1495,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.includeKeywords.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.includeKeywords = value
+								this.plugin.settings.customAnalysisScope.includeKeywords = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1510,7 +1512,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.excludeKeywords.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.excludeKeywords = value
+								this.plugin.settings.customAnalysisScope.excludeKeywords = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1527,7 +1529,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.includeTags.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.includeTags = value
+								this.plugin.settings.customAnalysisScope.includeTags = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1544,7 +1546,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.excludeTags.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.excludeTags = value
+								this.plugin.settings.customAnalysisScope.excludeTags = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1561,7 +1563,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.includeFolders.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.includeFolders = value
+								this.plugin.settings.customAnalysisScope.includeFolders = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
@@ -1578,7 +1580,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							.setValue(customScope.excludeFolders.join(', '))
 							.onChange(async (value) => {
 								this.ensureCustomAnalysisScope();
-								this.plugin.settings.customAnalysisScope!.excludeFolders = value
+								this.plugin.settings.customAnalysisScope.excludeFolders = value
 									.split(',')
 									.map(k => k.trim())
 									.filter(k => k.length > 0);
