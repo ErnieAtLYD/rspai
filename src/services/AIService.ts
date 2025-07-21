@@ -89,7 +89,7 @@ class OpenAIProvider implements LLMProvider {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                return this.handleOpenAIError(response);
+                await this.handleOpenAIError(response);
             }
 
             const data: OpenAIResponse = await response.json();
@@ -257,7 +257,7 @@ class OllamaProvider implements LLMProvider {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                return this.handleOllamaError(response);
+                await this.handleOllamaError(response);
             }
 
             const data: OllamaResponse = await response.json();
