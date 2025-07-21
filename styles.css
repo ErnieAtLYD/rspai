@@ -363,12 +363,6 @@ available in the app when your plugin is enabled.
     margin-bottom: 0;
 }
 
-/* When collapsed, rotate arrow */
-.retrospect-collapsed + .retrospect-collapsible-header::before,
-.retrospect-collapsible-header:has(+ .retrospect-collapsible-content.retrospect-collapsed)::before {
-    transform: rotate(-90deg);
-}
-
 /* Dark theme adjustments */
 .theme-dark .retrospect-collapsible-header:hover {
     color: var(--text-accent-hover);
