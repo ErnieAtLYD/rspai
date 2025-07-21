@@ -323,3 +323,53 @@ available in the app when your plugin is enabled.
 .theme-dark .callout-warning {
     background-color: rgba(255, 193, 7, 0.15);
 }
+
+/* Retrospect AI Settings Collapsible Sections */
+
+/* Collapsible header styling */
+.retrospect-collapsible-header {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+    position: relative;
+}
+
+.retrospect-collapsible-header:hover {
+    color: var(--text-accent);
+}
+
+.retrospect-collapsible-header::before {
+    content: "▼";
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.2s ease;
+    font-size: 0.8em;
+}
+
+/* Collapsible content styling */
+.retrospect-collapsible-content {
+    overflow: hidden;
+    transition: all 0.3s ease;
+    max-height: none;
+    opacity: 1;
+}
+
+.retrospect-collapsible-content.retrospect-collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* When collapsed, rotate arrow */
+.retrospect-collapsed + .retrospect-collapsible-header::before,
+.retrospect-collapsible-header:has(+ .retrospect-collapsible-content.retrospect-collapsed)::before {
+    transform: rotate(-90deg);
+}
+
+/* Dark theme adjustments */
+.theme-dark .retrospect-collapsible-header:hover {
+    color: var(--text-accent-hover);
+}
