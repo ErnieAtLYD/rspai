@@ -1795,8 +1795,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 	 * Render legacy NLP settings for power users
 	 */
 	private renderLegacyNLPSettings(containerEl: HTMLElement): void {
-
-
 		// Blocker Detection Sensitivity
 		new Setting(containerEl)
 			.setName("Blocker Detection Sensitivity")
@@ -1840,45 +1838,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.nlpAnalysisDepth || 'moderate')
 						.onChange(async (value: 'basic' | 'moderate' | 'deep') => {
 							this.plugin.settings.nlpAnalysisDepth = value;
-							await this.plugin.saveSettings();
-						})
-				);
-
-			// Enable Trend Analysis
-			new Setting(containerEl)
-				.setName("Enable Trend Analysis")
-				.setDesc("Analyze patterns and changes over time")
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.enableTrendAnalysis ?? true)
-						.onChange(async (value) => {
-							this.plugin.settings.enableTrendAnalysis = value;
-							await this.plugin.saveSettings();
-						})
-				);
-
-			// Enable Semantic Analysis
-			new Setting(containerEl)
-				.setName("Enable AI Semantic Analysis")
-				.setDesc("Use OpenAI for deep semantic understanding and insights generation")
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.enableSemanticAnalysis ?? true)
-						.onChange(async (value) => {
-							this.plugin.settings.enableSemanticAnalysis = value;
-							await this.plugin.saveSettings();
-						})
-				);
-
-			// Cache Analysis Results
-			new Setting(containerEl)
-				.setName("Cache Analysis Results")
-				.setDesc("Cache analysis results to improve performance (recommended)")
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.cacheAnalysisResults ?? true)
-						.onChange(async (value) => {
-							this.plugin.settings.cacheAnalysisResults = value;
 							await this.plugin.saveSettings();
 						})
 				);
