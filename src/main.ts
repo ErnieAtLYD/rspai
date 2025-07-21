@@ -1024,6 +1024,10 @@ export default class JournalReflectionPlugin extends Plugin {
 		) {
 			this.settings.reflectionFolder = DEFAULT_SETTINGS.reflectionFolder;
 		}
+
+		if (!this.settings.communicationStyle || !['direct', 'gentle', 'encouraging'].includes(this.settings.communicationStyle)) {
+			this.settings.communicationStyle = DEFAULT_SETTINGS.communicationStyle;
+		}
 	}
 
 	/**
@@ -1877,21 +1881,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.blockerDetectionSensitivity || 'medium')
 						.onChange(async (value: 'low' | 'medium' | 'high') => {
 							this.plugin.settings.blockerDetectionSensitivity = value;
-							await this.plugin.saveSettings();
-						})
-				);
-
-			// Pattern Recognition Threshold
-			new Setting(containerEl)
-				.setName("Pattern Recognition Threshold")
-				.setDesc("Minimum confidence level for pattern detection (0.1 = very sensitive, 1.0 = very specific)")
-				.addSlider((slider) =>
-					slider
-						.setLimits(0.1, 1.0, 0.1)
-						.setValue(this.plugin.settings.patternThreshold || 0.6)
-						.setDynamicTooltip()
-						.onChange(async (value) => {
-							this.plugin.settings.patternThreshold = value;
 							await this.plugin.saveSettings();
 						})
 				);
