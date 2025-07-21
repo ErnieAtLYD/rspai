@@ -1348,7 +1348,82 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 
 		// Provider-specific settings section (dynamic based on selection)
 		this.renderProviderSettings(containerEl);
+
+		// ⚙️ Analysis Settings Section
+		containerEl.createEl("h3", { text: "⚙️ Analysis Settings" });
+
+		// Communication style
+		new Setting(containerEl)
+			.setName("Communication Style")
+			.setDesc("How the AI should communicate with you in reflections and insights")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("direct", "Direct - Straightforward and concise")
+					.addOption("gentle", "Gentle - Supportive and nurturing")
+					.addOption("encouraging", "Encouraging - Uplifting and motivational")
+					.setValue(this.plugin.settings.communicationStyle || 'encouraging')
+					.onChange(async (value: 'direct' | 'gentle' | 'encouraging') => {
+						this.plugin.settings.communicationStyle = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Analysis depth
+		new Setting(containerEl)
+			.setName("Analysis Depth")
+			.setDesc("Choose how detailed the analysis should be")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("basic", "Basic - Quick insights and patterns")
+					.addOption("standard", "Standard - Balanced analysis with good detail")
+					.addOption("detailed", "Detailed - Comprehensive deep-dive analysis")
+					.setValue(this.plugin.settings.analysisDepth || 'standard')
+					.onChange(async (value: 'basic' | 'standard' | 'detailed') => {
+						this.plugin.settings.analysisDepth = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Enable trend analysis
+		new Setting(containerEl)
+			.setName("Enable Trend Analysis")
+			.setDesc("Analyze patterns and changes over time in your journal entries")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableTrendAnalysis ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.enableTrendAnalysis = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Enable AI insights
+		new Setting(containerEl)
+			.setName("Enable AI-Powered Insights")
+			.setDesc("Use AI to generate deep semantic insights and personalized recommendations")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableSemanticAnalysis ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.enableSemanticAnalysis = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Cache analysis results
+		new Setting(containerEl)
+			.setName("Cache Analysis Results")
+			.setDesc("Cache analysis results to improve performance (recommended)")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.cacheAnalysisResults ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.cacheAnalysisResults = value;
+						await this.plugin.saveSettings();
+					})
+			);
 		
+
 		// 🔒 Privacy & Content Section
 		containerEl.createEl("h3", { text: "🔒 Privacy & Content" });
 
@@ -1452,79 +1527,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ⚙️ Analysis Settings Section
-		containerEl.createEl("h3", { text: "⚙️ Analysis Settings" });
-
-		// Communication style
-		new Setting(containerEl)
-			.setName("Communication Style")
-			.setDesc("How the AI should communicate with you in reflections and insights")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("direct", "Direct - Straightforward and concise")
-					.addOption("gentle", "Gentle - Supportive and nurturing")
-					.addOption("encouraging", "Encouraging - Uplifting and motivational")
-					.setValue(this.plugin.settings.communicationStyle || 'encouraging')
-					.onChange(async (value: 'direct' | 'gentle' | 'encouraging') => {
-						this.plugin.settings.communicationStyle = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// Analysis depth
-		new Setting(containerEl)
-			.setName("Analysis Depth")
-			.setDesc("Choose how detailed the analysis should be")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("basic", "Basic - Quick insights and patterns")
-					.addOption("standard", "Standard - Balanced analysis with good detail")
-					.addOption("detailed", "Detailed - Comprehensive deep-dive analysis")
-					.setValue(this.plugin.settings.analysisDepth || 'standard')
-					.onChange(async (value: 'basic' | 'standard' | 'detailed') => {
-						this.plugin.settings.analysisDepth = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// Enable trend analysis
-		new Setting(containerEl)
-			.setName("Enable Trend Analysis")
-			.setDesc("Analyze patterns and changes over time in your journal entries")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableTrendAnalysis ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.enableTrendAnalysis = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// Enable AI insights
-		new Setting(containerEl)
-			.setName("Enable AI-Powered Insights")
-			.setDesc("Use AI to generate deep semantic insights and personalized recommendations")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableSemanticAnalysis ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.enableSemanticAnalysis = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// Cache analysis results
-		new Setting(containerEl)
-			.setName("Cache Analysis Results")
-			.setDesc("Cache analysis results to improve performance (recommended)")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.cacheAnalysisResults ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.cacheAnalysisResults = value;
-						await this.plugin.saveSettings();
-					})
-			);
 
 		// 🔧 Advanced Section (collapsible)
 		this.renderAdvancedSection(containerEl);
@@ -1771,21 +1773,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 	 * Render legacy NLP settings for power users
 	 */
 	private renderLegacyNLPSettings(containerEl: HTMLElement): void {
-		// NLP Analysis Depth
-		new Setting(containerEl)
-			.setName("NLP Analysis Depth")
-			.setDesc("Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("basic", "Basic - Fast analysis with core features")
-					.addOption("moderate", "Moderate - Balanced depth and performance")
-					.addOption("deep", "Deep - Comprehensive analysis (slower)")
-					.setValue(this.plugin.settings.nlpAnalysisDepth || 'moderate')
-					.onChange(async (value: 'basic' | 'moderate' | 'deep') => {
-						this.plugin.settings.nlpAnalysisDepth = value;
-						await this.plugin.saveSettings();
-					})
-			);
+
 
 		// Blocker Detection Sensitivity
 		new Setting(containerEl)
@@ -1865,22 +1853,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.nlpAnalysisDepth || 'moderate')
 						.onChange(async (value: 'basic' | 'moderate' | 'deep') => {
 							this.plugin.settings.nlpAnalysisDepth = value;
-							await this.plugin.saveSettings();
-						})
-				);
-
-			// Blocker Detection Sensitivity
-			new Setting(containerEl)
-				.setName("Blocker Detection Sensitivity")
-				.setDesc("Adjust how sensitive the system is to detecting productivity blockers")
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("low", "Low - Only detect obvious blockers")
-						.addOption("medium", "Medium - Balanced detection")
-						.addOption("high", "High - Detect subtle blockers")
-						.setValue(this.plugin.settings.blockerDetectionSensitivity || 'medium')
-						.onChange(async (value: 'low' | 'medium' | 'high') => {
-							this.plugin.settings.blockerDetectionSensitivity = value;
 							await this.plugin.saveSettings();
 						})
 				);
