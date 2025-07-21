@@ -1355,7 +1355,7 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 		// Communication style
 		new Setting(containerEl)
 			.setName("Communication Style")
-			.setDesc("How the AI should communicate with you in reflections and insights")
+			.setDesc("How should AI communicate insights with you?")
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("direct", "Direct - Straightforward and concise")
@@ -1367,6 +1367,28 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// Analysis Scope Settings (Feature Flag)
+		new Setting(containerEl)
+			.setName("Analysis Scope")
+			.setDesc("Choose the scope of analysis to focus on specific areas of your journal")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("whole-life", "Whole Life - Analyze all entries")
+					.addOption("work-only", "Work Only - Focus on work-related entries")
+					.addOption("custom", "Custom - Define your own scope")
+					.setValue(this.plugin.settings.analysisScope || 'whole-life')
+					.onChange(async (value: 'whole-life' | 'work-only' | 'custom') => {
+						this.plugin.settings.analysisScope = value;
+						await this.plugin.saveSettings();
+						// Refresh to show/hide custom scope settings
+						this.display();
+					})
+			);
+
+
+			
+
 
 		// Analysis depth
 		new Setting(containerEl)
@@ -1791,41 +1813,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// Analysis Scope Settings (Feature Flag)
-		if (this.plugin.settings.enabledAnalysisScopes) {
-			new Setting(containerEl)
-				.setName("Analysis Scope")
-				.setDesc("Choose the scope of analysis to focus on specific areas of your journal")
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("whole-life", "Whole Life - Analyze all entries")
-						.addOption("work-only", "Work Only - Focus on work-related entries")
-						.addOption("custom", "Custom - Define your own scope")
-						.setValue(this.plugin.settings.analysisScope || 'whole-life')
-						.onChange(async (value: 'whole-life' | 'work-only' | 'custom') => {
-							this.plugin.settings.analysisScope = value;
-							await this.plugin.saveSettings();
-							// Refresh to show/hide custom scope settings
-							this.display();
-						})
-				);
-		}
-
-		// Enable Analysis Scopes Feature Flag
-		new Setting(containerEl)
-			.setName("Enable Analysis Scopes (Beta)")
-			.setDesc("Enable analysis scope settings to focus on specific areas of your journal (work-only, custom filters, etc.)")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enabledAnalysisScopes ?? false)
-					.onChange(async (value) => {
-						this.plugin.settings.enabledAnalysisScopes = value;
-						await this.plugin.saveSettings();
-						// Refresh to show/hide analysis scope settings
-						this.display();
-					})
-			);
-
 		new Setting(containerEl)
 			.setName("Enable Advanced NLP Analysis")
 			.setDesc("Use sophisticated natural language processing for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis")
@@ -1919,60 +1906,11 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 							this.display();
 						})
 				);
-				
-			// Scan Frequency (only show if auto-scan is enabled)
-			if (this.plugin.settings.enableAutoScan) {
-				new Setting(containerEl)
-					.setName("Scan Frequency")
-					.setDesc("How often to run automatic analysis")
-					.addDropdown((dropdown) =>
-						dropdown
-							.addOption("manual", "Manual only")
-							.addOption("daily", "Daily")
-							.addOption("weekly", "Weekly")
-							.setValue(this.plugin.settings.scanFrequency ?? "manual")
-							.onChange(async (value) => {
-								const oldValue = this.plugin.settings.scanFrequency;
-								this.plugin.settings.scanFrequency = value as 'manual' | 'daily' | 'weekly';
-								await this.plugin.saveSettings();
-								
-								// If changing from manual to scheduled, trigger immediate scan
-								if (oldValue === 'manual' && value !== 'manual') {
-									this.plugin.runAutoScan();
-								}
-							})
-					);
-					
-				// Show last scan time if available
-				if (this.plugin.settings.lastAutoScan && this.plugin.settings.lastAutoScan > 0) {
-					const lastScanDate = new Date(this.plugin.settings.lastAutoScan);
-					const lastScanSetting = new Setting(containerEl)
-						.setName("Last Auto-scan")
-						.setDesc(`Last automatic scan: ${lastScanDate.toLocaleString()}`);
-					
-					// Add a manual scan trigger button
-					lastScanSetting.addButton((button) =>
-						button
-							.setButtonText("Run Now")
-							.setTooltip("Run analysis immediately")
-							.onClick(async () => {
-								try {
-									await this.plugin.performComprehensiveAnalysis();
-									new Notice("Manual scan completed successfully");
-									this.display(); // Refresh to update last scan time
-								} catch (error) {
-									new Notice("Manual scan failed. Check console for details.");
-									console.error("Manual scan error:", error);
-								}
-							})
-					);
-				}
-			}
       
 			// NLP Features Info
 			const infoEl = containerEl.createDiv({ cls: "setting-item-description" })
-      infoEl.style.color = "var(--text-muted)";
-			infoEl.createEl("strong", { text: "Legacy Advanced NLP Features:" });
+			infoEl.style.color = "var(--text-muted)";
+			infoEl.createEl("strong", { text: "Advanced NLP Features:" });
 			infoEl.createEl("br");
       
 			infoEl.createSpan({ text: "• " });
