@@ -1028,6 +1028,10 @@ export default class JournalReflectionPlugin extends Plugin {
 		if (!this.settings.communicationStyle || !['direct', 'gentle', 'encouraging'].includes(this.settings.communicationStyle)) {
 			this.settings.communicationStyle = DEFAULT_SETTINGS.communicationStyle;
 		}
+
+		if (!this.settings.analysisDepth || !['basic', 'standard', 'detailed'].includes(this.settings.analysisDepth)) {
+			this.settings.analysisDepth = DEFAULT_SETTINGS.analysisDepth;
+		}
 	}
 
 	/**
@@ -1770,20 +1774,20 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// Legacy Advanced NLP toggle (for power users)
-		new Setting(advancedContainer)
-			.setName("Enable Legacy Advanced NLP")
-			.setDesc("Enable advanced NLP features with more technical options (power users only)")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableAdvancedNLP ?? false)
-					.onChange(async (value) => {
-						this.plugin.settings.enableAdvancedNLP = value;
-						await this.plugin.saveSettings();
-						// Refresh to show/hide dependent settings
-						this.display();
-					})
-			);
+		new Setting(containerEl)
+		.setName("Enable Advanced NLP Analysis")
+		.setDesc("Use advanced NLP for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis")
+		.addToggle((toggle) =>
+			toggle
+				.setValue(this.plugin.settings.enableAdvancedNLP ?? true)
+				.onChange(async (value) => {
+					this.plugin.settings.enableAdvancedNLP = value;
+					await this.plugin.saveSettings();
+					// Refresh to show/hide dependent settings
+					this.display();
+				})
+		);
+
 
 		// Show legacy NLP settings if enabled
 		if (this.plugin.settings.enableAdvancedNLP) {
@@ -1808,20 +1812,6 @@ class JournalReflectionSettingTab extends PluginSettingTab {
 					.onChange(async (value: 'low' | 'medium' | 'high') => {
 						this.plugin.settings.blockerDetectionSensitivity = value;
 						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Enable Advanced NLP Analysis")
-			.setDesc("Use sophisticated natural language processing for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableAdvancedNLP ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.enableAdvancedNLP = value;
-						await this.plugin.saveSettings();
-						// Refresh to show/hide dependent settings
-						this.display();
 					})
 			);
 
