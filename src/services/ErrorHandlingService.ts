@@ -50,6 +50,7 @@ export interface ErrorHandlerOptions {
     retryDelay?: number;
 }
 
+
 export class RetrospectError extends Error {
     public readonly type: ErrorType;
     public readonly code: ErrorCode;
@@ -68,15 +69,33 @@ export class RetrospectError extends Error {
         retryable = false
     ) {
         super(message);
+        this.name = 'RetrospectError';
+        
+        // Fix for extending Error in JavaScript/TypeScript
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, RetrospectError);
+        }
+        
+        // Ensure prototype chain is properly set up
+        Object.setPrototypeOf(this, RetrospectError.prototype);
+        
         this.type = type;
         this.code = code;
         this.userMessage = userMessage;
         this.context = context;
         this.recoverable = recoverable;
         this.retryable = retryable;
-        this.name = 'RetrospectError';
     }
 
+    /**
+     * Creates a RetrospectError from an Error object.
+     * @param error - The Error object to create a RetrospectError from.
+     * @param type - The type of the error.
+     * @param code - The code of the error.
+     * @param context - The context of the error.
+     * @param userMessage - The user message to display.
+     * @returns A RetrospectError object.
+     */
     static fromError(error: Error, type: ErrorType, code: ErrorCode, context: ErrorContext, userMessage?: string): RetrospectError {
         const message = error.message || 'Unknown error occurred';
         const finalUserMessage = userMessage || this.getDefaultUserMessage(type, code);
@@ -93,6 +112,12 @@ export class RetrospectError extends Error {
         );
     }
 
+    /**
+     * Gets the default user message for an error.
+     * @param type - The type of the error.
+     * @param code - The code of the error.
+     * @returns The default user message for the error.
+     */
     private static getDefaultUserMessage(type: ErrorType, code: ErrorCode): string {
         switch (code) {
             case ErrorCode.API_KEY_MISSING:
@@ -122,6 +147,12 @@ export class RetrospectError extends Error {
         }
     }
 
+    /**
+     * Checks if an error is retryable.
+     * @param type - The type of the error.
+     * @param code - The code of the error.
+     * @returns True if the error is retryable, false otherwise.
+     */
     private static isRetryableError(type: ErrorType, code: ErrorCode): boolean {
         const retryableCodes = [
             ErrorCode.API_NETWORK_ERROR,
@@ -132,6 +163,13 @@ export class RetrospectError extends Error {
     }
 }
 
+/**
+ * The configuration for the ErrorHandlingService.
+ * @param maxRetries - The maximum number of retries.
+ * @param baseRetryDelay - The base delay between retries.
+ * @param enableLogging - Whether to enable logging.
+ * @param enableNotifications - Whether to enable notifications.
+ */
 export interface ErrorHandlingConfig {
     maxRetries: number;
     baseRetryDelay: number;
@@ -139,10 +177,19 @@ export interface ErrorHandlingConfig {
     enableNotifications: boolean;
 }
 
+/**
+ * The ErrorHandlingService class.
+ * This class is used to handle errors and provide a way to retry operations.
+ */
 export class ErrorHandlingService extends BaseService {
     private errorHistory: Map<string, RetrospectError[]> = new Map();
     private config: ErrorHandlingConfig;
     
+    /**
+     * Creates a new ErrorHandlingService.
+     * @param app - The Obsidian app.
+     * @param config - The configuration for the ErrorHandlingService.
+     */
     constructor(app: App, config: ErrorHandlingConfig) {
         super(app);
         this.config = {
@@ -153,14 +200,23 @@ export class ErrorHandlingService extends BaseService {
         };
     }
     
+    /**
+     * Initializes the ErrorHandlingService.
+     */
     protected async onInitialize(): Promise<void> {
         // Error handling service is ready immediately
     }
 
+    /**
+     * Disposes the ErrorHandlingService.
+     */
     protected async onDispose(): Promise<void> {
         this.errorHistory.clear();
     }
 
+    /**
+     * Handles an error by classifying it, recording it, and optionally logging it and showing a notification.
+     */
     public async handleError(error: Error | RetrospectError, context: ErrorContext, options: ErrorHandlerOptions = {}): Promise<void> {
         this.ensureReady();
         
@@ -193,6 +249,13 @@ export class ErrorHandlingService extends BaseService {
         }
     }
 
+    /**
+     * Executes an operation with retry.
+     * @param operation - The operation to execute.
+     * @param context - The context of the operation.
+     * @param options - The options for the operation.
+     * @returns The result of the operation.
+     */
     public async executeWithRetry<T>(
         operation: () => Promise<T>,
         context: ErrorContext,
@@ -231,6 +294,12 @@ export class ErrorHandlingService extends BaseService {
         throw lastError || new Error('Operation failed after retries');
     }
 
+    /**
+     * Classifies an error.
+     * @param error - The error to classify.
+     * @param context - The context of the error.
+     * @returns A RetrospectError object.
+     */
     private classifyError(error: Error, context: ErrorContext): RetrospectError {
         const message = error.message.toLowerCase();
         
@@ -277,6 +346,10 @@ export class ErrorHandlingService extends BaseService {
         return RetrospectError.fromError(error, ErrorType.USER, ErrorCode.INVALID_CONFIG, context);
     }
 
+    /**
+     * Records an error in the error history.
+     * @param error - The error to record.
+     */
     private recordError(error: RetrospectError): void {
         const key = `${error.context.component}:${error.context.operation}`;
         if (!this.errorHistory.has(key)) {
@@ -293,6 +366,10 @@ export class ErrorHandlingService extends BaseService {
         }
     }
 
+    /**
+     * Logs an error to the console.
+     * @param error - The error to log.
+     */
     private logError(error: RetrospectError): void {
         console.error(`[Retrospect AI] ${error.type.toUpperCase()} Error in ${error.context.component}:${error.context.operation}`, {
             code: error.code,
@@ -303,6 +380,10 @@ export class ErrorHandlingService extends BaseService {
         });
     }
 
+    /**
+     * Shows a user notification for an error.
+     * @param error - The error to show a notification for.
+     */
     private showUserNotification(error: RetrospectError): void {
         const severity = error.type === ErrorType.CRITICAL ? '🚨' : 
                         error.type === ErrorType.USER ? '⚠️' : 
@@ -321,6 +402,12 @@ export class ErrorHandlingService extends BaseService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    /**
+     * Gets the error history.
+     * @param component - The component of the error.
+     * @param operation - The operation of the error.
+     * @returns The error history.
+     */
     public getErrorHistory(component?: string, operation?: string): RetrospectError[] {
         this.ensureNotDisposed();
         
@@ -341,6 +428,11 @@ export class ErrorHandlingService extends BaseService {
         return Array.from(this.errorHistory.values()).flat();
     }
 
+    /**
+     * Clears the error history.
+     * @param component - The component of the error.
+     * @param operation - The operation of the error.
+     */
     public clearErrorHistory(component?: string, operation?: string): void {
         this.ensureNotDisposed();
         

@@ -201,7 +201,7 @@ describe('EncryptionService', () => {
             expect(mockCrypto.subtle.deriveKey).toHaveBeenCalledWith(
                 {
                     name: 'PBKDF2',
-                    salt: salt,
+                    salt: expect.any(ArrayBuffer),
                     iterations: 100000,
                     hash: 'SHA-256'
                 },

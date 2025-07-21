@@ -7,7 +7,7 @@ import { ErrorHandlingService } from "./ErrorHandlingService";
 import { getNlp, getSentiment, getNatural, CompromiseDoc, SentimentAnalyzerLib, NaturalModule } from "./nlp/nlp-loader";
 
 // Alias for compatibility
-interface SentimentAnalyzer extends SentimentAnalyzerLib {}
+type SentimentAnalyzer = SentimentAnalyzerLib;
 
 export interface ProductivityTheme {
 	theme: string;
@@ -114,7 +114,7 @@ export class NLPAnalysisService extends BaseService {
 				"pretty",
 				"somewhat",
 			];
-			productivityStopWords.forEach((word) => this.stopWords!.add(word));
+			productivityStopWords.forEach((word) => this.stopWords?.add(word));
 		}
 	}
 
@@ -428,9 +428,13 @@ export class NLPAnalysisService extends BaseService {
 			const preprocessed = await this.preprocessText(text);
 
 			// Basic sentiment analysis
-			const basicSentiment = this.sentimentAnalyzer!.analyze(
+			const basicSentiment = this.sentimentAnalyzer?.analyze(
 				preprocessed.cleanedText
 			);
+
+			if (!basicSentiment) {
+				return this.getNeutralSentiment();
+			}
 
 			// Advanced sentiment features
 			const emotions = this.analyzeEmotions(preprocessed);
@@ -489,9 +493,10 @@ export class NLPAnalysisService extends BaseService {
 			.tokenize(text)
 			.filter(
 				(token: string) =>
-					token.length > 2 && !this.stopWords!.has(token)
+					token.length > 2 && !this.stopWords?.has(token)
 			)
-			.map((token: string) => this.stemmer!.stem(token));
+			.map((token: string) => this.stemmer?.stem(token))
+			.filter((token): token is string => token !== undefined);
 	}
 
 	private extractEntities(
@@ -988,8 +993,8 @@ export class NLPAnalysisService extends BaseService {
 				instance.documents.length = 0;
 			}
 			// Clear any internal caches if available (not all TF-IDF implementations have this)
-			if (typeof (instance as any).clearCache === 'function') {
-				(instance as any).clearCache();
+			if (typeof (instance as unknown as { clearCache?: () => void }).clearCache === 'function') {
+				(instance as unknown as { clearCache: () => void }).clearCache();
 			}
 		} catch (error) {
 			console.warn('Error disposing TF-IDF instance:', error);
