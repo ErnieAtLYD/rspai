@@ -22,6 +22,7 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 - **⚡ High-Performance Caching**: Multi-level caching with TTL and disk persistence for instant results
 - **📊 Comprehensive Reports**: Generate detailed analysis reports with patterns, trends, and insights
 - **🎯 Configurable Analysis**: Adjustable confidence thresholds and analysis preferences
+- **⏰ Automatic Scanning**: Optional scheduled analysis with configurable frequency (daily/weekly)
 
 ## 🚀 Quick Start
 
@@ -113,8 +114,16 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
 | **Semantic Analysis** | Enable AI-powered insight generation | Enabled |
 | **Cache Analysis Results** | Enable caching for better performance | Enabled |
 
+### Automatic Scanning Settings
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Enable Auto-scan** | Automatically run analysis at specified intervals | Disabled |
+| **Scan Frequency** | How often to run automatic analysis | Manual |
+| **Available Frequencies** | Manual only, Daily, Weekly | Manual |
+
 ## 💡 How It Works
 
+### Manual Analysis
 1. **Scans** your vault for notes modified in the last N days
 2. **Filters** out any notes containing `#private` tag
 3. **Combines** the content and sends to your chosen AI provider (OpenAI or Ollama) with a thoughtful prompt
@@ -123,6 +132,14 @@ A simple, focused Obsidian plugin that creates thoughtful weekly summaries from 
    - Emotional journey and growth
    - Important events or insights
    - Areas for future reflection
+
+### Automatic Scanning
+When enabled, the plugin will:
+1. **Monitor** your journal entries automatically based on the configured frequency
+2. **Run** comprehensive analysis (patterns, trends, and insights) at scheduled intervals
+3. **Generate** reports in your Summaries folder without manual intervention
+4. **Track** the last scan time to prevent duplicate analysis
+5. **Provide** a "Run Now" button for immediate manual analysis
 
 ## 📝 Example Output
 
@@ -289,7 +306,7 @@ The plugin's service-based architecture makes it easy to extend:
 - Additional AI provider support (Anthropic Claude, Google Gemini)
 - Advanced privacy filters and content sanitization
 - Export formats (PDF, markdown, structured data)
-- Scheduled automatic reflections
+- ✅ **Scheduled automatic reflections** - *Now available with configurable daily/weekly scanning*
 - Integration with other Obsidian plugins
 - Custom pattern recognition rules
 - Analysis dashboard with visualizations
