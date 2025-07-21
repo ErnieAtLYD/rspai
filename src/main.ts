@@ -82,6 +82,10 @@ interface JournalReflectionSettings {
 	lastAutoScan?: number;
 }
 
+const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
+const MILLISECONDS_IN_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL = "gpt-4o-mini";
 const OPENAI_MAX_TOKENS = 1000;
@@ -1159,12 +1163,35 @@ export default class JournalReflectionPlugin extends Plugin {
 	}
 
 	/**
+	 * Check if the auto-scan should run
+	 * @returns {boolean} - True if the auto-scan should run, false otherwise
+	 * @description
+	 * This function checks if the auto-scan should run.
+	 * It checks if the last auto-scan time is set and if the interval has passed.
+	 * It also saves the last auto-scan time.
+	 * It is called when the auto-scan is running.
+	 */
+	private shouldRunAutoScan(): boolean {
+		const now = Date.now();
+		const intervalMs = this.settings.scanFrequency === 'daily' ?  MILLISECONDS_IN_DAY : MILLISECONDS_IN_WEEK;
+		
+		if (!this.settings.lastAutoScan) {
+			this.settings.lastAutoScan = now;
+			this.saveSettings(); // Save the initialized value
+			return false;
+		}
+		return now - this.settings.lastAutoScan >= intervalMs;
+	}
+		
+	/**
 	 * Setup automatic scanning based on settings
 	 * @description
 	 * This function sets up the automatic scanning based on the settings.
 	 * It clears any existing auto-scan interval and sets up a new one based on the scan frequency.
 	 * It then runs the auto-scan.
 	 * It finally registers the interval for cleanup.
+	 * @returns {void}
+	 * @throws {RetrospectError} - If the auto-scan interval is not cleared
 	 */
 	private setupAutoScan(): void {
 		this.clearAutoScan();
@@ -1173,11 +1200,13 @@ export default class JournalReflectionPlugin extends Plugin {
 			return;
 		}
 
-		const intervalMs = this.settings.scanFrequency === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+		const intervalMs = this.settings.scanFrequency === 'daily' ? MILLISECONDS_IN_DAY : MILLISECONDS_IN_WEEK;
 		
-		this.autoScanInterval = window.setInterval(() => {
+		this.autoScanInterval = window.setInterval(async () => {
 			try {
-				this.runAutoScan();
+				if (this.shouldRunAutoScan?.()) {
+					await this.runAutoScan();
+				}
 			} catch (error) {
 				this.errorHandler?.handleError(error, { 
 					operation: 'setupAutoScan',
@@ -1192,9 +1221,9 @@ export default class JournalReflectionPlugin extends Plugin {
 
 	/**
 	 * Clear automatic scanning
+	 * @returns {void}
 	 * @description
 	 * This function clears the automatic scanning interval.
-	 * It also sets the auto-scan interval to null.
 	 * It is called when the plugin is unloaded or when the auto-scan is disabled.
 	 */
 	private clearAutoScan(): void {
