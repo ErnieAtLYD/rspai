@@ -1,0 +1,24 @@
+name: 📝 General Feedback
+description: Share thoughts, impressions, or confusing moments
+title: "[FEEDBACK] "
+labels: ["feedback", "beta"]
+body:
+  - type: textarea
+    id: experience
+    attributes:
+      label: Describe your experience
+      description: What were you trying to do? How did it feel?
+  - type: checkboxes
+    id: reaction
+    attributes:
+      label: How did this feature feel to use?
+      options:
+        - [ ] Confusing
+        - [ ] Buggy
+        - [ ] Intuitive
+        - [ ] Surprisingly helpful
+        - [ ] I didn’t notice it
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: Any suggestions or "I wish it did ___" ideas?

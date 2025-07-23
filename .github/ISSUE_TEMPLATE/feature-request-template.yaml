@@ -1,0 +1,20 @@
+name: 💡 Feature Request
+description: Suggest a new idea to make the plugin better
+title: "[FEATURE] "
+labels: ["enhancement", "beta"]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: What's the feature?
+      description: Describe what you want the plugin to do.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this useful?
+      description: Tell us why this matters to your workflow.
+  - type: textarea
+    id: context
+    attributes:
+      label: Any context or examples?
+      description: Share links, sketches, or ideas for implementation.

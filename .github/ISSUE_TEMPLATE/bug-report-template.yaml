@@ -1,0 +1,41 @@
+name: 🐞 Bug Report
+description: Report something that's broken or not working as expected
+title: "[BUG] "
+labels: ["bug", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this! Please be as detailed as you can.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin Version
+      placeholder: e.g. 2.0.1
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: What happened? What did you expect to happen instead?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: List the steps so we can reproduce the issue.
+      placeholder: |
+        1. Open Obsidian
+        2. Run command 'Analyze Daily Note'
+        3. App crashes
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console Errors / Logs (if any)
+      description: Copy/paste anything that shows up in the developer console
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does this happen?
+      options:
+        - Only once
+        - Occasionally
+        - Every time
