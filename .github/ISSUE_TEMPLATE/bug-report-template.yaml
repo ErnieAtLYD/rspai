@@ -20,11 +20,11 @@ body:
   - type: dropdown
     id: operating-system
     attributes:
-    label: Operating System
-    options:
-      - Windows
-      - macOS
-      - Linux
+      label: Operating System
+      options:
+        - Windows
+        - macOS
+        - Linux
   - type: textarea
     id: description
     attributes:
