@@ -46,6 +46,101 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		}
 	}
 
+    private createFormSetting(
+        containerEl: HTMLElement, 
+        settingName: string, 
+        settingDesc: string, 
+        settingValue: boolean | string | number, 
+        onChange: (value: boolean | string | number) => void,
+        settingType: 'toggle' | 'dropdown' | 'slider' | 'text' | 'button' = 'toggle',
+        options?: {
+            toggleOptions?: {
+                onChange?: (value: boolean) => void;
+            };
+            dropdownOptions?: Array<{ value: string; label: string }>;
+            sliderOptions?: {
+                min?: number;
+                max?: number;
+                step?: number;
+            };
+            textOptions?: {
+                placeholder?: string;
+                type?: 'text' | 'password' | 'email' | 'url' | 'number';
+                disabled?: boolean;
+            };
+            buttonOptions?: {
+                buttonText?: string;
+                onClick?: () => void;
+            };
+        }
+    ): Setting {
+        switch (settingType) {
+            case 'toggle':
+                return new Setting(containerEl)
+                    .setName(settingName)
+                    .setDesc(settingDesc)
+                    .addToggle((toggle) =>
+                        toggle.setValue(settingValue as boolean).onChange(onChange)
+                    );
+            case 'dropdown':
+                return new Setting(containerEl)
+                    .setName(settingName)
+                    .setDesc(settingDesc)
+                    .addDropdown((dropdown) => {
+                        if (options?.dropdownOptions) {
+                            options.dropdownOptions.forEach(option => {
+                                dropdown.addOption(option.value, option.label);
+                            });
+                        } else {
+                            dropdown.addOption("option1", "Option 1")
+                                   .addOption("option2", "Option 2");
+                        }
+                        return dropdown.setValue(settingValue as string).onChange(onChange);
+                    });
+            case 'slider':
+                return new Setting(containerEl)
+                    .setName(settingName)
+                    .setDesc(settingDesc)
+                    .addSlider((slider) => {
+                        const sliderOptions = options?.sliderOptions;
+                        const min = sliderOptions?.min ?? 1;
+                        const max = sliderOptions?.max ?? 100;
+                        const step = sliderOptions?.step ?? 1;
+                        return slider.setLimits(min, max, step).setValue(settingValue as number).onChange(onChange);
+                    });
+            case 'text':
+                return new Setting(containerEl)
+                    .setName(settingName)
+                    .setDesc(settingDesc)
+                    .addText((text) => {
+                        const textOptions = options?.textOptions;
+                        if (textOptions?.placeholder) {
+                            text.setPlaceholder(textOptions.placeholder);
+                        }
+                        if (textOptions?.disabled) {
+                            text.setDisabled(textOptions.disabled);
+                        }
+                        text.setValue(settingValue as string).onChange(onChange);
+                        if (textOptions?.type && textOptions.type !== 'text') {
+                            text.inputEl.type = textOptions.type;
+                        }
+                        return text;
+                    });
+            case 'button':
+                return new Setting(containerEl)
+                    .setName(settingName)
+                    .setDesc(settingDesc)
+                    .addButton((button) => {
+                        const buttonOptions = options?.buttonOptions;
+                        const buttonText = buttonOptions?.buttonText || settingValue as string;
+                        const onClick = buttonOptions?.onClick || (() => onChange(settingValue));
+                        return button.setButtonText(buttonText).onClick(onClick);
+                    });
+            default:
+                return new Setting(containerEl).setName(settingName).setDesc(settingDesc);
+        }
+    }
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -56,21 +151,19 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "🤖 AI Provider" });
 		
 		// LLM Provider selection
-		new Setting(containerEl)
-			.setName("AI Provider")
-			.setDesc("Choose your preferred AI provider. OpenAI requires an API key, Ollama runs locally for enhanced privacy.")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("openai", "OpenAI (Remote)")
-					.addOption("ollama", "Ollama (Local)")
-					.setValue(this.plugin.settings.llmProvider)
-					.onChange(async (value: 'openai' | 'ollama') => {
-						this.plugin.settings.llmProvider = value;
-						await this.plugin.saveSettings();
-						await this.plugin.updateServiceConfigurations();
-						this.display(); // Refresh UI to show provider-specific settings
-					})
-			);
+		this.createFormSetting(
+            containerEl, 
+            "AI Provider", 
+            "Choose your preferred AI provider. OpenAI requires an API key, Ollama runs locally for enhanced privacy.", 
+            this.plugin.settings.llmProvider, 
+            async (value: 'openai' | 'ollama') => {
+                this.plugin.settings.llmProvider = value as 'openai' | 'ollama';
+                await this.plugin.saveSettings();
+                await this.plugin.updateServiceConfigurations();
+                this.display();
+        }, 'dropdown');
+
+
 
 		// Provider-specific settings section (dynamic based on selection)
 		this.renderProviderSettings(containerEl);
@@ -78,144 +171,151 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		// ⚙️ Analysis Settings Section
 		containerEl.createEl("h3", { text: "⚙️ Analysis Settings" });
 
-		// Communication style
-		new Setting(containerEl)
-			.setName("Communication Style")
-			.setDesc("How should AI communicate insights with you?")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("direct", "Direct - Straightforward and concise")
-					.addOption("gentle", "Gentle - Supportive and nurturing")
-					.addOption("encouraging", "Encouraging - Uplifting and motivational")
-					.setValue(this.plugin.settings.communicationStyle || 'encouraging')
-					.onChange(async (value: 'direct' | 'gentle' | 'encouraging') => {
-						this.plugin.settings.communicationStyle = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        // Communication style
+        this.createFormSetting(
+            containerEl, 
+            "Communication Style", 
+            "How should AI communicate insights with you?", 
+            this.plugin.settings.communicationStyle || 'encouraging', 
+            async (value: 'direct' | 'gentle' | 'encouraging') => {
+                this.plugin.settings.communicationStyle = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'direct', label: 'Direct - Straightforward and concise' }, 
+                    { value: 'gentle', label: 'Gentle - Supportive and nurturing' }, 
+                    { value: 'encouraging', label: 'Encouraging - Uplifting and motivational' }
+                ]
+            }
+        );
 
 		// Analysis Scope Settings (Feature Flag)
-		new Setting(containerEl)
-			.setName("Analysis Scope")
-			.setDesc("Choose the scope of analysis to focus on specific areas of your journal")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("whole-life", "Whole Life - Analyze all entries")
-					.addOption("work-only", "Work Only - Focus on work-related entries")
-					.addOption("custom", "Custom - Define your own scope")
-					.setValue(this.plugin.settings.analysisScope || 'whole-life')
-					.onChange(async (value: 'whole-life' | 'work-only' | 'custom') => {
-						this.plugin.settings.analysisScope = value;
-						await this.plugin.saveSettings();
-						// Refresh to show/hide custom scope settings
-						this.display();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Analysis Scope", 
+            "Choose the scope of analysis to focus on specific areas of your journal", 
+            this.plugin.settings.analysisScope || 'whole-life', 
+            async (value: 'whole-life' | 'work-only' | 'custom') => {
+                this.plugin.settings.analysisScope = value;
+                await this.plugin.saveSettings();
+                // Refresh to show/hide custom scope settings
+                this.display();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'whole-life', label: 'Whole Life - Analyze all entries' }, 
+                    { value: 'work-only', label: 'Work Only - Focus on work-related entries' }, 
+                    { value: 'custom', label: 'Custom - Define your own scope' }
+                ]
+            }
+        );
 
-
-			
-
-
-		// Analysis depth
-		new Setting(containerEl)
-			.setName("Analysis Depth")
-			.setDesc("Choose how detailed the analysis should be")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("basic", "Basic - Quick insights and patterns")
-					.addOption("standard", "Standard - Balanced analysis with good detail")
-					.addOption("detailed", "Detailed - Comprehensive deep-dive analysis")
-					.setValue(this.plugin.settings.analysisDepth || 'standard')
-					.onChange(async (value: 'basic' | 'standard' | 'detailed') => {
-						this.plugin.settings.analysisDepth = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        // Analysis depth
+        this.createFormSetting(
+            containerEl, 
+            "Analysis Scope", 
+            "Choose the scope of analysis to focus on specific areas of your journal", 
+            this.plugin.settings.analysisDepth || 'standard', 
+            async (value: 'basic' | 'standard' | 'detailed') => {
+                this.plugin.settings.analysisDepth = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'basic', label: 'Basic - Quick insights and patterns' }, 
+                    { value: 'standard', label: 'Standard - Balanced analysis with good detail' }, 
+                    { value: 'detailed', label: 'Detailed - Comprehensive deep-dive analysis' }
+                ]
+            }
+        );
 
 		// Enable trend analysis
-		new Setting(containerEl)
-			.setName("Enable Trend Analysis")
-			.setDesc("Analyze patterns and changes over time in your journal entries")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableTrendAnalysis ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.enableTrendAnalysis = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Enable Trend Analysis", 
+            "Analyze patterns and changes over time in your journal entries", 
+            this.plugin.settings.enableTrendAnalysis ?? true, 
+            async (value: boolean) => {
+                this.plugin.settings.enableTrendAnalysis = value;
+                await this.plugin.saveSettings();
+            },
+            'toggle'
+        );
+
 
 		// Enable AI insights
-		new Setting(containerEl)
-			.setName("Enable AI-Powered Insights")
-			.setDesc("Use AI to generate deep semantic insights and personalized recommendations")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableSemanticAnalysis ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.enableSemanticAnalysis = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Enable AI-Powered Insights", 
+            "Use AI to generate deep semantic insights and personalized recommendations", 
+            this.plugin.settings.enableSemanticAnalysis ?? true, 
+            async (value: boolean) => {
+                this.plugin.settings.enableSemanticAnalysis = value;
+                await this.plugin.saveSettings();
+            },
+            'toggle'
+        );
 
 		// Cache analysis results
-		new Setting(containerEl)
-			.setName("Cache Analysis Results")
-			.setDesc("Cache analysis results to improve performance (recommended)")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.cacheAnalysisResults ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.cacheAnalysisResults = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Cache Analysis Results", 
+            "Cache analysis results to improve performance (recommended)", 
+            this.plugin.settings.cacheAnalysisResults ?? true, 
+            async (value: boolean) => {
+                this.plugin.settings.cacheAnalysisResults = value;
+                await this.plugin.saveSettings();
+            },
+            'toggle'
+        );
+
 		
 
 		// 🔒 Privacy & Content Section
 		containerEl.createEl("h3", { text: "🔒 Privacy & Content" });
 
 		// Private content marker
-		new Setting(containerEl)
-			.setName("Exclude Private Notes")
-			.setDesc("Skip notes that contain the #private tag to protect sensitive content")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.excludePrivate)
-					.onChange(async (value) => {
-						this.plugin.settings.excludePrivate = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Exclude Private Notes", 
+            "Skip notes that contain the #private tag to protect sensitive content", 
+            this.plugin.settings.excludePrivate ?? true, 
+            async (value: boolean) => {
+                this.plugin.settings.excludePrivate = value;
+                await this.plugin.saveSettings();
+            },
+            'toggle'
+        );
 
 		// Periodic note folders path
-		this.journalFolderSetting = new Setting(containerEl)
-			.setName("Periodic Note Folders")
-			.setDesc(
-				"Comma-separated paths to your periodic note folders. If folders are found, only those will be searched. If empty or no folders exist, the entire vault will be searched as fallback."
-			)
-			.addText((text) => {
-				text.setPlaceholder("Daily Notes, Journal")
-					.setValue(
-						this.plugin.settings.periodicNoteFolders?.join(", ") ||
-							""
-					)
-					.onChange(async (value) => {
-						// Parse comma-separated values and trim whitespace
-						const folders = value
-							.split(",")
-							.map((f) => f.trim())
-							.filter((f) => f.length > 0);
-						this.plugin.settings.periodicNoteFolders = folders;
-						await this.plugin.saveSettings();
-						if (this.journalFolderSetting) {
-							this.validateFolderPaths(
-								this.journalFolderSetting,
-								folders
-							);
-						}
-					});
-			});
+        this.createFormSetting(
+            containerEl, 
+            "Periodic Note Folders", 
+            "Comma-separated paths to your periodic note folders. If folders are found, only those will be searched. If empty or no folders exist, the entire vault will be searched as fallback.", 
+            this.plugin.settings.periodicNoteFolders?.join(", ") || "", 
+                         async (value: string) => {
+                 const folders = value.split(",").map((f) => f.trim()).filter((f) => f.length > 0);
+                 this.plugin.settings.periodicNoteFolders = folders;
+                 await this.plugin.saveSettings();
+                 if (this.journalFolderSetting) {
+                     this.validateFolderPaths(
+                         this.journalFolderSetting,
+                         folders
+                     );
+                 }
+             },
+            'text',
+            {
+                textOptions: {
+                    placeholder: "Daily Notes, Journal",
+                    type: 'text'
+                }
+            }
+        );
 
 		// Initial validation using requestAnimationFrame to ensure DOM is ready
 		requestAnimationFrame(() => {
@@ -228,27 +328,17 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		});
 
 		// Reflection output folder
-		this.reflectionFolderSetting = new Setting(containerEl)
-			.setName("Reflection Output Folder")
-			.setDesc(
-				"Where to save generated reflections (will be created if it doesn't exist)"
-			)
-			.addText((text) => {
-				text.setPlaceholder("Reflections")
-					.setValue(
-						this.plugin.settings.reflectionFolder || "Summaries"
-					)
-					.onChange(async (value) => {
-						this.plugin.settings.reflectionFolder = value;
-						await this.plugin.saveSettings();
-						if (this.reflectionFolderSetting) {
-							this.validateOrCreateFolder(
-								this.reflectionFolderSetting,
-								value
-							);
-						}
-					});
-			});
+        this.createFormSetting(
+            containerEl, 
+            "Reflection Output Folder", 
+            "Where to save generated reflections (will be created if it doesn't exist)", 
+            this.plugin.settings.reflectionFolder || "Summaries", 
+            async (value: string) => {
+                this.plugin.settings.reflectionFolder = value;
+                await this.plugin.saveSettings();
+            },
+            'text'
+        );
 
 		// Initial validation using requestAnimationFrame to ensure DOM is ready
 		requestAnimationFrame(() => {
@@ -261,20 +351,17 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		});
 
 		// Days to include
-		new Setting(containerEl)
-			.setName("Days to Include")
-			.setDesc("How many days back to look for journal entries")
-			.addSlider((slider) =>
-				slider
-					.setLimits(1, 30, 1)
-					.setValue(this.plugin.settings.daysToInclude)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.daysToInclude = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
+        this.createFormSetting(
+            containerEl, 
+            "Days to Include", 
+            "How many days back to look for journal entries", 
+            this.plugin.settings.daysToInclude, 
+            async (value: number) => {
+                this.plugin.settings.daysToInclude = value;
+                await this.plugin.saveSettings();
+            },
+            'slider'
+        );
 
 		// 🔧 Advanced Section (collapsible)
 		this.renderAdvancedSection(containerEl);
@@ -290,27 +377,74 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 
 			// Encryption status and management
 			const encryptionStatus = this.plugin.settings.encryptionEnabled ? "🔒 Encrypted" : "🔓 Plain Text";
-			new Setting(containerEl)
-				.setName("API Key Security")
-				.setDesc(`Current status: ${encryptionStatus}. Click to manage encryption settings.`)
-				.addButton((btn) => {
-					btn.setButtonText("Manage Encryption")
-						.onClick(() => {
-							const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
-								// Refresh the settings display after modal closes
-								this.display();
-							}, this.plugin.errorHandler);
-							modal.open();
-						});
-				});
+
+            this.createFormSetting(
+                containerEl, 
+                "API Key Security", 
+                `Current status: ${encryptionStatus}. Click to manage encryption settings.`, 
+                this.plugin.settings.encryptionEnabled ? "🔒 Encrypted" : "🔓 Plain Text", 
+                async (value: boolean) => {
+                    this.plugin.settings.encryptionEnabled = value;
+                },
+                'button',
+                {
+                    buttonOptions: {
+                        buttonText: "Manage Encryption",
+                        onClick: () => {
+                            const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
+                                // Refresh the settings display after modal closes
+                                this.display();
+                            }, this.plugin.errorHandler);
+                            modal.open();
+                        }
+                    }
+                }
+            );
+
+            this.createFormSetting(
+                containerEl, 
+                "API Key Security", 
+                `Current status: ${encryptionStatus}. Click to manage encryption settings.`, 
+                this.plugin.settings.encryptionEnabled ? "🔒 Encrypted" : "🔓 Plain Text", 
+                async (value: boolean) => {
+                    this.plugin.settings.encryptionEnabled = value;
+                },
+                'button',
+                {
+                    buttonOptions: {
+                        buttonText: "Manage Encryption",
+                        onClick: () => {
+                            const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
+                                // Refresh the settings display after modal closes
+                                this.display();
+                            }, this.plugin.errorHandler);
+                            modal.open();
+                        }
+                    }
+                }
+            );
 
 			// API Key setting
-			const apiKeySetting = new Setting(containerEl)
-				.setName("OpenAI API Key")
-				.setDesc(this.plugin.settings.encryptionEnabled ? 
-					"Your API key is encrypted. Use 'Manage Encryption' to modify." : 
-					"Your OpenAI API key for generating reflections (stored in plain text)");
-			
+            const apiKeySetting = this.createFormSetting(
+                containerEl, 
+                "OpenAI API Key", 
+                this.plugin.settings.encryptionEnabled ? 
+                    "Your API key is encrypted. Use 'Manage Encryption' to modify." : 
+                    "Your OpenAI API key for generating reflections (stored in plain text)", 
+                this.plugin.settings.openaiApiKey as string, 
+                async (value: string) => {
+                    this.plugin.settings.openaiApiKey = value;
+                    await this.plugin.saveSettings();
+                },
+                'text',
+                {
+                    textOptions: {
+                        placeholder: "sk-...",
+                        type: 'password'
+                    }
+                }
+            );
+
 			if (!this.plugin.settings.encryptionEnabled) {
 				apiKeySetting.addText((text) => {
 					text.setPlaceholder("sk-...")
@@ -339,20 +473,24 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 			}
 
 			// Model selection
-			new Setting(containerEl)
-				.setName("OpenAI Model")
-				.setDesc("Which OpenAI model to use for analysis and summaries")
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("gpt-4o-mini", "GPT-4o Mini (Recommended)")
-						.addOption("gpt-4o", "GPT-4o")
-						.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo")
-						.setValue(this.plugin.settings.openaiModel)
-						.onChange(async (value) => {
-						this.plugin.settings.openaiModel = value;
-						await this.plugin.saveSettings();
-					})
-			);
+            this.createFormSetting(
+                containerEl, 
+                "OpenAI Model", 
+                "Which OpenAI model to use for analysis and summaries", 
+                this.plugin.settings.openaiModel, 
+                async (value: string) => {
+                    this.plugin.settings.openaiModel = value;
+                    await this.plugin.saveSettings();
+                },
+                'dropdown',
+                {
+                    dropdownOptions: [
+                        { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recommended)' },   
+                        { value: 'gpt-4o', label: 'GPT-4o' }, 
+                        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+                    ]
+                }
+            );
 		}
 
 		// Ollama Settings (show only when Ollama is selected)
@@ -360,53 +498,64 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 			containerEl.createEl("h4", { text: "Ollama Configuration" });
 
 			// Ollama base URL
-			new Setting(containerEl)
-				.setName("Ollama Base URL")
-				.setDesc("The base URL where Ollama is running (usually http://localhost:11434)")
-				.addText((text) =>
-					text
-						.setPlaceholder("http://localhost:11434")
-						.setValue(this.plugin.settings.ollamaBaseUrl)
-						.onChange(async (value) => {
-							this.plugin.settings.ollamaBaseUrl = value;
-							await this.plugin.saveSettings();
-							await this.plugin.updateServiceConfigurations();
-						})
-				);
+            this.createFormSetting(
+                containerEl, 
+                "Ollama Base URL", 
+                "The base URL where Ollama is running (usually http://localhost:11434)", 
+                this.plugin.settings.ollamaBaseUrl, 
+                async (value: string) => {
+                    this.plugin.settings.ollamaBaseUrl = value;
+                    await this.plugin.saveSettings();
+                },
+                'text',
+                {
+                    textOptions: {
+                        placeholder: "http://localhost:11434"
+                    }
+                }
+            );
 
 			// Ollama model selection
-			new Setting(containerEl)
-				.setName("Ollama Model")
-				.setDesc("The Ollama model to use (ensure it's downloaded first with 'ollama pull <model>')")
-				.addText((text) =>
-					text
-						.setPlaceholder("llama3.1:8b")
-						.setValue(this.plugin.settings.ollamaModel)
-						.onChange(async (value) => {
-							this.plugin.settings.ollamaModel = value;
-							await this.plugin.saveSettings();
-							await this.plugin.updateServiceConfigurations();
-						})
-				);
+            this.createFormSetting(
+                containerEl, 
+                "Ollama Model", 
+                "The Ollama model to use (ensure it's downloaded first with 'ollama pull <model>')", 
+                this.plugin.settings.ollamaModel, 
+                async (value: string) => {
+                    this.plugin.settings.ollamaModel = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.updateServiceConfigurations();
+                },
+                'text',
+                {
+                    textOptions: {
+                        placeholder: "llama3.1:8b"
+                    }
+                }
+            );
 
 			// Ollama timeout
-			new Setting(containerEl)
-				.setName("Request Timeout")
-				.setDesc("Timeout for Ollama requests in milliseconds (30000 = 30 seconds)")
-				.addText((text) =>
-					text
-						.setPlaceholder("30000")
-						.setValue(this.plugin.settings.ollamaTimeout.toString())
-						.onChange(async (value) => {
-							const timeout = parseInt(value);
-							if (!isNaN(timeout) && timeout > 0) {
-								this.plugin.settings.ollamaTimeout = timeout;
-								await this.plugin.saveSettings();
-								await this.plugin.updateServiceConfigurations();
-							}
-						})
-				);
+            this.createFormSetting(
+                containerEl, 
+                "Request Timeout", 
+                "Timeout for Ollama requests in milliseconds (30000 = 30 seconds)", 
+                this.plugin.settings.ollamaTimeout.toString(), 
+                async (value: string) => {
+                    const timeout = parseInt(value);
+                    if (!isNaN(timeout) && timeout > 0) {
+                        this.plugin.settings.ollamaTimeout = timeout;
+                    }
+                },
+                'text',
+                {
+                    textOptions: {
+                        placeholder: "30000"
+                    }
+                }
+            );
 
+
+            
 			// Ollama connection test
 			new Setting(containerEl)
 				.setName("Test Connection")
@@ -522,61 +671,162 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 	 */
 	private renderLegacyNLPSettings(containerEl: HTMLElement): void {
 		// Blocker Detection Sensitivity
-		new Setting(containerEl)
-			.setName("Blocker Detection Sensitivity")
-			.setDesc("Adjust how sensitive the system is to detecting productivity blockers")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("low", "Low - Only detect obvious blockers")
-					.addOption("medium", "Medium - Balanced detection")
-					.addOption("high", "High - Detect subtle blockers")
-					.setValue(this.plugin.settings.blockerDetectionSensitivity || 'medium')
-					.onChange(async (value: 'low' | 'medium' | 'high') => {
-						this.plugin.settings.blockerDetectionSensitivity = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            containerEl, 
+            "Blocker Detection Sensitivity", 
+            "Adjust how sensitive the system is to detecting productivity blockers", 
+            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
+            async (value: 'low' | 'medium' | 'high') => {
+                this.plugin.settings.blockerDetectionSensitivity = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'low', label: 'Low - Only detect obvious blockers' },
+                    { value: 'medium', label: 'Medium - Balanced detection' },
+                    { value: 'high', label: 'High - Detect subtle blockers' }
+                ]
+            }
+        );
+
+		// NLP Analysis Depth (only show if advanced NLP is enabled)
+        this.createFormSetting(
+            containerEl, 
+            "NLP Analysis Depth", 
+            "Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)", 
+            this.plugin.settings.nlpAnalysisDepth || 'moderate', 
+            async (value: 'basic' | 'moderate' | 'deep') => {
+                this.plugin.settings.nlpAnalysisDepth = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'basic', label: 'Basic - Fast analysis with core features' },
+                    { value: 'moderate', label: 'Moderate - Balanced depth and performance' },
+                    { value: 'deep', label: 'Deep - Comprehensive analysis (slower)' }
+                ]
+            }
+        );
+
+		// Enable Auto-scan
+        this.createFormSetting(
+            containerEl, 
+            "Blocker Detection Sensitivity", 
+            "Adjust how sensitive the system is to detecting productivity blockers", 
+            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
+            async (value: 'low' | 'medium' | 'high') => {
+                this.plugin.settings.blockerDetectionSensitivity = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'low', label: 'Low - Only detect obvious blockers' },
+                    { value: 'medium', label: 'Medium - Balanced detection' },
+                    { value: 'high', label: 'High - Detect subtle blockers' }
+                ]
+            }
+        );
+
+		// NLP Analysis Depth (only show if advanced NLP is enabled)
+        this.createFormSetting(
+            containerEl, 
+            "Blocker Detection Sensitivity", 
+            "Adjust how sensitive the system is to detecting productivity blockers", 
+            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
+            async (value: 'low' | 'medium' | 'high') => {
+                this.plugin.settings.blockerDetectionSensitivity = value;
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'low', label: 'Low - Only detect obvious blockers' },
+                    { value: 'medium', label: 'Medium - Balanced detection' },
+                    { value: 'high', label: 'High - Detect subtle blockers' }   
+                ]
+            }
+        );
+
+		// NLP Analysis Depth (only show if advanced NLP is enabled)
+        this.createFormSetting(
+            containerEl, 
+            "Blocker Detection Sensitivity", 
+            "Adjust how sensitive the system is to detecting productivity blockers", 
+            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
+            async (value: 'low' | 'medium' | 'high') => {
+                this.plugin.settings.blockerDetectionSensitivity = value;
+                await this.plugin.saveSettings();
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'low', label: 'Low - Only detect obvious blockers' },
+                    { value: 'medium', label: 'Medium - Balanced detection' },
+                    { value: 'high', label: 'High - Detect subtle blockers' }
+                ]
+            }
+        );
+
 
 		// NLP Analysis Depth (only show if advanced NLP is enabled)
 		if (this.plugin.settings.enableAdvancedNLP ?? true) {
-			new Setting(containerEl)
-				.setName("NLP Analysis Depth")
-				.setDesc("Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)")
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("basic", "Basic - Fast analysis with core features")
-						.addOption("moderate", "Moderate - Balanced depth and performance")
-						.addOption("deep", "Deep - Comprehensive analysis (slower)")
-						.setValue(this.plugin.settings.nlpAnalysisDepth || 'moderate')
-						.onChange(async (value: 'basic' | 'moderate' | 'deep') => {
-							this.plugin.settings.nlpAnalysisDepth = value;
-							await this.plugin.saveSettings();
-						})
-				);
+            this.createFormSetting(
+                containerEl, 
+                "NLP Analysis Depth", 
+                "Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)", 
+                this.plugin.settings.nlpAnalysisDepth || 'moderate', 
+                async (value: 'basic' | 'moderate' | 'deep') => {
+                    this.plugin.settings.nlpAnalysisDepth = value;
+                    await this.plugin.saveSettings();
+                },
+                'dropdown',
+                {
+                    dropdownOptions: [
+                        { value: 'basic', label: 'Basic - Fast analysis with core features' },
+                        { value: 'moderate', label: 'Moderate - Balanced depth and performance' },
+                        { value: 'deep', label: 'Deep - Comprehensive analysis (slower)' }
+                    ]
+                }
+            );
 				
 			// Scan Frequency Section
 			containerEl.createEl("h4", { text: "Automatic Scanning" });
 			
 			// Enable Auto-scan
-			new Setting(containerEl)
-				.setName("Enable Auto-scan")
-				.setDesc("Automatically run analysis at specified intervals")
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.enableAutoScan ?? false)
-						.onChange(async (value) => {
-							this.plugin.settings.enableAutoScan = value;
-							await this.plugin.saveSettings();
-							
-							// If enabling auto-scan, trigger an immediate scan
-							if (value && this.plugin.settings.scanFrequency !== 'manual') {
-								this.plugin.runAutoScan();
-							}
-							
-							// Refresh to show/hide scan frequency setting
-							this.display();
-						})
-				);
+            this.createFormSetting(
+                containerEl, 
+                "Enable Auto-scan", 
+                "Automatically run analysis at specified intervals", 
+                this.plugin.settings.enableAutoScan ?? false, 
+                async (value: boolean) => {
+                    this.plugin.settings.enableAutoScan = value;
+                    await this.plugin.saveSettings();
+                    
+                    // If enabling auto-scan, trigger an immediate scan
+                    if (value && this.plugin.settings.scanFrequency !== 'manual') {
+                        this.plugin.runAutoScan();
+                    }
+                },
+                'toggle',
+                {
+                    toggleOptions: {
+                        onChange: async (value: boolean) => {
+                            this.plugin.settings.enableAutoScan = value;
+                            await this.plugin.saveSettings();
+
+                            // If enabling auto-scan, trigger an immediate scan
+                            if (value && this.plugin.settings.scanFrequency !== 'manual') {
+                                this.plugin.runAutoScan();
+                            }
+                            
+                            // Refresh to show/hide scan frequency setting
+                            this.display();
+                        }
+                    }
+                }
+            );
       
 			// NLP Features Info
 			const infoEl = containerEl.createDiv({ cls: "setting-item-description" })
