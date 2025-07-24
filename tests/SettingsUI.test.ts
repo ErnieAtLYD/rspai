@@ -107,53 +107,29 @@ describe('JournalReflectionSettingTab', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         
-        mockContainerEl = {
+        // Create a helper function for comprehensive DOM mocking
+        const createMockElement = (tag?: string, attrs?: any): any => ({
+            tagName: tag?.toUpperCase() || 'DIV',
+            textContent: attrs?.text || '',
             empty: jest.fn(),
-            createEl: jest.fn((tag, attrs) => ({
-                textContent: attrs?.text || '',
-                classList: {
-                    add: jest.fn(),
-                    contains: jest.fn().mockReturnValue(false),
-                    toggle: jest.fn()
-                },
-                style: {},
-                addEventListener: jest.fn(),
-                appendChild: jest.fn(),
-                querySelector: jest.fn().mockReturnValue(null)
-            })),
-            createDiv: jest.fn((attrs) => ({
-                style: {},
-                classList: {
-                    add: jest.fn(),
-                    contains: jest.fn().mockReturnValue(false),
-                    toggle: jest.fn()
-                },
-                createSpan: jest.fn((attrs) => ({ 
-                    textContent: attrs?.text || '',
-                    style: {}
-                })),
-                createEl: jest.fn((tag, attrs) => ({ 
-                    textContent: attrs?.text || '', 
-                    setAttribute: jest.fn(),
-                    href: attrs?.href || '',
-                    style: {}
-                })),
-                createDiv: jest.fn((attrs) => ({
-                    style: {},
-                    createSpan: jest.fn((attrs) => ({ 
-                        textContent: attrs?.text || '',
-                        style: {}
-                    })),
-                    createEl: jest.fn((tag, attrs) => ({ 
-                        textContent: attrs?.text || '', 
-                        setAttribute: jest.fn(),
-                        href: attrs?.href || '',
-                        style: {}
-                    }))
-                })),
-                addEventListener: jest.fn()
-            }))
-        };
+            classList: {
+                add: jest.fn(),
+                contains: jest.fn().mockReturnValue(false),
+                toggle: jest.fn()
+            },
+            style: {},
+            addEventListener: jest.fn(),
+            appendChild: jest.fn(),
+            querySelector: jest.fn().mockReturnValue(null),
+            createSpan: jest.fn((attrs) => createMockElement('span', attrs)),
+            createEl: jest.fn((tag, attrs) => createMockElement(tag, attrs)),
+            createDiv: jest.fn((attrs) => createMockElement('div', attrs)),
+            setAttribute: jest.fn(),
+            href: attrs?.href || '',
+            title: attrs?.title || ''
+        });
+        
+        mockContainerEl = createMockElement();
 
         settingsTab = new JournalReflectionSettingTab(mockApp as any, mockPlugin as any);
         settingsTab.containerEl = mockContainerEl;
@@ -314,9 +290,10 @@ describe('JournalReflectionSettingTab', () => {
 
             expect(mockContainerEl.empty).toHaveBeenCalled();
             expect(mockContainerEl.createEl).toHaveBeenCalledWith('h2', { text: 'Retrospect AI Settings' });
-            expect(mockContainerEl.createEl).toHaveBeenCalledWith('h3', { text: '🤖 AI Provider' });
-            expect(mockContainerEl.createEl).toHaveBeenCalledWith('h3', { text: '⚙️ Analysis Settings' });
-            expect(mockContainerEl.createEl).toHaveBeenCalledWith('h3', { text: '🔒 Privacy & Content' });
+            
+            // Check that section containers are created
+            expect(mockContainerEl.createDiv).toHaveBeenCalledWith({ cls: 'retrospect-section' });
+            expect(mockContainerEl.createDiv).toHaveBeenCalledTimes(5); // 5 sections
         });
     });
 
@@ -535,29 +512,43 @@ describe('JournalReflectionSettingTab', () => {
 
     describe('renderAdvancedSection', () => {
         test('should create collapsible advanced section', () => {
-            // Update the mock to handle NLP settings
-            const mockAdvancedContainer = {
-                createEl: jest.fn().mockReturnThis(),
-                createDiv: jest.fn(() => ({
-                    style: {},
-                    createSpan: jest.fn(),
-                    createEl: jest.fn()
-                })),
+            // Create a helper function for comprehensive DOM mocking (same as beforeEach)
+            const createMockElement = (tag?: string, attrs?: any): any => ({
+                tagName: tag?.toUpperCase() || 'DIV',
+                textContent: attrs?.text || '',
+                empty: jest.fn(),
                 classList: {
+                    add: jest.fn(),
                     contains: jest.fn().mockReturnValue(false),
                     toggle: jest.fn()
-                }
+                },
+                style: {},
+                addEventListener: jest.fn(),
+                appendChild: jest.fn(),
+                querySelector: jest.fn().mockReturnValue(null),
+                createSpan: jest.fn((attrs) => createMockElement('span', attrs)),
+                createEl: jest.fn((tag, attrs) => createMockElement(tag, attrs)),
+                createDiv: jest.fn((attrs) => createMockElement('div', attrs)),
+                setAttribute: jest.fn(),
+                href: attrs?.href || '',
+                title: attrs?.title || ''
+            });
+            
+            const mockAdvancedContainer = createMockElement();
+            
+            // Set up the section container that the method actually uses
+            (settingsTab as any).sectionContainers = {
+                advanced: mockAdvancedContainer
             };
             
-            mockContainerEl.createDiv = jest.fn().mockReturnValue(mockAdvancedContainer);
-            
-            (settingsTab as any).renderAdvancedSection(mockContainerEl);
+            (settingsTab as any).renderAdvancedSection();
 
-            expect(mockContainerEl.createEl).toHaveBeenCalledWith('h3', { 
+            expect(mockAdvancedContainer.empty).toHaveBeenCalled();
+            expect(mockAdvancedContainer.createEl).toHaveBeenCalledWith('h3', { 
                 text: '🔧 Advanced', 
                 cls: 'retrospect-collapsible-header' 
             });
-            expect(mockContainerEl.createDiv).toHaveBeenCalledWith({ 
+            expect(mockAdvancedContainer.createDiv).toHaveBeenCalledWith({ 
                 cls: 'retrospect-collapsible-content retrospect-collapsed' 
             });
         });
