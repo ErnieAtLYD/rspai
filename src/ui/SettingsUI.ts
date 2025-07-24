@@ -81,17 +81,11 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                         toggle.setValue(settingValue as boolean).onChange(onChange)
                     );
             case 'dropdown':
-                return new Setting(containerEl)
-                    .setName(settingName)
-                    .setDesc(settingDesc)
-                    .addDropdown((dropdown) => {
+                return new Setting(containerEl).setName(settingName).setDesc(settingDesc).addDropdown((dropdown) => {
                         if (options?.dropdownOptions) {
                             options.dropdownOptions.forEach(option => {
                                 dropdown.addOption(option.value, option.label);
                             });
-                        } else {
-                            dropdown.addOption("option1", "Option 1")
-                                   .addOption("option2", "Option 2");
                         }
                         return dropdown.setValue(settingValue as string).onChange(onChange);
                     });
@@ -161,13 +155,15 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     await this.plugin.updateServiceConfigurations();
                     this.display();
                 }
-        }, 'dropdown', {
-            dropdownOptions: [
-                { value: 'openai', label: 'OpenAI' },
-                { value: 'ollama', label: 'Ollama' }
-            ]
-        });
-
+            },
+            'dropdown',
+            {
+                dropdownOptions: [
+                    { value: 'openai', label: 'OpenAI' },
+                    { value: 'ollama', label: 'Ollama' }
+                ]
+            }
+        );
 
 
 		// Provider-specific settings section (dynamic based on selection)
