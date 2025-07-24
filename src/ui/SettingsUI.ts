@@ -760,53 +760,33 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             }
         );
 
-		// NLP Analysis Depth (only show if advanced NLP is enabled)
-		if (this.plugin.settings.enableAdvancedNLP ?? true) {
-            this.createFormSetting(
-                containerEl, 
-                "NLP Analysis Depth", 
-                "Choose the depth of NLP analysis: Basic (fast), Moderate (balanced), Deep (comprehensive)", 
-                this.plugin.settings.nlpAnalysisDepth || 'moderate', 
-                async (value: 'basic' | 'moderate' | 'deep') => {
-                    this.plugin.settings.nlpAnalysisDepth = value;
-                    await this.plugin.saveSettings();
-                },
-                'dropdown',
-                {
-                    dropdownOptions: [
-                        { value: 'basic', label: 'Basic - Fast analysis with core features' },
-                        { value: 'moderate', label: 'Moderate - Balanced depth and performance' },
-                        { value: 'deep', label: 'Deep - Comprehensive analysis (slower)' }
-                    ]
-                }
-            );
-			// NLP Features Info
-			const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
-			infoEl.style.color = "var(--text-muted)";
-			infoEl.createEl("strong", { text: "Advanced NLP Features:" });
-			infoEl.createEl("br");
+        // NLP Features Info
+        const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
+        infoEl.style.color = "var(--text-muted)";
+        infoEl.createEl("strong", { text: "Advanced NLP Features:" });
+        infoEl.createEl("br");
       
-			infoEl.createSpan({ text: "• " });
-			infoEl.createEl("strong", { text: "Productivity Theme Extraction:" });
-			infoEl.createSpan({ text: " Identifies recurring themes in your work" });
-			infoEl.createEl("br");
-			infoEl.createSpan({ text: "• " });
-			infoEl.createEl("strong", { text: "Blocker Detection:" });
-			infoEl.createSpan({ text: " Spots procrastination, time management, and workflow issues" });
-			infoEl.createEl("br");
-			infoEl.createSpan({ text: "• " });
-			infoEl.createEl("strong", { text: "Multi-dimensional Sentiment:" });
-			infoEl.createSpan({ text: " Analyzes emotions, arousal levels, and productivity mood" });
-			infoEl.createEl("br");
-			infoEl.createSpan({ text: "• " });
-			infoEl.createEl("strong", { text: "Context-aware Analysis:" });
-			infoEl.createSpan({ text: " Understands the nuances of your writing style" });
-			infoEl.createEl("br");
-			infoEl.createSpan({ text: "• " });
-			infoEl.createEl("strong", { text: "Pattern Correlation:" });
-			infoEl.createSpan({ text: " Connects productivity patterns with mood and activities" });
-		}
-	}
+        infoEl.createSpan({ text: "• " });
+        infoEl.createEl("strong", { text: "Productivity Theme Extraction:" });
+        infoEl.createSpan({ text: " Identifies recurring themes in your work" });
+        infoEl.createEl("br");
+        infoEl.createSpan({ text: "• " });
+        infoEl.createEl("strong", { text: "Blocker Detection:" });
+        infoEl.createSpan({ text: " Spots procrastination, time management, and workflow issues" });
+        infoEl.createEl("br");
+        infoEl.createSpan({ text: "• " });
+        infoEl.createEl("strong", { text: "Multi-dimensional Sentiment:" });
+        infoEl.createSpan({ text: " Analyzes emotions, arousal levels, and productivity mood" });
+        infoEl.createEl("br");
+        infoEl.createSpan({ text: "• " });
+        infoEl.createEl("strong", { text: "Context-aware Analysis:" });
+        infoEl.createSpan({ text: " Understands the nuances of your writing style" });
+        infoEl.createEl("br");
+        infoEl.createSpan({ text: "• " });
+        infoEl.createEl("strong", { text: "Pattern Correlation:" });
+        infoEl.createSpan({ text: " Connects productivity patterns with mood and activities" });
+    }
+
 
 
 	/**
