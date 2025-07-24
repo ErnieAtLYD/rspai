@@ -60,6 +60,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 min?: number;
                 max?: number;
                 step?: number;
+                dynamicTooltip?: boolean;
             };
             textOptions?: {
                 placeholder?: string;
@@ -98,7 +99,15 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                         const min = sliderOptions?.min ?? 1;
                         const max = sliderOptions?.max ?? 100;
                         const step = sliderOptions?.step ?? 1;
-                        return slider.setLimits(min, max, step).setValue(settingValue as number).onChange(onChange);
+                        const dynamicTooltip = sliderOptions?.dynamicTooltip ?? false;
+                        
+                        slider.setLimits(min, max, step).setValue(settingValue as number).onChange(onChange);
+                        
+                        if (dynamicTooltip) {
+                            slider.setDynamicTooltip();
+                        }
+                        
+                        return slider;
                     });
             case 'text':
                 return new Setting(containerEl)
@@ -475,7 +484,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             );
 
 			// API Key setting
-            const apiKeySetting = this.createFormSetting(
+            this.createFormSetting(
                 containerEl, 
                 "OpenAI API Key", 
                 this.plugin.settings.encryptionEnabled ? 
@@ -494,24 +503,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     }
                 }
             );
-
-			if (!this.plugin.settings.encryptionEnabled) {
-				apiKeySetting.addText((text) => {
-					text.setPlaceholder("sk-...")
-						.setValue(typeof this.plugin.settings.openaiApiKey === 'string' ? this.plugin.settings.openaiApiKey : "")
-						.onChange(async (value) => {
-							this.plugin.settings.openaiApiKey = value;
-							await this.plugin.saveSettings();
-						});
-					text.inputEl.type = "password";
-				});
-			} else {
-				apiKeySetting.addText((text) => {
-					text.setPlaceholder("[Encrypted]")
-						.setValue("[Encrypted]")
-						.setDisabled(true);
-				});
-			}
 			
 			// Security warning for plain text storage
 			if (!this.plugin.settings.encryptionEnabled) {
@@ -604,44 +595,50 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 }
             );
 
-
-            
-			// Ollama connection test
-			new Setting(containerEl)
-				.setName("Test Connection")
-				.setDesc("Test if Ollama is running and the model is available")
-				.addButton((btn) =>
-					btn
-						.setButtonText("Test Connection")
-						.onClick(async () => {
-							btn.setDisabled(true);
-							btn.setButtonText("Testing...");
+			this.createFormSetting(
+				containerEl,
+				"Test Connection",
+				"Test if Ollama is running and the model is available",
+				"Test Connection",
+				() => {},
+				'button',
+				{
+					buttonOptions: {
+						buttonText: "Test Connection",
+						onClick: async () => {
+							const btn = containerEl.querySelector('.setting-item:last-child button') as HTMLButtonElement;
+							if (!btn) return;
+							
+							btn.disabled = true;
+							btn.textContent = "Testing...";
 							
 							try {
 								const aiService = this.plugin.serviceManager.resolve<AIService>('aiService');
 								const success = await aiService.testConnection();
 								if (success) {
-									btn.setButtonText("✅ Success");
+									btn.textContent = "✅ Success";
 									setTimeout(() => {
-										btn.setButtonText("Test Connection");
-										btn.setDisabled(false);
+										btn.textContent = "Test Connection";
+										btn.disabled = false;
 									}, 2000);
 								} else {
-									btn.setButtonText("❌ Failed");
+									btn.textContent = "❌ Failed";
 									setTimeout(() => {
-										btn.setButtonText("Test Connection");
-										btn.setDisabled(false);
+										btn.textContent = "Test Connection";
+										btn.disabled = false;
 									}, 2000);
 								}
 							} catch (error) {
-								btn.setButtonText("❌ Error");
+								btn.textContent = "❌ Error";
 								setTimeout(() => {
-									btn.setButtonText("Test Connection");
-									btn.setDisabled(false);
+									btn.textContent = "Test Connection";
+									btn.disabled = false;
 								}, 2000);
 							}
-						})
-				);
+						}
+					}
+				}
+			);
 
 			// Ollama setup instructions
 			const ollamaInfoEl = containerEl.createDiv({ cls: "setting-item-description" });
@@ -681,34 +678,40 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		});
 
 		// Pattern recognition threshold (simplified)
-		new Setting(advancedContainer)
-			.setName("Pattern Recognition Sensitivity")
-			.setDesc("Adjust how sensitive pattern detection is (lower = more patterns detected)")
-			.addSlider((slider) =>
-				slider
-					.setLimits(0.1, 1.0, 0.1)
-					.setValue(this.plugin.settings.patternThreshold || 0.6)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.patternThreshold = value;
-						await this.plugin.saveSettings();
-					})
-			);
+        this.createFormSetting(
+            advancedContainer, 
+            "Pattern Recognition Sensitivity", 
+            "Adjust how sensitive pattern detection is (lower = more patterns detected)", 
+            this.plugin.settings.patternThreshold || 0.6, 
+            async (value: number) => {
+                this.plugin.settings.patternThreshold = value;
+                await this.plugin.saveSettings();
+            },
+            'slider',
+            {
+                sliderOptions: {
+                    min: 0.1,
+                    max: 1.0,
+                    step: 0.1,
+                    dynamicTooltip: true
+                }
+            }
+        );
 
-		new Setting(containerEl)
-		.setName("Enable Advanced NLP Analysis")
-		.setDesc("Use advanced NLP for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis")
-		.addToggle((toggle) =>
-			toggle
-				.setValue(this.plugin.settings.enableAdvancedNLP ?? true)
-				.onChange(async (value) => {
-					this.plugin.settings.enableAdvancedNLP = value;
-					await this.plugin.saveSettings();
-					// Refresh to show/hide dependent settings
-					this.display();
-				})
-		);
-
+        // Enable advanced NLP analysis
+        this.createFormSetting(
+            advancedContainer,
+            "Enable Advanced NLP Analysis",
+            "Use advanced NLP for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis",
+            this.plugin.settings.enableAdvancedNLP ?? true,
+            async (value: boolean) => {
+                this.plugin.settings.enableAdvancedNLP = value;
+                await this.plugin.saveSettings();
+                // Refresh to show/hide dependent settings
+                this.display();
+            },
+            'toggle'
+        );
 
 		// Show legacy NLP settings if enabled
 		if (this.plugin.settings.enableAdvancedNLP) {
@@ -765,7 +768,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
         infoEl.style.color = "var(--text-muted)";
         infoEl.createEl("strong", { text: "Advanced NLP Features:" });
         infoEl.createEl("br");
-      
+    
         infoEl.createSpan({ text: "• " });
         infoEl.createEl("strong", { text: "Productivity Theme Extraction:" });
         infoEl.createSpan({ text: " Identifies recurring themes in your work" });
