@@ -20,6 +20,15 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 	plugin: JournalReflectionPlugin;
 	private journalFolderSetting: Setting | null = null;
 	private reflectionFolderSetting: Setting | null = null;
+	
+	// Section containers for selective updates
+	private sectionContainers: {
+		aiProvider?: HTMLElement;
+		analysisSettings?: HTMLElement;
+		autoScanSettings?: HTMLElement;
+		privacyContent?: HTMLElement;
+		advanced?: HTMLElement;
+	} = {};
 
 	constructor(app: App, plugin: JournalReflectionPlugin) {
 		super(app, plugin);
@@ -148,6 +157,26 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h2", { text: "Retrospect AI Settings" });
 
+		// Create section containers
+		this.sectionContainers.aiProvider = containerEl.createDiv({ cls: "retrospect-section" });
+		this.sectionContainers.analysisSettings = containerEl.createDiv({ cls: "retrospect-section" });
+		this.sectionContainers.autoScanSettings = containerEl.createDiv({ cls: "retrospect-section" });
+		this.sectionContainers.privacyContent = containerEl.createDiv({ cls: "retrospect-section" });
+		this.sectionContainers.advanced = containerEl.createDiv({ cls: "retrospect-section" });
+
+		// Render all sections
+		this.renderAiProviderSection();
+		this.renderAnalysisSettingsSection();
+		this.renderAutoScanSettingsSection();
+		this.renderPrivacyContentSection();
+		this.renderAdvancedSection();
+	}
+
+	private renderAiProviderSection(): void {
+		const containerEl = this.sectionContainers.aiProvider;
+		if (!containerEl) return;
+		containerEl.empty();
+
 		// 🤖 AI Provider Section
 		containerEl.createEl("h3", { text: "🤖 AI Provider" });
 		
@@ -162,7 +191,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     this.plugin.settings.llmProvider = value;
                     await this.plugin.saveSettings();
                     await this.plugin.updateServiceConfigurations();
-                    this.display();
+                    this.renderAiProviderSection();
                 }
             },
             'dropdown',
@@ -174,9 +203,14 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             }
         );
 
-
 		// Provider-specific settings section (dynamic based on selection)
 		this.renderProviderSettings(containerEl);
+	}
+
+	private renderAnalysisSettingsSection(): void {
+		const containerEl = this.sectionContainers.analysisSettings;
+		if (!containerEl) return;
+		containerEl.empty();
 
 		// ⚙️ Analysis Settings Section
 		containerEl.createEl("h3", { text: "⚙️ Analysis Settings" });
@@ -211,7 +245,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 this.plugin.settings.analysisScope = value;
                 await this.plugin.saveSettings();
                 // Refresh to show/hide custom scope settings
-                this.display();
+                this.renderAnalysisSettingsSection();
             },
             'dropdown',
             {
@@ -256,7 +290,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             'toggle'
         );
 
-
 		// Enable AI insights
         this.createFormSetting(
             containerEl, 
@@ -282,6 +315,12 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             },
             'toggle'
         );
+	}
+
+	private renderAutoScanSettingsSection(): void {
+		const containerEl = this.sectionContainers.autoScanSettings;
+		if (!containerEl) return;
+		containerEl.empty();
 
 		// 🕐 Auto-Scan Settings Section
 		containerEl.createEl("h3", { text: "🕐 Auto-Scan Settings" });
@@ -297,7 +336,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
                 
                 // Refresh to show/hide scan frequency setting
-                this.display();
+                this.renderAutoScanSettingsSection();
             },
             'toggle'
         );
@@ -356,6 +395,12 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 }
             );
         }
+	}
+
+	private renderPrivacyContentSection(): void {
+		const containerEl = this.sectionContainers.privacyContent;
+		if (!containerEl) return;
+		containerEl.empty();
 
 		// 🔒 Privacy & Content Section
 		containerEl.createEl("h3", { text: "🔒 Privacy & Content" });
@@ -374,7 +419,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
         );
 
 		// Periodic note folders path
-        this.createFormSetting(
+        this.journalFolderSetting = this.createFormSetting(
             containerEl, 
             "Periodic Note Folders", 
             "Comma-separated paths to your periodic note folders. If folders are found, only those will be searched. If empty or no folders exist, the entire vault will be searched as fallback.", 
@@ -410,7 +455,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		});
 
 		// Reflection output folder
-        this.createFormSetting(
+        this.reflectionFolderSetting = this.createFormSetting(
             containerEl, 
             "Reflection Output Folder", 
             "Where to save generated reflections (will be created if it doesn't exist)", 
@@ -444,9 +489,71 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             },
             'slider'
         );
+	}
+
+	private renderAdvancedSection(): void {
+		const containerEl = this.sectionContainers.advanced;
+		if (!containerEl) return;
+		containerEl.empty();
 
 		// 🔧 Advanced Section (collapsible)
-		this.renderAdvancedSection(containerEl);
+		const advancedHeader = containerEl.createEl("h3", { 
+			text: "🔧 Advanced", 
+			cls: "retrospect-collapsible-header" 
+		});
+		
+		const advancedContainer = containerEl.createDiv({ 
+			cls: "retrospect-collapsible-content retrospect-collapsed" 
+		});
+
+		// Make header clickable to toggle section
+		advancedHeader.style.cursor = "pointer";
+		advancedHeader.addEventListener("click", () => {
+			const isCollapsed = advancedContainer.classList.contains("retrospect-collapsed");
+			advancedContainer.classList.toggle("retrospect-collapsed", !isCollapsed);
+			advancedHeader.textContent = isCollapsed ? "🔧 Advanced (expanded)" : "🔧 Advanced";
+		});
+
+		// Pattern recognition threshold (simplified)
+        this.createFormSetting(
+            advancedContainer, 
+            "Pattern Recognition Sensitivity", 
+            "Adjust how sensitive pattern detection is (lower = more patterns detected)", 
+            this.plugin.settings.patternThreshold || 0.6, 
+            async (value: number) => {
+                this.plugin.settings.patternThreshold = value;
+                await this.plugin.saveSettings();
+            },
+            'slider',
+            {
+                sliderOptions: {
+                    min: 0.1,
+                    max: 1.0,
+                    step: 0.1,
+                    dynamicTooltip: true
+                }
+            }
+        );
+
+        // Enable advanced NLP analysis
+        this.createFormSetting(
+            advancedContainer,
+            "Enable Advanced NLP Analysis",
+            "Use advanced NLP for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis",
+            this.plugin.settings.enableAdvancedNLP ?? true,
+            async (value: boolean) => {
+                this.plugin.settings.enableAdvancedNLP = value;
+                await this.plugin.saveSettings();
+                // Refresh to show/hide dependent settings
+                this.renderAdvancedSection();
+            },
+            'toggle'
+        );
+
+		// Show legacy NLP settings if enabled
+		if (this.plugin.settings.enableAdvancedNLP) {
+			this.renderLegacyNLPSettings(advancedContainer);
+		}
 	}
 
 	/**
@@ -474,8 +581,8 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                         buttonText: "Manage Encryption",
                         onClick: () => {
                             const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
-                                // Refresh the settings display after modal closes
-                                this.display();
+                                // Refresh the AI provider section after modal closes
+                                this.renderAiProviderSection();
                             }, this.plugin.errorHandler);
                             modal.open();
                         }
@@ -652,70 +759,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 				attr: { target: "_blank" }
 			});
 			ollamaInfoEl.createSpan({ text: ", then run 'ollama pull " + this.plugin.settings.ollamaModel + "' to download the model." });
-		}
-	}
-
-	/**
-	 * Render advanced settings section (collapsible)
-	 */
-	private renderAdvancedSection(containerEl: HTMLElement): void {
-		// Create collapsible advanced section
-		const advancedHeader = containerEl.createEl("h3", { 
-			text: "🔧 Advanced", 
-			cls: "retrospect-collapsible-header" 
-		});
-		
-		const advancedContainer = containerEl.createDiv({ 
-			cls: "retrospect-collapsible-content retrospect-collapsed" 
-		});
-
-		// Make header clickable to toggle section
-		advancedHeader.style.cursor = "pointer";
-		advancedHeader.addEventListener("click", () => {
-			const isCollapsed = advancedContainer.classList.contains("retrospect-collapsed");
-			advancedContainer.classList.toggle("retrospect-collapsed", !isCollapsed);
-			advancedHeader.textContent = isCollapsed ? "🔧 Advanced (expanded)" : "🔧 Advanced";
-		});
-
-		// Pattern recognition threshold (simplified)
-        this.createFormSetting(
-            advancedContainer, 
-            "Pattern Recognition Sensitivity", 
-            "Adjust how sensitive pattern detection is (lower = more patterns detected)", 
-            this.plugin.settings.patternThreshold || 0.6, 
-            async (value: number) => {
-                this.plugin.settings.patternThreshold = value;
-                await this.plugin.saveSettings();
-            },
-            'slider',
-            {
-                sliderOptions: {
-                    min: 0.1,
-                    max: 1.0,
-                    step: 0.1,
-                    dynamicTooltip: true
-                }
-            }
-        );
-
-        // Enable advanced NLP analysis
-        this.createFormSetting(
-            advancedContainer,
-            "Enable Advanced NLP Analysis",
-            "Use advanced NLP for deeper insights including productivity themes, blocker detection, and multi-dimensional sentiment analysis",
-            this.plugin.settings.enableAdvancedNLP ?? true,
-            async (value: boolean) => {
-                this.plugin.settings.enableAdvancedNLP = value;
-                await this.plugin.saveSettings();
-                // Refresh to show/hide dependent settings
-                this.display();
-            },
-            'toggle'
-        );
-
-		// Show legacy NLP settings if enabled
-		if (this.plugin.settings.enableAdvancedNLP) {
-			this.renderLegacyNLPSettings(advancedContainer);
 		}
 	}
 
