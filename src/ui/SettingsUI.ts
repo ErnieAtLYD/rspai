@@ -487,7 +487,15 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 this.plugin.settings.daysToInclude = value;
                 await this.plugin.saveSettings();
             },
-            'slider'
+            'slider',
+            {
+                sliderOptions: {
+                    min: 1,
+                    max: 30,
+                    step: 1,
+                    dynamicTooltip: true
+                }
+            }
         );
 	}
 
@@ -892,34 +900,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 			);
 		} else {
 			this.addValidationIcon(setting, "error", "No folders found");
-		}
-	}
-
-	private validateFolderPath(setting: Setting, folderPath: string): void {
-		// Remove any existing validation indicators
-		const existingIcon = setting.settingEl.querySelector(
-			".folder-validation-icon"
-		);
-		if (existingIcon) {
-			existingIcon.remove();
-		}
-
-		if (!folderPath || folderPath.trim() === "") {
-			this.addValidationIcon(
-				setting,
-				"info",
-				"Will search in root folder"
-			);
-			return;
-		}
-
-		// Check if folder exists
-		const folder = this.app.vault.getAbstractFileByPath(folderPath.trim());
-
-		if (folder && folder instanceof TFolder) {
-			this.addValidationIcon(setting, "success", "Folder found");
-		} else {
-			this.addValidationIcon(setting, "error", "Folder not found");
 		}
 	}
 
