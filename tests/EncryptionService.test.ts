@@ -1,6 +1,6 @@
 import { App } from 'obsidian';
-import { EncryptionService, EncryptionConfig, EncryptedData } from './EncryptionService';
-import { ErrorHandlingService } from './ErrorHandlingService';
+import { EncryptionService, EncryptionConfig, EncryptedData } from '../src/services/EncryptionService';
+import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock the crypto module for consistent testing
 const mockCrypto = {
@@ -48,7 +48,7 @@ describe('EncryptionService', () => {
             initialize: jest.fn().mockResolvedValue(undefined),
             dispose: jest.fn().mockResolvedValue(undefined),
             onConfigUpdate: jest.fn().mockResolvedValue(undefined)
-        } as any;
+        } as Partial<ErrorHandlingService> as ErrorHandlingService;
         
         encryptionService = new EncryptionService(app, {}, mockErrorHandler);
     });
@@ -93,7 +93,7 @@ describe('EncryptionService', () => {
         it('should throw error when Web Crypto API is not available', async () => {
             // Temporarily remove crypto
             const originalCrypto = global.crypto;
-            delete (global as any).crypto;
+            (global as { crypto?: Crypto }).crypto = undefined;
 
             await expect(encryptionService.initialize()).rejects.toThrow(
                 'Web Crypto API not available. Cannot initialize encryption service.'
@@ -126,7 +126,7 @@ describe('EncryptionService', () => {
 
         it('should return false when crypto is undefined', () => {
             const originalCrypto = global.crypto;
-            delete (global as any).crypto;
+            (global as { crypto?: Crypto }).crypto = undefined;
 
             expect(encryptionService['isWebCryptoAvailable']()).toBe(false);
 
@@ -144,7 +144,7 @@ describe('EncryptionService', () => {
 
         it('should return false when crypto.getRandomValues is undefined', () => {
             const originalGetRandomValues = global.crypto.getRandomValues;
-            delete (global.crypto as any).getRandomValues;
+            delete (global.crypto as { getRandomValues?: (array: Uint8Array) => Uint8Array }).getRandomValues;
 
             expect(encryptionService['isWebCryptoAvailable']()).toBe(false);
 
@@ -247,7 +247,7 @@ describe('EncryptionService', () => {
 
         it('should throw error when Web Crypto API is not available', async () => {
             const originalCrypto = global.crypto;
-            delete (global as any).crypto;
+            (global as { crypto?: Crypto }).crypto = undefined;
             
             // Create a new service instance without initializing it
             const uninitializedService = new EncryptionService(app, {}, mockErrorHandler);
@@ -318,7 +318,7 @@ describe('EncryptionService', () => {
 
         it('should throw error when Web Crypto API is not available', async () => {
             const originalCrypto = global.crypto;
-            delete (global as any).crypto;
+            (global as { crypto?: Crypto }).crypto = undefined;
             
             // Create a new service instance without initializing it
             const uninitializedService = new EncryptionService(app, {}, mockErrorHandler);
@@ -564,7 +564,7 @@ describe('EncryptionService', () => {
             // Create a real encryption service for integration testing
             const { webcrypto: realCrypto } = await import('crypto');
             if (realCrypto) {
-                global.crypto = realCrypto as any;
+                global.crypto = realCrypto as unknown as Crypto;
                 
                 const realService = new EncryptionService(app, {}, mockErrorHandler);
                 await realService.initialize();
@@ -592,10 +592,10 @@ describe('EncryptionService', () => {
         it('should handle encryption with wrong data types', async () => {
             await encryptionService.initialize();
             
-            await expect(encryptionService.encrypt(null as any, 'password')).rejects.toThrow();
-            await expect(encryptionService.encrypt(undefined as any, 'password')).rejects.toThrow();
-            await expect(encryptionService.encrypt('data', null as any)).rejects.toThrow();
-            await expect(encryptionService.encrypt('data', undefined as any)).rejects.toThrow();
+            await expect(encryptionService.encrypt(null as unknown as string, 'password')).rejects.toThrow();
+            await expect(encryptionService.encrypt(undefined as unknown as string, 'password')).rejects.toThrow();
+            await expect(encryptionService.encrypt('data', null as unknown as string)).rejects.toThrow();
+            await expect(encryptionService.encrypt('data', undefined as unknown as string)).rejects.toThrow();
         });
 
         it('should handle decryption with malformed encrypted data', async () => {
