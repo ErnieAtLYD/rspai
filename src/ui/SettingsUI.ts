@@ -1,6 +1,4 @@
-// src/ui/_SettingsUI.ts
-
-// TO DO: Implement Settings UI (refactor from main.ts)
+// src/ui/SettingsUI.ts
 
 import { App, PluginSettingTab, Setting } from "obsidian";
 import JournalReflectionPlugin, { DEFAULT_SETTINGS } from "../main";
@@ -157,10 +155,12 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             "Choose your preferred AI provider. OpenAI requires an API key, Ollama runs locally for enhanced privacy.", 
             this.plugin.settings.llmProvider, 
             async (value: 'openai' | 'ollama') => {
-                this.plugin.settings.llmProvider = value as 'openai' | 'ollama';
-                await this.plugin.saveSettings();
-                await this.plugin.updateServiceConfigurations();
-                this.display();
+                if (value === 'openai' || value === 'ollama') {
+                    this.plugin.settings.llmProvider = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.updateServiceConfigurations();
+                    this.display();
+                }
         }, 'dropdown', {
             dropdownOptions: [
                 { value: 'openai', label: 'OpenAI' },
@@ -221,8 +221,8 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
         // Analysis depth
         this.createFormSetting(
             containerEl, 
-            "Analysis Scope", 
-            "Choose the scope of analysis to focus on specific areas of your journal", 
+            "Analysis Depth", 
+            "How deep should the analysis be?", 
             this.plugin.settings.analysisDepth || 'standard', 
             async (value: 'basic' | 'standard' | 'detailed') => {
                 this.plugin.settings.analysisDepth = value;
