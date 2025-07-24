@@ -5,7 +5,7 @@ import { EncryptionService, ErrorHandlingService } from "./services";
  * Modal for prompting user for master password
  */
 export class MasterPasswordModal extends Modal {
-    private password: string = "";
+    private password = "";
     private onSubmit: (password: string | null) => void;
 
     constructor(app: App, onSubmit: (password: string | null) => void) {
@@ -82,9 +82,9 @@ export class MasterPasswordModal extends Modal {
  * Modal for setting up encryption for the first time
  */
 export class EncryptionSetupModal extends Modal {
-    private password: string = "";
-    private confirmPassword: string = "";
-    private apiKey: string = "";
+    private password = "";
+    private confirmPassword = "";
+    private apiKey = "";
     private onSubmit: (password: string | null, apiKey: string | null) => void;
     private encryptionService: EncryptionService;
 
