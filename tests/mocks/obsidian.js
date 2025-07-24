@@ -43,6 +43,15 @@ class Plugin {
 class Setting {
     constructor(containerEl) {
         this.containerEl = containerEl;
+        this.settingEl = {
+            querySelector: () => null,
+            createDiv: (attrs) => ({
+                classList: { add: () => {} },
+                textContent: '',
+                title: '',
+                appendChild: () => {}
+            })
+        };
     }
     
     setName(name) {
@@ -58,6 +67,7 @@ class Setting {
             setPlaceholder: () => textComponent,
             setValue: () => textComponent,
             onChange: () => textComponent,
+            setDisabled: () => textComponent,
             inputEl: { type: 'text' }
         };
         callback(textComponent);
@@ -70,6 +80,37 @@ class Setting {
             onChange: () => toggleComponent
         };
         callback(toggleComponent);
+        return this;
+    }
+    
+    addDropdown(callback) {
+        const dropdownComponent = {
+            addOption: () => dropdownComponent,
+            setValue: () => dropdownComponent,
+            onChange: () => dropdownComponent
+        };
+        callback(dropdownComponent);
+        return this;
+    }
+    
+    addSlider(callback) {
+        const sliderComponent = {
+            setLimits: () => sliderComponent,
+            setValue: () => sliderComponent,
+            onChange: () => sliderComponent,
+            setDynamicTooltip: () => sliderComponent
+        };
+        callback(sliderComponent);
+        return this;
+    }
+    
+    addButton(callback) {
+        const buttonComponent = {
+            setButtonText: () => buttonComponent,
+            onClick: () => buttonComponent,
+            setDisabled: () => buttonComponent
+        };
+        callback(buttonComponent);
         return this;
     }
 }
@@ -152,6 +193,7 @@ if (typeof document === 'undefined') {
     global.document = {
         createElement: (tagName) => ({
             tagName: tagName.toUpperCase(),
+            style: {},
             classList: {
                 add: () => {},
                 remove: () => {},
@@ -175,7 +217,28 @@ if (typeof document === 'undefined') {
                 return el;
             },
             createDiv: function(attrs) {
-                return this.createEl('div', attrs);
+                const div = this.createEl('div', attrs);
+                div.style = {};
+                div.createSpan = function(attrs) {
+                    const span = document.createElement('span');
+                    if (attrs && attrs.text) span.textContent = attrs.text;
+                    return span;
+                };
+                div.createEl = function(tagName, attrs) {
+                    const el = document.createElement(tagName);
+                    if (attrs) {
+                        if (attrs.text) el.textContent = attrs.text;
+                        if (attrs.cls) el.className = attrs.cls;
+                        if (attrs.href) el.href = attrs.href;
+                        if (attrs.attr) {
+                            Object.keys(attrs.attr).forEach(key => {
+                                el.setAttribute(key, attrs.attr[key]);
+                            });
+                        }
+                    }
+                    return el;
+                };
+                return div;
             },
             empty: function() {
                 this.innerHTML = '';

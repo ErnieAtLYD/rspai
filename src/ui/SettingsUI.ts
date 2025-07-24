@@ -401,29 +401,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 }
             );
 
-            this.createFormSetting(
-                containerEl, 
-                "API Key Security", 
-                `Current status: ${encryptionStatus}. Click to manage encryption settings.`, 
-                this.plugin.settings.encryptionEnabled ? "🔒 Encrypted" : "🔓 Plain Text", 
-                async (value: boolean) => {
-                    this.plugin.settings.encryptionEnabled = value;
-                },
-                'button',
-                {
-                    buttonOptions: {
-                        buttonText: "Manage Encryption",
-                        onClick: () => {
-                            const modal = new EncryptionManagementModal(this.app, this.plugin, () => {
-                                // Refresh the settings display after modal closes
-                                this.display();
-                            }, this.plugin.errorHandler);
-                            modal.open();
-                        }
-                    }
-                }
-            );
-
 			// API Key setting
             const apiKeySetting = this.createFormSetting(
                 containerEl, 
@@ -729,46 +706,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 ]
             }
         );
-
-		// NLP Analysis Depth (only show if advanced NLP is enabled)
-        this.createFormSetting(
-            containerEl, 
-            "Blocker Detection Sensitivity", 
-            "Adjust how sensitive the system is to detecting productivity blockers", 
-            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
-            async (value: 'low' | 'medium' | 'high') => {
-                this.plugin.settings.blockerDetectionSensitivity = value;
-            },
-            'dropdown',
-            {
-                dropdownOptions: [
-                    { value: 'low', label: 'Low - Only detect obvious blockers' },
-                    { value: 'medium', label: 'Medium - Balanced detection' },
-                    { value: 'high', label: 'High - Detect subtle blockers' }   
-                ]
-            }
-        );
-
-		// NLP Analysis Depth (only show if advanced NLP is enabled)
-        this.createFormSetting(
-            containerEl, 
-            "Blocker Detection Sensitivity", 
-            "Adjust how sensitive the system is to detecting productivity blockers", 
-            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
-            async (value: 'low' | 'medium' | 'high') => {
-                this.plugin.settings.blockerDetectionSensitivity = value;
-                await this.plugin.saveSettings();
-            },
-            'dropdown',
-            {
-                dropdownOptions: [
-                    { value: 'low', label: 'Low - Only detect obvious blockers' },
-                    { value: 'medium', label: 'Medium - Balanced detection' },
-                    { value: 'high', label: 'High - Detect subtle blockers' }
-                ]
-            }
-        );
-
 
 		// NLP Analysis Depth (only show if advanced NLP is enabled)
 		if (this.plugin.settings.enableAdvancedNLP ?? true) {
