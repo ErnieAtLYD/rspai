@@ -19,11 +19,15 @@ export interface JournalReflectionSettings {
 	reflectionFolder: string;
 	encryptionEnabled?: boolean;
 	encryptionSetup?: boolean;
+	// Analysis Settings
+	communicationStyle?: 'direct' | 'gentle' | 'encouraging';
+	analysisDepth?: 'basic' | 'standard' | 'detailed';
 	analysisEnabled?: boolean;
 	patternThreshold?: number;
 	enableTrendAnalysis?: boolean;
 	enableSemanticAnalysis?: boolean;
 	cacheAnalysisResults?: boolean;
+	// Legacy Advanced NLP Settings (kept for compatibility)
 	enableAdvancedNLP?: boolean;
 	nlpAnalysisDepth?: 'basic' | 'moderate' | 'deep';
 	blockerDetectionSensitivity?: 'low' | 'medium' | 'high';
@@ -39,4 +43,8 @@ export interface JournalReflectionSettings {
 		includeTags: string[];
 		excludeTags: string[];
 	};
+	// Scan Frequency Settings
+	enableAutoScan?: boolean;
+	scanFrequency?: 'manual' | 'daily' | 'weekly';
+	lastAutoScan?: number;
 }
