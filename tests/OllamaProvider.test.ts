@@ -36,13 +36,8 @@ describe('OllamaProvider (via AIService)', () => {
         mockErrorHandler = {
             handleError: jest.fn(),
             executeWithRetry: jest.fn().mockImplementation(async (fn) => {
-                try {
-                    // Let the function execute and propagate any errors
-                    return await fn();
-                } catch (error) {
-                    // Ensure errors are properly thrown
-                    throw error;
-                }
+                // Execute the function directly, letting errors propagate
+                return await fn();
             }),
             initialize: jest.fn(),
             dispose: jest.fn(),
@@ -127,7 +122,14 @@ describe('OllamaProvider (via AIService)', () => {
                 text: async () => 'Model not found'
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should handle server errors (500+)', async () => {
@@ -138,7 +140,14 @@ describe('OllamaProvider (via AIService)', () => {
                 text: async () => 'Server error'
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should handle network timeout', async () => {
@@ -162,7 +171,14 @@ describe('OllamaProvider (via AIService)', () => {
             // Fast-forward time to trigger timeout
             jest.advanceTimersByTime(31000);
             
-            await expect(callPromise).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await callPromise;
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
             
             jest.useRealTimers();
         });
@@ -171,7 +187,14 @@ describe('OllamaProvider (via AIService)', () => {
             const networkError = new TypeError('fetch failed');
             (global.fetch as jest.Mock).mockRejectedValueOnce(networkError);
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should trim whitespace from response', async () => {
@@ -200,7 +223,14 @@ describe('OllamaProvider (via AIService)', () => {
                 json: async () => mockResponse
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should handle missing response field', async () => {
@@ -214,7 +244,14 @@ describe('OllamaProvider (via AIService)', () => {
                 json: async () => mockResponse
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should reject empty prompt', async () => {
@@ -271,8 +308,24 @@ describe('OllamaProvider (via AIService)', () => {
 
         it('should reject empty content', async () => {
             const sourceFiles = [] as TFile[];
-            await expect(aiService.generateSummary('', sourceFiles)).rejects.toThrow();
-            await expect(aiService.generateSummary('   ', sourceFiles)).rejects.toThrow();
+            
+            let errorThrown1 = false;
+            try {
+                await aiService.generateSummary('', sourceFiles);
+            } catch (error) {
+                errorThrown1 = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown1).toBe(true);
+            
+            let errorThrown2 = false;
+            try {
+                await aiService.generateSummary('   ', sourceFiles);
+            } catch (error) {
+                errorThrown2 = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown2).toBe(true);
         });
     });
 
@@ -339,7 +392,14 @@ describe('OllamaProvider (via AIService)', () => {
                 text: async () => 'Model not found'
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
 
         it('should handle general API errors', async () => {
@@ -350,7 +410,14 @@ describe('OllamaProvider (via AIService)', () => {
                 text: async () => 'Invalid request'
             });
 
-            await expect(aiService.generateResponse('Test prompt')).rejects.toThrow();
+            let errorThrown = false;
+            try {
+                await aiService.generateResponse('Test prompt');
+            } catch (error) {
+                errorThrown = true;
+                expect(error).toBeDefined();
+            }
+            expect(errorThrown).toBe(true);
         });
     });
 
