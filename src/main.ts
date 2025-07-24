@@ -973,6 +973,10 @@ export default class JournalReflectionPlugin extends Plugin {
 			this.settings.reflectionFolder = DEFAULT_SETTINGS.reflectionFolder;
 		}
 
+		if (!this.settings.llmProvider || !['openai', 'ollama'].includes(this.settings.llmProvider)) {
+			this.settings.llmProvider = DEFAULT_SETTINGS.llmProvider;
+		}
+
 		if (!this.settings.communicationStyle || !['direct', 'gentle', 'encouraging'].includes(this.settings.communicationStyle)) {
 			this.settings.communicationStyle = DEFAULT_SETTINGS.communicationStyle;
 		}

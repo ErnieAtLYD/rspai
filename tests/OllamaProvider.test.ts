@@ -1,7 +1,7 @@
 // tests/OllamaProvider.test.ts
 
 import { App, TFile } from 'obsidian';
-import { ErrorHandlingService, ErrorType, ErrorCode, RetrospectError } from '../src/services/ErrorHandlingService';
+import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 import { AIService, AIServiceConfig } from '../src/services/AIService';
 
 // Mock fetch globally
@@ -161,7 +161,7 @@ describe('OllamaProvider (via AIService)', () => {
                             const abortError = new Error('The operation was aborted');
                             abortError.name = 'AbortError';
                             reject(abortError);
-                        }, 30000);
+                        }, 100);
                     });
                 }
             );

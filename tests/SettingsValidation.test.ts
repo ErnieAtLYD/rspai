@@ -93,6 +93,11 @@ class MockJournalReflectionPlugin {
         if (!this.settings.analysisDepth || !['basic', 'standard', 'detailed'].includes(this.settings.analysisDepth)) {
             this.settings.analysisDepth = DEFAULT_SETTINGS.analysisDepth;
         }
+
+        // Validate LLM provider
+        if (!this.settings.llmProvider || !['openai', 'ollama'].includes(this.settings.llmProvider)) {
+            this.settings.llmProvider = DEFAULT_SETTINGS.llmProvider;
+        }
     }
 }
 
@@ -408,6 +413,36 @@ describe('Settings Validation', () => {
             plugin.settings.daysToInclude = -10;
             plugin.validateSettings();
             expect(plugin.settings.daysToInclude).toBe(7);
+        });
+    });
+
+    describe('llmProvider validation', () => {
+        test('should use default for invalid LLM provider', () => {
+            plugin.settings.llmProvider = 'option2' as any; // Invalid provider
+            plugin.validateSettings();
+            expect(plugin.settings.llmProvider).toBe('openai');
+        });
+
+        test('should use default when llmProvider is null', () => {
+            plugin.settings.llmProvider = null as any;
+            plugin.validateSettings();
+            expect(plugin.settings.llmProvider).toBe('openai');
+        });
+
+        test('should use default when llmProvider is undefined', () => {
+            plugin.settings.llmProvider = undefined as any;
+            plugin.validateSettings();
+            expect(plugin.settings.llmProvider).toBe('openai');
+        });
+
+        test('should preserve valid LLM providers', () => {
+            plugin.settings.llmProvider = 'openai';
+            plugin.validateSettings();
+            expect(plugin.settings.llmProvider).toBe('openai');
+
+            plugin.settings.llmProvider = 'ollama';
+            plugin.validateSettings();
+            expect(plugin.settings.llmProvider).toBe('ollama');
         });
     });
 });

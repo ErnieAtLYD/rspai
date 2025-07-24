@@ -161,7 +161,12 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
                 await this.plugin.updateServiceConfigurations();
                 this.display();
-        }, 'dropdown');
+        }, 'dropdown', {
+            dropdownOptions: [
+                { value: 'openai', label: 'OpenAI' },
+                { value: 'ollama', label: 'Ollama' }
+            ]
+        });
 
 
 
@@ -273,7 +278,79 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             'toggle'
         );
 
+		// 🕐 Auto-Scan Settings Section
+		containerEl.createEl("h3", { text: "🕐 Auto-Scan Settings" });
 		
+		// Enable Auto-scan
+        this.createFormSetting(
+            containerEl, 
+            "Enable Auto-scan", 
+            "Automatically run analysis at specified intervals", 
+            this.plugin.settings.enableAutoScan ?? false, 
+            async (value: boolean) => {
+                this.plugin.settings.enableAutoScan = value;
+                await this.plugin.saveSettings();
+                
+                // Refresh to show/hide scan frequency setting
+                this.display();
+            },
+            'toggle'
+        );
+
+        // Scan Frequency (only show if auto-scan is enabled)
+        if (this.plugin.settings.enableAutoScan) {
+            this.createFormSetting(
+                containerEl, 
+                "Scan Frequency", 
+                "How often to automatically run analysis", 
+                this.plugin.settings.scanFrequency || 'weekly', 
+                async (value: 'manual' | 'daily' | 'weekly') => {
+                    this.plugin.settings.scanFrequency = value;
+                    await this.plugin.saveSettings();
+                    
+                    // If changing from manual to scheduled, trigger an immediate scan
+                    if (value !== 'manual' && this.plugin.settings.enableAutoScan) {
+                        this.plugin.runAutoScan();
+                    }
+                },
+                'dropdown',
+                {
+                    dropdownOptions: [
+                        { value: 'manual', label: 'Manual - Only when triggered manually' },
+                        { value: 'daily', label: 'Daily - Run analysis every 24 hours' },
+                        { value: 'weekly', label: 'Weekly - Run analysis every 7 days' }
+                    ]
+                }
+            );
+
+            // Show last scan time if available
+            if (this.plugin.settings.lastAutoScan && this.plugin.settings.lastAutoScan > 0) {
+                const lastScanDate = new Date(this.plugin.settings.lastAutoScan).toLocaleString();
+                const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
+                infoEl.style.color = "var(--text-muted)";
+                infoEl.createSpan({ text: `Last auto-scan: ${lastScanDate}` });
+            }
+
+            // Manual trigger button
+            this.createFormSetting(
+                containerEl, 
+                "Run Auto-scan Now", 
+                "Trigger an immediate analysis run (useful for testing)", 
+                "Run Now", 
+                () => {
+                    this.plugin.runAutoScan();
+                },
+                'button',
+                {
+                    buttonOptions: {
+                        buttonText: "Run Now",
+                        onClick: () => {
+                            this.plugin.runAutoScan();
+                        }
+                    }
+                }
+            );
+        }
 
 		// 🔒 Privacy & Content Section
 		containerEl.createEl("h3", { text: "🔒 Privacy & Content" });
@@ -687,26 +764,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
             }
         );
 
-		// Enable Auto-scan
-        this.createFormSetting(
-            containerEl, 
-            "Blocker Detection Sensitivity", 
-            "Adjust how sensitive the system is to detecting productivity blockers", 
-            this.plugin.settings.blockerDetectionSensitivity || 'medium', 
-            async (value: 'low' | 'medium' | 'high') => {
-                this.plugin.settings.blockerDetectionSensitivity = value;
-                await this.plugin.saveSettings();
-            },
-            'dropdown',
-            {
-                dropdownOptions: [
-                    { value: 'low', label: 'Low - Only detect obvious blockers' },
-                    { value: 'medium', label: 'Medium - Balanced detection' },
-                    { value: 'high', label: 'High - Detect subtle blockers' }
-                ]
-            }
-        );
-
 		// NLP Analysis Depth (only show if advanced NLP is enabled)
 		if (this.plugin.settings.enableAdvancedNLP ?? true) {
             this.createFormSetting(
@@ -727,46 +784,8 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
                     ]
                 }
             );
-				
-			// Scan Frequency Section
-			containerEl.createEl("h4", { text: "Automatic Scanning" });
-			
-			// Enable Auto-scan
-            this.createFormSetting(
-                containerEl, 
-                "Enable Auto-scan", 
-                "Automatically run analysis at specified intervals", 
-                this.plugin.settings.enableAutoScan ?? false, 
-                async (value: boolean) => {
-                    this.plugin.settings.enableAutoScan = value;
-                    await this.plugin.saveSettings();
-                    
-                    // If enabling auto-scan, trigger an immediate scan
-                    if (value && this.plugin.settings.scanFrequency !== 'manual') {
-                        this.plugin.runAutoScan();
-                    }
-                },
-                'toggle',
-                {
-                    toggleOptions: {
-                        onChange: async (value: boolean) => {
-                            this.plugin.settings.enableAutoScan = value;
-                            await this.plugin.saveSettings();
-
-                            // If enabling auto-scan, trigger an immediate scan
-                            if (value && this.plugin.settings.scanFrequency !== 'manual') {
-                                this.plugin.runAutoScan();
-                            }
-                            
-                            // Refresh to show/hide scan frequency setting
-                            this.display();
-                        }
-                    }
-                }
-            );
-      
 			// NLP Features Info
-			const infoEl = containerEl.createDiv({ cls: "setting-item-description" })
+			const infoEl = containerEl.createDiv({ cls: "setting-item-description" });
 			infoEl.style.color = "var(--text-muted)";
 			infoEl.createEl("strong", { text: "Advanced NLP Features:" });
 			infoEl.createEl("br");
