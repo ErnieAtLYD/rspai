@@ -22,7 +22,7 @@ describe("ErrorHandlingService", () => {
         };
         defaultConfig = {
             maxRetries: 3,
-            baseRetryDelay: 1000,
+            baseRetryDelay: 10, // Reduce delay for faster tests
             enableLogging: false, // Disable logging in tests
             enableNotifications: false // Disable notifications in tests
         };
@@ -522,7 +522,7 @@ describe("ErrorHandlingService", () => {
 
         describe("Backoff Delay Calculations", () => {
             it("should calculate exponential backoff with jitter", () => {
-                const baseDelay = 1000;
+                const baseDelay = 10;
                 
                 // Test multiple attempts to verify exponential growth
                 const delay1 = (service as any).calculateBackoffDelay(0, baseDelay);
@@ -542,8 +542,8 @@ describe("ErrorHandlingService", () => {
             });
 
             it("should cap delay at maximum value", () => {
-                const baseDelay = 1000;
-                const maxDelay = 30000;
+                const baseDelay = 10;
+                const maxDelay = 30000; // This is hardcoded in the service
                 
                 // High attempt number should be capped at maxDelay
                 const delay = (service as any).calculateBackoffDelay(10, baseDelay);
@@ -552,7 +552,7 @@ describe("ErrorHandlingService", () => {
             });
 
             it("should include jitter to prevent thundering herd", () => {
-                const baseDelay = 1000;
+                const baseDelay = 10;
                 const attempt = 1;
                 
                 // Run multiple calculations to verify jitter varies

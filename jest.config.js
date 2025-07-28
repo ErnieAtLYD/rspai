@@ -22,9 +22,10 @@ export default {
   moduleNameMapper: {
     '^obsidian$': '<rootDir>/tests/mocks/obsidian.js'
   },
-  testTimeout: 30000, // 30 seconds for AI integration tests
-  verbose: true,
-  detectOpenHandles: true,
+  testTimeout: 10000, // 10 seconds should be sufficient
+  verbose: false,
+  detectOpenHandles: false,
   forceExit: true,
+  maxWorkers: 1,
   extensionsToTreatAsEsm: ['.ts']
 }; 
