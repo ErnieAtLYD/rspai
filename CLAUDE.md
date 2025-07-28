@@ -74,6 +74,9 @@ The added complexity is justified by the security-critical nature of the encrypt
 - **CacheService**: High-performance caching with TTL and disk persistence for analysis results
 - **PatternRecognitionService**: Behavioral pattern detection, trend analysis, and insight generation
 - **AnalysisManager**: Central orchestrator for comprehensive AI-powered analysis
+- **ErrorHandlingService**: Centralized error classification, retry mechanisms, and user notification system
+- **NLPAnalysisService**: Advanced natural language processing for theme extraction, sentiment analysis, and blocker detection
+- **Logger**: Structured logging service with configurable levels and error handler integration
 
 **User Interface** (`src/modals.ts`)
 - **MasterPasswordModal**: Prompts for master password to decrypt API keys
@@ -206,6 +209,72 @@ The added complexity is justified by the security-critical nature of the encrypt
 - Secure random number generation for cryptographic values
 - Proper memory handling for sensitive data
 
+### Error Handling Service
+
+**ErrorHandlingService** (`src/services/ErrorHandlingService.ts`)
+- **Centralized Error Management**: Single point for error classification, handling, and recovery
+- **Error Classification System**: Categorizes errors by type (CRITICAL, USER, API, FILESYSTEM, VALIDATION, NETWORK) and specific error codes
+- **Retry Mechanisms**: Intelligent retry logic with exponential backoff and jitter for network and transient errors
+- **Error History Tracking**: Maintains error history per component/operation with size limits (50 entries max)
+- **User Notification**: Configurable user-facing error messages and Obsidian Notice integration
+- **Structured Logging**: Integration with Logger service for detailed error tracking
+
+**Error Types and Codes:**
+- **CRITICAL**: Plugin initialization failures, service registration errors
+- **USER**: API key issues, invalid configurations
+- **API**: Rate limiting, network errors, response errors
+- **FILESYSTEM**: File/folder not found, permission denied, disk space
+- **VALIDATION**: Invalid settings, configuration errors
+- **NETWORK**: Connection failures, timeouts
+
+**Retry Strategy:**
+- Exponential backoff with 15% jitter to prevent thundering herd
+- Maximum delay cap of 30 seconds
+- Configurable retry attempts (default: 3)
+- Automatic retry for network/rate-limit errors only
+- Non-retryable errors: API key invalid, file not found, permission denied
+
+### NLP Analysis Service
+
+**NLPAnalysisService** (`src/services/NLPAnalysisService.ts`)
+- **Advanced Text Processing**: Uses compromise.js, natural, and sentiment libraries for sophisticated NLP
+- **Dynamic Library Loading**: Lazy-loads NLP dependencies for better performance
+- **Multi-layered Analysis**: Combines rule-based and statistical approaches
+
+**Core NLP Modules** (`src/services/nlp/`)
+- **TextProcessor**: Text cleaning, tokenization, keyword extraction, and consistent hashing
+- **ThemeExtractor**: Productivity theme identification with confidence scoring
+- **SentimentAnalyzer**: Emotional analysis with polarity, subjectivity, and productivity-specific sentiment
+- **BlockerDetector**: Identifies productivity blockers (procrastination, time management, workflow disruption)
+
+**Analysis Capabilities:**
+- **Productivity Theme Extraction**: Identifies recurring productivity themes with confidence scores
+- **Sentiment Analysis**: Multi-dimensional emotional analysis including arousal and confidence levels
+- **Blocker Detection**: Categorizes productivity obstacles with severity levels and actionable suggestions
+- **Text Preprocessing**: Intelligent text cleaning while preserving semantic meaning
+- **Caching Integration**: Results cached for performance with configurable TTL
+
+**Dependencies:**
+- **compromise**: 14.14.4 - Natural language understanding and processing
+- **natural**: 8.1.0 - Tokenization, stemming, and statistical analysis
+- **sentiment**: 5.0.2 - Sentiment analysis with AFINN-based scoring
+
+### Logger Service
+
+**Logger** (`src/services/Logger.ts`)
+- **Structured Logging**: Service-specific logging with contextual information
+- **Log Levels**: Debug, info, warn, error with appropriate console methods
+- **Error Handler Integration**: Seamless integration with ErrorHandlingService for error tracking
+- **Context Support**: Rich context objects for detailed debugging information
+- **Late Binding**: Supports error handler injection after service initialization
+
+**Usage Pattern:**
+```typescript
+const logger = new Logger('ServiceName', errorHandler);
+logger.info('Operation completed', { duration: 123, items: 5 });
+logger.error('Failed to process', error, { context: 'additional info' });
+```
+
 ### Analysis Engine Architecture
 
 **AnalysisManager** (`src/services/AnalysisManager.ts`)
@@ -292,6 +361,11 @@ The added complexity is justified by the security-critical nature of the encrypt
 src/
 ├── main.ts                 # Main plugin class with service coordination
 ├── modals.ts              # User interface modals for encryption management
+├── types.ts               # TypeScript type definitions
+├── types/
+│   └── sentiment.d.ts     # Type definitions for sentiment library
+├── ui/
+│   └── SettingsUI.ts      # Enhanced settings user interface
 └── services/
     ├── index.ts           # Service exports
     ├── ServiceManager.ts  # Dependency injection container
@@ -301,7 +375,17 @@ src/
     ├── EncryptionService.ts # AES-256 encryption implementation
     ├── CacheService.ts    # High-performance caching with TTL and persistence
     ├── PatternRecognitionService.ts # Behavioral pattern detection and trend analysis
-    └── AnalysisManager.ts # Central analysis orchestrator and report generation
+    ├── AnalysisManager.ts # Central analysis orchestrator and report generation
+    ├── ErrorHandlingService.ts # Centralized error management and retry logic
+    ├── NLPAnalysisService.ts # Advanced natural language processing
+    ├── Logger.ts          # Structured logging service
+    └── nlp/
+        ├── index.ts       # NLP module exports
+        ├── nlp-loader.ts  # Dynamic NLP library loading
+        ├── TextProcessor.ts # Text cleaning and preprocessing
+        ├── ThemeExtractor.ts # Productivity theme identification
+        ├── SentimentAnalyzer.ts # Emotional analysis
+        └── BlockerDetector.ts # Productivity blocker detection
 
 tests/
 ├── setup.ts               # Test setup configuration
@@ -338,11 +422,17 @@ root/
 
 ## Key Dependencies
 
+### Runtime Dependencies
 - **obsidian**: Core Obsidian API
-- **moment**: Date/time handling
+- **compromise**: 14.14.4 - Natural language understanding and processing
+- **natural**: 8.1.0 - Tokenization, stemming, and statistical NLP analysis
+- **sentiment**: 5.0.2 - AFINN-based sentiment analysis
+
+### Development Dependencies
 - **esbuild**: Fast bundling and development
-- **typescript**: Type checking
-- **jest + ts-jest**: Testing framework
+- **typescript**: Type checking with ESM support
+- **jest + ts-jest**: Testing framework with TypeScript support
+- **babel-jest**: JavaScript transformation for testing
 
 ## Plugin Distribution
 
