@@ -1,6 +1,19 @@
 // src/services/FileOperationsService.ts
 
-import { App, TFile, TFolder, moment } from "obsidian";
+import { App, TFile, TFolder, moment as momentNamespace } from "obsidian";
+
+// Define interface for moment function based on actual usage
+interface MomentFunction {
+    (): moment.Moment;
+    (input?: moment.MomentInput): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, strict?: boolean): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, language?: string, strict?: boolean): moment.Moment;
+}
+
+// Handle Obsidian's moment namespace export with proper typing
+const moment: MomentFunction = 
+    (momentNamespace as unknown as { default?: MomentFunction }).default || 
+    (momentNamespace as unknown as MomentFunction);
 import { BaseService } from "./BaseService";
 import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
 
