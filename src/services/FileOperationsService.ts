@@ -1,6 +1,19 @@
 // src/services/FileOperationsService.ts
 
-import { App, TFile, TFolder, moment } from "obsidian";
+import { App, TFile, TFolder, moment as momentNamespace } from "obsidian";
+
+// Define interface for moment function based on actual usage
+interface MomentFunction {
+    (): moment.Moment;
+    (input?: moment.MomentInput): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, strict?: boolean): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, language?: string, strict?: boolean): moment.Moment;
+}
+
+// Handle Obsidian's moment namespace export with proper typing
+const moment: MomentFunction = 
+    (momentNamespace as unknown as { default?: MomentFunction }).default || 
+    (momentNamespace as unknown as MomentFunction);
 import { BaseService } from "./BaseService";
 import { ErrorHandlingService, ErrorType, ErrorCode, ErrorContext } from "./ErrorHandlingService";
 
@@ -58,7 +71,7 @@ export class FileOperationsService extends BaseService {
     async findRecentNotes(): Promise<TFile[]> {
         this.ensureReady();
 
-        const cutoffDate = moment().subtract(this.config.daysToInclude, "days");
+        const cutoffDate = window.moment().subtract(this.config.daysToInclude, "days");
 
         // Try folder-based approach first
         const folderFiles = await this.getPeriodicFilesFromFolders();
@@ -153,7 +166,7 @@ export class FileOperationsService extends BaseService {
     async createSummaryNote(summary: string, sourceFiles: TFile[]): Promise<TFile> {
         this.ensureReady();
 
-        const date = moment().format("YYYY-MM-DD");
+        const date = window.moment().format("YYYY-MM-DD");
         const summaryPath = `${this.config.reflectionFolder}/Weekly Reflection - ${date}.md`;
 
         // Create reflection folder if it doesn't exist
@@ -166,7 +179,7 @@ export class FileOperationsService extends BaseService {
 
         const summaryContent = `# Weekly Reflection - ${date}
 
-*Generated on ${moment().format("YYYY-MM-DD [at] HH:mm")}*
+*Generated on ${window.moment().format("YYYY-MM-DD [at] HH:mm")}*
 
 ${summary}
 
@@ -335,7 +348,7 @@ ${backlinks}
         }
 
         // Fallback to file creation time
-        const creationDate = moment(file.stat.ctime);
+        const creationDate = window.moment(file.stat.ctime);
         return creationDate.isValid() ? creationDate : null;
     }
 
@@ -372,20 +385,20 @@ ${backlinks}
 
                 if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
                     // ISO format: YYYY-MM-DD
-                    parsedDate = moment(dateStr, "YYYY-MM-DD");
+                    parsedDate = window.moment(dateStr, "YYYY-MM-DD");
                 } else if (dateStr.match(/^\d{8}$/)) {
                     // Compact format: YYYYMMDD
-                    parsedDate = moment(dateStr, "YYYYMMDD");
+                    parsedDate = window.moment(dateStr, "YYYYMMDD");
                 } else if (dateStr.match(/^\d{4}-\d{3}$/)) {
                     // Year and day of year: YYYY-DDD
-                    parsedDate = moment(dateStr, "YYYY-DDD");
+                    parsedDate = window.moment(dateStr, "YYYY-DDD");
                 } else if (dateStr.match(/^\d{4}-\d{2}$/)) {
                     // Month and year: YYYY-MM (assume first day of month)
-                    parsedDate = moment(dateStr + "-01", "YYYY-MM-DD");
+                    parsedDate = window.moment(dateStr + "-01", "YYYY-MM-DD");
                 } else if (dateStr.match(/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/)) {
                     // Try both US (MM/DD/YYYY) and European (DD/MM/YYYY) formats
-                    const usDate = moment(dateStr, ["M/D/YYYY", "MM/DD/YYYY", "M-D-YYYY", "MM-DD-YYYY"], true);
-                    const euDate = moment(dateStr, ["D/M/YYYY", "DD/MM/YYYY", "D-M-YYYY", "DD-MM-YYYY"], true);
+                    const usDate = window.moment(dateStr, ["M/D/YYYY", "MM/DD/YYYY", "M-D-YYYY", "MM-DD-YYYY"], true);
+                    const euDate = window.moment(dateStr, ["D/M/YYYY", "DD/MM/YYYY", "D-M-YYYY", "DD-MM-YYYY"], true);
                     
                     // Prefer the format that results in a more recent date (likely more accurate)
                     if (usDate.isValid() && euDate.isValid()) {

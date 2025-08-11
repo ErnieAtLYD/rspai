@@ -1,6 +1,19 @@
 // src/main.ts
 
-import { Plugin, moment, Notice } from "obsidian";
+import { Plugin, moment as momentNamespace, Notice } from "obsidian";
+
+// Define interface for moment function based on actual usage  
+interface MomentFunction {
+    (): moment.Moment;
+    (input?: moment.MomentInput): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, strict?: boolean): moment.Moment;
+    (input?: moment.MomentInput, format?: moment.MomentFormatSpecification, language?: string, strict?: boolean): moment.Moment;
+}
+
+// Handle Obsidian's moment namespace export with proper typing
+const moment: MomentFunction = 
+    (momentNamespace as unknown as { default?: MomentFunction }).default || 
+    (momentNamespace as unknown as MomentFunction);
 
 import { JournalReflectionSettings } from "./types";
 import { MasterPasswordModal, EncryptionSetupModal } from "./modals";
@@ -605,7 +618,7 @@ export default class JournalReflectionPlugin extends Plugin {
 
 			// Create patterns report
 			const report = this.formatPatternsReport(patterns);
-			const fileName = `Pattern Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileName = `Pattern Analysis - ${window.moment().format('YYYY-MM-DD HH-mm')}`;
 			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
@@ -646,7 +659,7 @@ export default class JournalReflectionPlugin extends Plugin {
 
 			// Create trends report
 			const report = this.formatTrendsReport(trends);
-			const fileName = `Trend Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileName = `Trend Analysis - ${window.moment().format('YYYY-MM-DD HH-mm')}`;
 			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
@@ -685,7 +698,7 @@ export default class JournalReflectionPlugin extends Plugin {
 
 			// Create comprehensive report
 			const report = this.formatComprehensiveReport(result);
-			const fileName = `Comprehensive Analysis - ${moment().format('YYYY-MM-DD HH-mm')}`;
+			const fileName = `Comprehensive Analysis - ${window.moment().format('YYYY-MM-DD HH-mm')}`;
 			const fileOpsService = this.serviceManager.resolve<FileOperationsService>('fileOperationsService');
 			const reportFile = await fileOpsService.createAnalysisReport(fileName, report);
 
@@ -743,7 +756,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private formatPatternsReport(patterns: PatternData[]): string {
 		let report = `# Journal Pattern Analysis\n\n`;
-		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
+		report += `Generated: ${window.moment().format('YYYY-MM-DD HH:mm')}\n\n`;
 		report += `## Detected Patterns (${patterns.length})\n\n`;
 
 		for (const pattern of patterns) {
@@ -770,7 +783,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private formatTrendsReport(trends: TrendData[]): string {
 		let report = `# Journal Trend Analysis\n\n`;
-		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n\n`;
+		report += `Generated: ${window.moment().format('YYYY-MM-DD HH:mm')}\n\n`;
 		report += `## Detected Trends (${trends.length})\n\n`;
 
 		for (const trend of trends) {
@@ -795,7 +808,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 */
 	private formatComprehensiveReport(result: AnalysisResult): string {
 		let report = `# Comprehensive Journal Analysis\n\n`;
-		report += `Generated: ${moment().format('YYYY-MM-DD HH:mm')}\n`;
+		report += `Generated: ${window.moment().format('YYYY-MM-DD HH:mm')}\n`;
 		report += `Time Range: ${result.timeRange}\n`;
 		report += `Overall Confidence: ${(result.confidence * 100).toFixed(0)}%\n\n`;
 
