@@ -343,6 +343,33 @@ logger.error('Failed to process', error, { context: 'additional info' });
 - Handle errors gracefully with try/catch blocks
 - Provide user feedback via `Notice` class
 
+### Moment.js Compatibility
+**Important:** This plugin uses moment.js for date operations, which requires special handling due to Obsidian's namespace exports:
+
+**Implementation Pattern:**
+```typescript
+import { moment as momentNamespace } from "obsidian";
+
+// Define interface for moment function based on actual usage  
+interface MomentFunction {
+    (): moment.Moment;
+    (input?: moment.MomentInput): moment.Moment;
+    // ... additional overloads
+}
+
+// Handle Obsidian's moment namespace export with proper typing
+const moment: MomentFunction = 
+    (momentNamespace as unknown as { default?: MomentFunction }).default || 
+    (momentNamespace as unknown as MomentFunction);
+```
+
+**Key Considerations:**
+- Obsidian exports moment.js differently across API versions
+- Always use the fallback pattern shown above for compatibility
+- Import from `obsidian` package, not direct moment.js imports
+- Type safety is maintained through the MomentFunction interface
+- This pattern ensures compatibility across different Obsidian versions
+
 ### Settings Development
 - Validate settings before saving in `validateSettings()`
 - Use `Object.assign()` pattern for loading settings with defaults
