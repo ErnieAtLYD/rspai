@@ -87,8 +87,9 @@ describe('CacheService', () => {
     });
 
     describe('Cache Operations', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, { persistToDisk: false }, 'test-plugin');
+            await cacheService.initialize();
         });
 
         test('should store and retrieve values', async () => {
@@ -139,6 +140,82 @@ describe('CacheService', () => {
             
             await cacheService.set(testKey, testValue);
             expect(await cacheService.has(testKey)).toBe(true);
+        });
+    });
+
+    describe('Hit Ratio Tracking', () => {
+        beforeEach(async () => {
+            cacheService = new CacheService(mockApp, mockErrorHandler, { persistToDisk: false }, 'test-plugin');
+            await cacheService.initialize();
+        });
+
+        test('should start with 0 hit ratio when no accesses', () => {
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0);
+        });
+
+        test('should track misses for non-existent keys', async () => {
+            await cacheService.get('missing-key');
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0);
+        });
+
+        test('should track hits for existing keys', async () => {
+            await cacheService.set('test-key', 'test-value');
+            await cacheService.get('test-key');
+            
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(1);
+        });
+
+        test('should calculate hit ratio correctly with mixed hits and misses', async () => {
+            await cacheService.set('key1', 'value1');
+            
+            // 1 hit
+            await cacheService.get('key1');
+            // 2 misses
+            await cacheService.get('missing1');
+            await cacheService.get('missing2');
+            // 1 more hit
+            await cacheService.get('key1');
+            
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0.5); // 2 hits / 4 total accesses
+        });
+
+        test('should track misses for expired entries', async () => {
+            await cacheService.set('expire-key', 'value', { ttl: -1 }); // Already expired
+            await cacheService.get('expire-key');
+            
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0);
+        });
+
+        test('should reset hit ratio statistics', async () => {
+            await cacheService.set('test-key', 'test-value');
+            await cacheService.get('test-key');
+            await cacheService.get('missing-key');
+            
+            let stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0.5);
+            
+            cacheService.resetStats();
+            
+            stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0);
+        });
+
+        test('should continue tracking after reset', async () => {
+            await cacheService.set('test-key', 'test-value');
+            await cacheService.get('test-key');
+            
+            cacheService.resetStats();
+            
+            await cacheService.get('test-key'); // Hit
+            await cacheService.get('missing'); // Miss
+            
+            const stats = cacheService.getStats();
+            expect(stats.hitRatio).toBe(0.5);
         });
     });
 });
