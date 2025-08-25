@@ -255,7 +255,7 @@ export class AnalysisManager extends BaseService {
             await this.config.cacheService.delete(key);
         }
         
-        new Notice(`Cleared ${analysisKeys.length} analysis cache entries`);
+        new Notice(`RETROSPECT-AI: Cleared ${analysisKeys.length} analysis cache entries`);
     }
 
     /**

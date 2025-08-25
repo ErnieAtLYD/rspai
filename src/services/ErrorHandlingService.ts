@@ -390,7 +390,7 @@ export class ErrorHandlingService extends BaseService {
                         error.type === ErrorType.API ? '🌐' : 
                         error.type === ErrorType.FILESYSTEM ? '📁' : '❌';
         
-        new Notice(`${severity} ${error.userMessage}`, error.type === ErrorType.CRITICAL ? 10000 : 5000);
+        new Notice(`RETROSPECT-AI: ${severity} ${error.userMessage}`, error.type === ErrorType.CRITICAL ? 10000 : 5000);
     }
 
     private calculateBackoffDelay(attempt: number, baseDelay: number): number {
