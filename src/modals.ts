@@ -296,7 +296,7 @@ export class EncryptionManagementModal extends Modal {
                                 const decrypted = await this.plugin.getDecryptedApiKey();
                                 if (decrypted) {
                                     // Show success message using Notice directly for modal feedback
-                                    new Notice("✓ Decryption successful!");
+                                    new Notice("RETROSPECT-AI: ✓ Decryption successful!");
                                 } else {
                                     await this.errorHandler.handleError(
                                         new Error("Decryption test failed"),

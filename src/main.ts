@@ -1235,7 +1235,7 @@ export default class JournalReflectionPlugin extends Plugin {
 			// Run comprehensive analysis by default
 			await this.performComprehensiveAnalysis();
 			
-			new Notice("Auto-scan completed successfully");
+			new Notice("RETROSPECT-AI: Auto-scan completed successfully");
 		} catch (error) {
 			await this.errorHandler?.handleError(
 				new RetrospectError(
