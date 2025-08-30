@@ -441,6 +441,12 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * @description
 	 */
 	private async validateAnalysisPrerequisites(): Promise<boolean> {
+		const context = {
+			operation: 'validateAnalysisPrerequisites',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
+
 		if (!this.serviceManager) {
 			await this.errorHandler?.handleError(
 				new RetrospectError(
@@ -448,9 +454,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.SERVICE_UNAVAILABLE,
 					"Services not initialized",
 					"Services not initialized",
-					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				),
-				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 			return false;
 		}
@@ -462,9 +468,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.API_KEY_INVALID,
 					"Please configure your OpenAI API key first",
 					"Please configure your OpenAI API key first",
-					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				),
-				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 			return false;
 		} else if (this.settings.llmProvider === 'ollama') {
@@ -477,9 +483,9 @@ export default class JournalReflectionPlugin extends Plugin {
 						ErrorCode.SERVICE_UNAVAILABLE,
 						"AI service not available",
 						"AI service not available for Ollama validation",
-						{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+						context
 					),
-					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				);
 				return false;
 			}
@@ -492,9 +498,9 @@ export default class JournalReflectionPlugin extends Plugin {
 						ErrorCode.API_RESPONSE_ERROR,
 						"Ollama connection failed",
 						`Cannot connect to Ollama at ${this.settings.ollamaBaseUrl}. Please ensure:\n1. Ollama is running (try: ollama serve)\n2. The model '${this.settings.ollamaModel}' is installed (try: ollama pull ${this.settings.ollamaModel})\n3. The base URL is correct: ${this.settings.ollamaBaseUrl}`,
-						{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+						context
 					),
-					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				);
 				return false;
 			}
@@ -508,9 +514,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.SERVICE_UNAVAILABLE,
 					"File operations service not available",
 					"File operations service not available",
-					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				),
-				{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 			return false;
 		}
@@ -528,6 +534,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It is called when the user creates a weekly summary.
 	 */
 	async createWeeklySummary() {
+		const context = {
+			operation: 'createWeeklySummary',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		const apiKey = await this.getDecryptedApiKey();
 		if (!apiKey) {
 			await this.errorHandler?.handleError(
@@ -536,9 +547,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.API_KEY_INVALID,
 					"Please set your OpenAI API key in settings first!",
 					"Please set your OpenAI API key in settings first!",
-					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					{ ...context }
 				),
-				{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				{ ...context }
 			);
 			return;
 		}
@@ -560,9 +571,9 @@ export default class JournalReflectionPlugin extends Plugin {
 						ErrorCode.NO_CONTENT_FOUND,
 						"No journal entries found in the last week.",
 						"No journal entries found in the last week.",
-						{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+						{ ...context }
 					),
-					{ operation: 'createWeeklySummary', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					{ ...context }
 				);
 				return;
 			}
