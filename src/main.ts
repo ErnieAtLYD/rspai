@@ -626,6 +626,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * @throws {RetrospectError} - If the analysis fails
 	 */
 	async analyzePatterns(): Promise<void> {
+		const context = {
+			operation: 'analyzePatterns',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
@@ -641,9 +646,9 @@ export default class JournalReflectionPlugin extends Plugin {
 						ErrorCode.SERVICE_UNAVAILABLE,
 						"Analysis service not available. Pattern analysis disabled.",
 						"Analysis service not available. Pattern analysis disabled.",
-						{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+						context
 					),
-					{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				);
 				return;
 			}
@@ -667,7 +672,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
-				{ operation: 'analyzePatterns', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 		}
 	}
@@ -682,6 +687,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It is called when the user performs a trend analysis.
 	 */
 	async analyzeTrends(): Promise<void> {
+		const context = {
+			operation: 'analyzeTrends',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
@@ -708,7 +718,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
-				{ operation: 'analyzeTrends', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 		}
 	}
@@ -723,6 +733,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It is called when the user performs a comprehensive analysis.
 	 */
 	async performComprehensiveAnalysis(): Promise<void> {
+		const context = {
+			operation: 'performComprehensiveAnalysis',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		if (!await this.validateAnalysisPrerequisites()) {
 			return;
 		}
@@ -747,7 +762,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
-				{ operation: 'performComprehensiveAnalysis', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 		}
 	}
@@ -760,6 +775,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It also shows a notification when the cache is cleared.
 	 */
 	async clearAnalysisCache(): Promise<void> {
+		const context = {
+			operation: 'clearAnalysisCache',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		if (!this.serviceManager) {
 			await this.errorHandler?.handleError(
 				new RetrospectError(
@@ -767,9 +787,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.SERVICE_UNAVAILABLE,
 					"Services not initialized",
 					"Services not initialized",
-					{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				),
-				{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 			return;
 		}
@@ -780,7 +800,7 @@ export default class JournalReflectionPlugin extends Plugin {
 		} catch (error) {
 			await this.errorHandler.handleError(
 				error instanceof Error ? error : new Error(String(error)),
-				{ operation: 'clearAnalysisCache', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 		}
 	}
@@ -1215,6 +1235,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * @throws {RetrospectError} - If the auto-scan interval is not cleared
 	 */
 	private setupAutoScan(): void {
+		const context = {
+			operation: 'setupAutoScan',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		};
 		this.clearAutoScan();
 		
 		if (!this.settings.enableAutoScan || this.settings.scanFrequency === 'manual') {
@@ -1229,11 +1254,7 @@ export default class JournalReflectionPlugin extends Plugin {
 					await this.runAutoScan();
 				}
 			} catch (error) {
-				this.errorHandler?.handleError(error, { 
-					operation: 'setupAutoScan',
-					component: 'JournalReflectionPlugin',
-					timestamp: Date.now() 
-				});
+				this.errorHandler?.handleError(error, context);
 			}
 		}, intervalMs);
 
@@ -1264,6 +1285,11 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * It finally sets the auto-scan running flag to false.
 	 */
 	public async runAutoScan(): Promise<void> {
+		const context = {
+			operation: 'runAutoScan',
+			component: 'JournalReflectionPlugin',
+			timestamp: Date.now()
+		}
 		if (this.isAutoScanRunning) { 
 			return; 
 		}
@@ -1283,9 +1309,9 @@ export default class JournalReflectionPlugin extends Plugin {
 					ErrorCode.API_RESPONSE_ERROR,
 					"Auto-scan failed",
 					"Auto-scan failed. Please check your settings and try again.",
-					{ operation: 'Auto-scan', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					context
 				),
-				{ operation: 'Auto-scan', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				context
 			);
 		} finally {
 			this.isAutoScanRunning = false;
