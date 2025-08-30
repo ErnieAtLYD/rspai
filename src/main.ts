@@ -468,7 +468,36 @@ export default class JournalReflectionPlugin extends Plugin {
 			);
 			return false;
 		} else if (this.settings.llmProvider === 'ollama') {
-			// TODO: Validate Ollama model
+			// Validate Ollama model availability
+			const aiService = this.serviceManager.resolve<AIService>('aiService');
+			if (!aiService) {
+				await this.errorHandler?.handleError(
+					new RetrospectError(
+						ErrorType.CRITICAL,
+						ErrorCode.SERVICE_UNAVAILABLE,
+						"AI service not available",
+						"AI service not available for Ollama validation",
+						{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					),
+					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
+				return false;
+			}
+
+			const isOllamaValid = await aiService.testConnection();
+			if (!isOllamaValid) {
+				await this.errorHandler?.handleError(
+					new RetrospectError(
+						ErrorType.USER,
+						ErrorCode.API_RESPONSE_ERROR,
+						"Ollama connection failed",
+						`Cannot connect to Ollama at ${this.settings.ollamaBaseUrl}. Please ensure:\n1. Ollama is running (try: ollama serve)\n2. The model '${this.settings.ollamaModel}' is installed (try: ollama pull ${this.settings.ollamaModel})\n3. The base URL is correct: ${this.settings.ollamaBaseUrl}`,
+						{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+					),
+					{ operation: 'validateAnalysisPrerequisites', component: 'JournalReflectionPlugin', timestamp: Date.now() }
+				);
+				return false;
+			}
 		}
 
 		// Check if critical services are available
