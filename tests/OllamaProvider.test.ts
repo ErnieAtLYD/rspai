@@ -155,7 +155,7 @@ describe('OllamaProvider (via AIService)', () => {
             
             (global.fetch as jest.Mock).mockImplementationOnce(
                 () => {
-                    return new Promise((resolve, reject) => {
+                    return new Promise((_resolve, reject) => {
                         // Simulate timeout by rejecting with AbortError after delay
                         setTimeout(() => {
                             const abortError = new Error('The operation was aborted');
@@ -434,7 +434,7 @@ describe('OllamaProvider (via AIService)', () => {
             jest.useFakeTimers();
             
             (global.fetch as jest.Mock).mockImplementationOnce(
-                (url, options) => {
+                (_url, options) => {
                     expect(options.signal).toBeDefined();
                     return new Promise(() => {}); // Never resolves
                 }

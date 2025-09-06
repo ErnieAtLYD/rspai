@@ -430,11 +430,9 @@ describe("ErrorHandlingService", () => {
             });
 
             it("should handle RetrospectError instances in retries", async () => {
-                let attemptCount = 0;
                 const maxRetries = 2;
                 
                 const operation = jest.fn().mockImplementation(() => {
-                    attemptCount++;
                     throw new RetrospectError(
                         ErrorType.NETWORK,
                         ErrorCode.API_NETWORK_ERROR,
@@ -568,11 +566,9 @@ describe("ErrorHandlingService", () => {
 
         describe("Retry Configuration", () => {
             it("should use custom maxRetries from options", async () => {
-                let attemptCount = 0;
                 const customMaxRetries = 1;
                 
                 const operation = jest.fn().mockImplementation(() => {
-                    attemptCount++;
                     throw new Error("Network error occurred");
                 });
 
@@ -613,10 +609,7 @@ describe("ErrorHandlingService", () => {
             });
 
             it("should use service config defaults when options not provided", async () => {
-                let attemptCount = 0;
-                
                 const operation = jest.fn().mockImplementation(() => {
-                    attemptCount++;
                     throw new Error("Network error occurred");
                 });
 
@@ -979,7 +972,7 @@ describe("ErrorHandlingService", () => {
             it("should clear all history on service disposal", async () => {
                 await service.handleError(new Error("Test error"), defaultContext);
                 
-                let history = service.getErrorHistory();
+                const history = service.getErrorHistory();
                 expect(history).toHaveLength(1);
                 
                 await service.dispose();

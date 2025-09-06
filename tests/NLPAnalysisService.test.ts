@@ -1,8 +1,6 @@
 // tests/NLPAnalysisService.test.ts
 
-import { NLPAnalysisService, NLPAnalysisConfig, ProductivityTheme, BlockerPattern, SentimentAnalysis } from '../src/services/NLPAnalysisService';
-import { CacheService } from '../src/services/CacheService';
-import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
+import { NLPAnalysisService, NLPAnalysisConfig } from '../src/services/NLPAnalysisService';
 
 // Mock Obsidian App
 const mockApp = {

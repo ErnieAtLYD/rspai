@@ -1,8 +1,6 @@
 // tests/NLPAnalysisService.ErrorHandling.test.ts
 
 import { NLPAnalysisService, NLPAnalysisConfig } from '../src/services/NLPAnalysisService';
-import { CacheService } from '../src/services/CacheService';
-import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 import * as nlpLoader from '../src/services/nlp/nlp-loader';
 
 // Mock Obsidian App
