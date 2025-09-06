@@ -32,7 +32,21 @@ export interface AnalysisResult {
     insights: InsightData[];
     summary?: string;
     confidence: number;
-    metadata: Record<string, any>;
+    metadata: AnalysisMetadata;
+}
+
+export interface AnalysisMetadata {
+    fileCount: number;
+    processingTime: number;
+    options: AnalysisOptions;
+    [key: string]: string | number | boolean | AnalysisOptions | undefined;
+}
+
+export interface CacheStats {
+    size: number;
+    maxSize: number;
+    hitRatio: number;
+    memoryUsage: number;
 }
 
 export interface AnalysisManagerConfig {
@@ -118,7 +132,10 @@ export class AnalysisManager extends BaseService {
 
         // Check if analysis is already running
         if (this.activeAnalyses.has(analysisId)) {
-            return await this.activeAnalyses.get(analysisId)!;
+            const existingAnalysis = this.activeAnalyses.get(analysisId);
+            if (existingAnalysis) {
+                return await existingAnalysis;
+            }
         }
 
         // Start new analysis
@@ -191,7 +208,30 @@ export class AnalysisManager extends BaseService {
         const files = await this.getAnalysisFiles(daysBack);
         const timeRange = `${daysBack}d`;
         
+        if (options.useCache !== false) {
+            const cacheKey = this.config.cacheService.generateAnalysisKey('trends', {
+                daysBack,
+                fileCount: files.length,
+                options
+            });
+            
+            const cached = await this.config.cacheService.get<TrendData[]>(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
+        
         const analysisResult = await this.config.patternRecognitionService.analyzeFiles(files, timeRange);
+        
+        if (options.useCache !== false) {
+            const cacheKey = this.config.cacheService.generateAnalysisKey('trends', {
+                daysBack,
+                fileCount: files.length,
+                options
+            });
+            await this.config.cacheService.set(cacheKey, analysisResult.trends, { ttl: 6 * 60 * 60 * 1000 });
+        }
+        
         return analysisResult.trends;
     }
 
@@ -261,7 +301,7 @@ export class AnalysisManager extends BaseService {
     /**
      * Get cache statistics
      */
-    getCacheStats(): any {
+    getCacheStats(): CacheStats {
         return this.config.cacheService.getStats();
     }
 
