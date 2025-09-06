@@ -243,7 +243,6 @@ The added complexity is justified by the security-critical nature of the encrypt
 
 **Core NLP Modules** (`src/services/nlp/`)
 - **TextProcessor**: Text cleaning, tokenization, keyword extraction, and consistent hashing
-- **ThemeExtractor**: Productivity theme identification with confidence scoring
 - **SentimentAnalyzer**: Emotional analysis with polarity, subjectivity, and productivity-specific sentiment
 - **BlockerDetector**: Identifies productivity blockers (procrastination, time management, workflow disruption)
 
@@ -410,7 +409,6 @@ src/
         ├── index.ts       # NLP module exports
         ├── nlp-loader.ts  # Dynamic NLP library loading
         ├── TextProcessor.ts # Text cleaning and preprocessing
-        ├── ThemeExtractor.ts # Productivity theme identification
         ├── SentimentAnalyzer.ts # Emotional analysis
         └── BlockerDetector.ts # Productivity blocker detection
 
