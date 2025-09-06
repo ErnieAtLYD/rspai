@@ -1070,7 +1070,7 @@ export default class JournalReflectionPlugin extends Plugin {
 	 * @throws {RetrospectError} - If the decryption fails
 	 * @throws {Error} - If the decryption fails
 	 */
-	private async getDecryptedApiKey(): Promise<string> {
+	public async getDecryptedApiKey(): Promise<string> {
 		if (!this.settings.openaiApiKey) {
 			return "";
 		}

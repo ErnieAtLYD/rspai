@@ -95,7 +95,7 @@ export class Logger {
 	 */
 	private log(level: LogLevel, message: string, context?: LogContext): void {
 		const prefix = `[${this.serviceName}]`;
-		const timestamp = new Date().toISOString();
+		// const timestamp = new Date().toISOString();
 		const contextStr = context ? JSON.stringify(context) : '';
 
 		switch (level) {

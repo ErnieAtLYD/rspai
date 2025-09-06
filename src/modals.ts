@@ -1,5 +1,6 @@
 import { App, Modal, Setting, Notice } from "obsidian";
 import { EncryptionService, ErrorHandlingService } from "./services";
+import type JournalReflectionPlugin from "./main";
 
 /**
  * Modal for prompting user for master password
@@ -242,11 +243,11 @@ export class EncryptionSetupModal extends Modal {
  * Modal for encryption management settings
  */
 export class EncryptionManagementModal extends Modal {
-    private plugin: any; // JournalReflectionPlugin type
+    private plugin: JournalReflectionPlugin;
     private onCloseCallback: () => void;
     private errorHandler: ErrorHandlingService;
 
-    constructor(app: App, plugin: any, onCloseCallback: () => void, errorHandler: ErrorHandlingService) {
+    constructor(app: App, plugin: JournalReflectionPlugin, onCloseCallback: () => void, errorHandler: ErrorHandlingService) {
         super(app);
         this.plugin = plugin;
         this.onCloseCallback = onCloseCallback;

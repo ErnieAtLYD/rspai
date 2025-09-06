@@ -84,7 +84,10 @@ export class PatternRecognitionService extends BaseService {
 
         if (!this.nlpService) {
             this.logger.debug("Lazy-loading NLP service on first use");
-            this.nlpService = this.config.nlpService!;
+            if (!this.config.nlpService) {
+                throw new Error('NLP service not configured');
+            }
+            this.nlpService = this.config.nlpService;
         }
 
         if (!this.nlpService.isReady()) {
@@ -446,12 +449,12 @@ export class PatternRecognitionService extends BaseService {
         };
     }
 
-    private async analyzeSentimentTrend(files: TFile[]): Promise<TrendData | null> {
+    private async analyzeSentimentTrend(_files: TFile[]): Promise<TrendData | null> {
         // Placeholder for sentiment analysis
         return null;
     }
 
-    private async analyzeTopicDiversityTrend(files: TFile[]): Promise<TrendData | null> {
+    private async analyzeTopicDiversityTrend(_files: TFile[]): Promise<TrendData | null> {
         // Placeholder for topic diversity analysis
         return null;
     }
@@ -635,7 +638,7 @@ Focus on actionable insights about personal growth, habits, and well-being.`;
     /**
      * Generate enhanced insights using NLP data
      */
-    private async generateEnhancedInsights(patterns: PatternData[], trends: TrendData[], content: string): Promise<InsightData[]> {
+    private async generateEnhancedInsights(patterns: PatternData[], _trends: TrendData[], _content: string): Promise<InsightData[]> {
         const insights: InsightData[] = [];
 
         // Find patterns with NLP data

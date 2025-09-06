@@ -30,7 +30,7 @@ export interface IService {
  * Service constructor type
  * Defines how services are created
  */
-export type ServiceConstructor<T extends IService> = new (...args: any[]) => T;
+export type ServiceConstructor<T extends IService> = new (...args: unknown[]) => T;
 
 /**
  * Service factory function type
@@ -77,8 +77,8 @@ export interface ServiceRegistration<T extends IService> {
  * - Type safety
  */
 export class ServiceManager {
-    private services = new Map<string, ServiceRegistration<any>>();
-    private instances = new Map<string, any>();
+    private services = new Map<string, ServiceRegistration<IService>>();
+    private instances = new Map<string, IService>();
     private initializing = new Set<string>();
     private errorHandler?: ErrorHandlingService;
 
@@ -129,7 +129,7 @@ export class ServiceManager {
             ...registration
         };
 
-        this.services.set(key, config);
+        this.services.set(key, config as unknown as ServiceRegistration<IService>);
 
         // Initialize eagerly if requested
         if (config.eager) {
@@ -166,7 +166,7 @@ export class ServiceManager {
             return this.instances.get(key) as T;
         }
 
-        const registration = this.services.get(key);
+        const registration = this.services.get(key) as ServiceRegistration<T> | undefined;
         if (!registration) {
             throw new RetrospectError(
                 ErrorType.CRITICAL,
@@ -243,7 +243,7 @@ export class ServiceManager {
         // Initialize all other services (excluding ErrorHandlingService which is already done)
         const promises: Promise<void>[] = [];
         
-        for (const key of this.services.keys()) {
+        for (const key of Array.from(this.services.keys())) {
             if (key === 'errorHandlingService') {
                 continue; // Already initialized
             }
@@ -325,8 +325,8 @@ export class ServiceManager {
      * @param dependencies - Array of dependency keys
      * @returns Array of resolved dependency instances
      */
-    private resolveDependencies(dependencies: string[]): any[] {
-        return dependencies.map(dep => this.resolve(dep));
+    private resolveDependencies(dependencies: string[]): IService[] {
+        return dependencies.map(dep => this.resolve<IService>(dep));
     }
 
     /**
@@ -338,7 +338,7 @@ export class ServiceManager {
      */
     private createInstance<T extends IService>(
         registration: ServiceRegistration<T>,
-        dependencies: any[]
+        dependencies: IService[]
     ): T {
         const { implementation } = registration;
 
@@ -352,7 +352,9 @@ export class ServiceManager {
         const Constructor = implementation as ServiceConstructor<T>;
         
         // Common pattern: pass app as first parameter, then dependencies
-        return new Constructor(this.app, ...dependencies);
+        // Use Reflect.construct for proper constructor calling with variable arguments
+        const args = [this.app, ...dependencies];
+        return Reflect.construct(Constructor, args) as T;
     }
 
     /**

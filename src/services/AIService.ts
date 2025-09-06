@@ -169,7 +169,7 @@ class OpenAIProvider implements LLMProvider {
         );
     }
 
-    private handleNetworkError(error: any): Promise<never> {
+    private handleNetworkError(error: Error): Promise<never> {
         if (error.name === 'AbortError') {
             throw new RetrospectError(
                 ErrorType.NETWORK,
@@ -325,7 +325,7 @@ class OllamaProvider implements LLMProvider {
         );
     }
 
-    private handleNetworkError(error: any): Promise<never> {
+    private handleNetworkError(error: Error): Promise<never> {
         if (error.name === 'AbortError') {
             throw new RetrospectError(
                 ErrorType.NETWORK,
