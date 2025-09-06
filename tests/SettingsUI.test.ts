@@ -1,19 +1,20 @@
 // Tests for SettingsUI functionality
 
 import { jest } from '@jest/globals';
+import type { App } from 'obsidian';
 
 // Mock Obsidian classes
-const mockObsidian = require('./mocks/obsidian.js');
-const { App, Setting, PluginSettingTab, TFolder } = mockObsidian;
+import mockObsidian from './mocks/obsidian.js';
+const { Setting, TFolder } = mockObsidian;
 
 // Make Setting available globally for the tests
 global.Setting = Setting;
 
 // Mock requestAnimationFrame
-global.requestAnimationFrame = jest.fn((callback) => {
-    callback();
+global.requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+    callback(0);
     return 0;
-});
+}) as typeof global.requestAnimationFrame;
 
 // Mock dependencies
 const mockPlugin = {
@@ -120,7 +121,7 @@ describe('JournalReflectionSettingTab', () => {
             style: {},
             addEventListener: jest.fn(),
             appendChild: jest.fn(),
-            querySelector: jest.fn().mockReturnValue(null),
+            querySelector: jest.fn().mockReturnValue(undefined),
             createSpan: jest.fn((attrs) => createMockElement('span', attrs)),
             createEl: jest.fn((tag, attrs) => createMockElement(tag, attrs)),
             createDiv: jest.fn((attrs) => createMockElement('div', attrs)),
@@ -131,7 +132,7 @@ describe('JournalReflectionSettingTab', () => {
         
         mockContainerEl = createMockElement();
 
-        settingsTab = new JournalReflectionSettingTab(mockApp as any, mockPlugin as any);
+        settingsTab = new JournalReflectionSettingTab(mockApp as unknown as App, mockPlugin as never);
         settingsTab.containerEl = mockContainerEl;
     });
 
@@ -144,8 +145,8 @@ describe('JournalReflectionSettingTab', () => {
 
     describe('ensureCustomAnalysisScope', () => {
         test('should initialize customAnalysisScope if not present', () => {
-            mockPlugin.settings.customAnalysisScope = undefined;
-            (settingsTab as any).ensureCustomAnalysisScope();
+            mockPlugin.settings.customAnalysisScope = undefined as never;
+            (settingsTab as unknown as { ensureCustomAnalysisScope: () => void }).ensureCustomAnalysisScope();
             
             expect(mockPlugin.settings.customAnalysisScope).toEqual(DEFAULT_SETTINGS.customAnalysisScope);
         });
@@ -160,9 +161,9 @@ describe('JournalReflectionSettingTab', () => {
                 includeTags: [],
                 excludeTags: []
             };
-            mockPlugin.settings.customAnalysisScope = existingScope;
+            mockPlugin.settings.customAnalysisScope = existingScope as never;
             
-            (settingsTab as any).ensureCustomAnalysisScope();
+            (settingsTab as unknown as { ensureCustomAnalysisScope: () => void }).ensureCustomAnalysisScope();
             
             expect(mockPlugin.settings.customAnalysisScope).toBe(existingScope);
         });
@@ -321,7 +322,7 @@ describe('JournalReflectionSettingTab', () => {
         beforeEach(() => {
             mockSetting = {
                 settingEl: {
-                    querySelector: jest.fn().mockReturnValue(null),
+                    querySelector: jest.fn().mockReturnValue(undefined),
                     createDiv: jest.fn().mockReturnValue({
                         classList: { add: jest.fn() },
                         textContent: '',
@@ -380,7 +381,7 @@ describe('JournalReflectionSettingTab', () => {
         });
 
         test('should show error when no folders exist', () => {
-            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(undefined);
 
             const addValidationIconSpy = jest.spyOn(settingsTab as any, 'addValidationIcon');
             
@@ -400,7 +401,7 @@ describe('JournalReflectionSettingTab', () => {
         beforeEach(() => {
             mockSetting = {
                 settingEl: {
-                    querySelector: jest.fn().mockReturnValue(null),
+                    querySelector: jest.fn().mockReturnValue(undefined),
                     createDiv: jest.fn().mockReturnValue({
                         classList: { add: jest.fn() },
                         textContent: '',
@@ -437,7 +438,7 @@ describe('JournalReflectionSettingTab', () => {
         });
 
         test('should create folder and show success', async () => {
-            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(undefined);
             mockApp.vault.createFolder.mockResolvedValue(undefined);
             const addValidationIconSpy = jest.spyOn(settingsTab as any, 'addValidationIcon');
             
@@ -452,7 +453,7 @@ describe('JournalReflectionSettingTab', () => {
         });
 
         test('should show error when folder creation fails', async () => {
-            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(undefined);
             mockApp.vault.createFolder.mockRejectedValue(new Error('Creation failed'));
             const addValidationIconSpy = jest.spyOn(settingsTab as any, 'addValidationIcon');
             
@@ -525,7 +526,7 @@ describe('JournalReflectionSettingTab', () => {
                 style: {},
                 addEventListener: jest.fn(),
                 appendChild: jest.fn(),
-                querySelector: jest.fn().mockReturnValue(null),
+                querySelector: jest.fn().mockReturnValue(undefined),
                 createSpan: jest.fn((attrs) => createMockElement('span', attrs)),
                 createEl: jest.fn((tag, attrs) => createMockElement(tag, attrs)),
                 createDiv: jest.fn((attrs) => createMockElement('div', attrs)),

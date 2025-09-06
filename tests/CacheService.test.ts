@@ -1,7 +1,6 @@
 // tests/CacheService.test.ts
 
 import { CacheService } from '../src/services/CacheService';
-import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
 const mockApp = {

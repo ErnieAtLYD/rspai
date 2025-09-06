@@ -1,6 +1,5 @@
 // tests/SettingsValidation.test.ts
 
-import { jest } from '@jest/globals';
 
 // Mock the main plugin class with validation methods
 class MockJournalReflectionPlugin {
