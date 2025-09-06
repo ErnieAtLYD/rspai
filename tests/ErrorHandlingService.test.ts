@@ -1,3 +1,5 @@
+// tests/ErrorHandlingService.test.ts
+
 import { App } from "obsidian";
 import { ErrorHandlingService, ErrorType, ErrorCode, RetrospectError, ErrorContext, ErrorHandlingConfig } from "../src/services/ErrorHandlingService";
 

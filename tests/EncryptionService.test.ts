@@ -135,11 +135,11 @@ describe('EncryptionService', () => {
 
         it('should return false when crypto.subtle is undefined', () => {
             const originalSubtle = global.crypto.subtle;
-            delete (global.crypto as any).subtle;
+            Object.defineProperty(global.crypto, 'subtle', { value: undefined, configurable: true });
 
             expect(encryptionService['isWebCryptoAvailable']()).toBe(false);
 
-            (global.crypto as any).subtle = originalSubtle;
+            Object.defineProperty(global.crypto, 'subtle', { value: originalSubtle, configurable: true });
         });
 
         it('should return false when crypto.getRandomValues is undefined', () => {
@@ -339,7 +339,7 @@ describe('EncryptionService', () => {
         it('should throw error when encrypted data is null', async () => {
             await encryptionService.initialize();
             
-            await expect(encryptionService.decrypt(null as any, 'password')).rejects.toThrow(
+            await expect(encryptionService.decrypt(null as unknown as EncryptedData, 'password')).rejects.toThrow(
                 'Encrypted data and password are required for decryption'
             );
         });
@@ -433,7 +433,7 @@ describe('EncryptionService', () => {
         });
 
         it('should reject null/undefined password', () => {
-            const result = encryptionService.validatePassword(null as any);
+            const result = encryptionService.validatePassword(null as unknown as string);
             expect(result.valid).toBe(false);
             expect(result.message).toBe('Password cannot be empty');
         });
