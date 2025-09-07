@@ -5,7 +5,7 @@ import { ErrorHandlingService } from "./ErrorHandlingService";
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogContext {
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 export type LogErrorContext = string | LogContext;
