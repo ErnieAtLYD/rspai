@@ -327,7 +327,8 @@ describe("JournalReflectionSettingTab", () => {
 				"🧪"
 			);
 
-			expect(mockHeader.style.cursor).toBe("pointer");
+			// The cursor style is now handled by CSS class .retrospect-collapsible-header
+			// instead of inline styles, so we just check for the event listener
 			expect(mockHeader.addEventListener).toHaveBeenCalledWith("click", expect.any(Function));
 		});
 	});

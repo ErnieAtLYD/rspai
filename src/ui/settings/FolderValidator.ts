@@ -127,26 +127,15 @@ export class FolderValidator {
 		switch (type) {
 			case "success":
 				iconEl.textContent = "✓";
-				iconEl.style.color = "var(--color-green)";
 				break;
 			case "error":
 				iconEl.textContent = "✗";
-				iconEl.style.color = "var(--color-red)";
 				break;
 			case "info":
 				iconEl.textContent = "ℹ";
-				iconEl.style.color = "var(--color-blue)";
 				break;
 		}
 
-		// Style the icon
-		iconEl.style.position = "absolute";
-		iconEl.style.right = "10px";
-		iconEl.style.top = "50%";
-		iconEl.style.transform = "translateY(-50%)";
-		iconEl.style.fontSize = "16px";
-		iconEl.style.fontWeight = "bold";
-		iconEl.style.cursor = "help";
 		iconEl.title = tooltip;
 
 		// Make the setting container relative for absolute positioning
@@ -154,7 +143,7 @@ export class FolderValidator {
 			".setting-item-control"
 		);
 		if (settingControl) {
-			(settingControl as HTMLElement).style.position = "relative";
+			settingControl.classList.add("has-validation");
 			settingControl.appendChild(iconEl);
 		}
 	}
