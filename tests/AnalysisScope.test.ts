@@ -8,7 +8,21 @@ import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 jest.mock('obsidian', () => ({
     App: jest.fn(),
     Plugin: jest.fn(),
-    TFile: jest.fn(),
+    TFile: class MockTFile {
+        path: string;
+        name: string;
+        basename: string;
+        extension: string;
+        stat: { mtime: number; ctime: number };
+
+        constructor(path: string) {
+            this.path = path;
+            this.name = path.split('/').pop() || '';
+            this.basename = this.name.split('.')[0] || '';
+            this.extension = path.split('.').pop() || '';
+            this.stat = { mtime: Date.now(), ctime: Date.now() };
+        }
+    },
     TFolder: jest.fn(),
     moment: jest.fn(() => ({
         subtract: jest.fn().mockReturnThis(),

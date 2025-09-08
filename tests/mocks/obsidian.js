@@ -156,6 +156,7 @@ class TFile {
     constructor(path) {
         this.path = path;
         this.name = path.split('/').pop();
+        this.basename = this.name.split('.')[0]; // Add basename property
         this.extension = path.split('.').pop();
         this.stat = { mtime: Date.now(), ctime: Date.now() };
     }
