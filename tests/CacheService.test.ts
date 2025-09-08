@@ -5,6 +5,7 @@ import { CacheService } from '../src/services/CacheService';
 // Mock Obsidian App
 const mockApp = {
     vault: {
+        configDir: '.obsidian',
         adapter: {
             read: jest.fn(),
             write: jest.fn(),
@@ -37,7 +38,7 @@ describe('CacheService', () => {
 
         test('should remove path traversal sequences', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, '../../../malicious');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/malicious/cache.json');
+            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/plugin----malicious/cache.json');
         });
 
         test('should replace path separators with hyphens', () => {
@@ -57,7 +58,7 @@ describe('CacheService', () => {
 
         test('should prepend "plugin-" if it starts with non-alphanumeric', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, '-my-plugin');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/plugin-my-plugin/cache.json');
+            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/plugin--my-plugin/cache.json');
         });
 
         test('should limit length to 50 characters', () => {
