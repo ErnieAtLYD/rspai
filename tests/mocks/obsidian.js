@@ -49,6 +49,7 @@ class Setting {
                 classList: { add: () => {} },
                 textContent: '',
                 title: '',
+                style: {},
                 appendChild: () => {}
             })
         };
@@ -210,6 +211,7 @@ if (typeof document === 'undefined') {
             removeEventListener: () => {},
             createEl: function(tagName, attrs) {
                 const el = document.createElement(tagName);
+                el.style = {};
                 if (attrs) {
                     if (attrs.text) el.textContent = attrs.text;
                     if (attrs.cls) el.className = attrs.cls;
@@ -226,6 +228,7 @@ if (typeof document === 'undefined') {
                 };
                 div.createEl = function(tagName, attrs) {
                     const el = document.createElement(tagName);
+                    el.style = {};
                     if (attrs) {
                         if (attrs.text) el.textContent = attrs.text;
                         if (attrs.cls) el.className = attrs.cls;
@@ -241,7 +244,7 @@ if (typeof document === 'undefined') {
                 return div;
             },
             empty: function() {
-                this.innerHTML = '';
+                this.textContent = '';
             },
             appendText: function(text) {
                 this.textContent += text;

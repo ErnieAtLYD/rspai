@@ -126,15 +126,15 @@ export class FolderValidator {
 		// Set icon based on type
 		switch (type) {
 			case "success":
-				iconEl.innerHTML = "✓";
+				iconEl.textContent = "✓";
 				iconEl.style.color = "var(--color-green)";
 				break;
 			case "error":
-				iconEl.innerHTML = "✗";
+				iconEl.textContent = "✗";
 				iconEl.style.color = "var(--color-red)";
 				break;
 			case "info":
-				iconEl.innerHTML = "ℹ";
+				iconEl.textContent = "ℹ";
 				iconEl.style.color = "var(--color-blue)";
 				break;
 		}
