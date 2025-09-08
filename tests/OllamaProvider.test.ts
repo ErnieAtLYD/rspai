@@ -285,9 +285,11 @@ describe('OllamaProvider (via AIService)', () => {
             };
             
             const sourceFiles = [
-                { basename: 'Day 1', path: 'day1.md' },
-                { basename: 'Day 2', path: 'day2.md' }
-            ] as TFile[];
+                new TFile('day1.md'),
+                new TFile('day2.md')
+            ];
+            sourceFiles[0].basename = 'Day 1';
+            sourceFiles[1].basename = 'Day 2';
             
             (global.fetch as jest.Mock).mockResolvedValueOnce({
                 ok: true,
@@ -296,6 +298,9 @@ describe('OllamaProvider (via AIService)', () => {
 
             const result = await aiService.generateSummary('Journal content here', sourceFiles);
             
+            // Verify TFile instances are properly created
+            expect(sourceFiles[0] instanceof TFile).toBe(true);
+            expect(sourceFiles[1] instanceof TFile).toBe(true);
             expect(result).toBe('Weekly summary of journal entries');
             expect(global.fetch).toHaveBeenCalledWith(
                 'http://localhost:11434/api/generate',
@@ -307,7 +312,7 @@ describe('OllamaProvider (via AIService)', () => {
         });
 
         it('should reject empty content', async () => {
-            const sourceFiles = [] as TFile[];
+            const sourceFiles: TFile[] = [];
             
             let errorThrown1 = false;
             try {
