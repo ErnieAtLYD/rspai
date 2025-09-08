@@ -112,38 +112,34 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should include work-related content with work keywords', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const workContent = 'Today I had a meeting with the team about the new project deadline.';
             mockApp.vault.read.mockResolvedValue(workContent);
 
             const result = await fileOpsService.getNotesContent([mockFile]);
+            expect(mockFile instanceof TFile).toBe(true);
             expect(result).toContain('2024-01-01');
             expect(result).toContain(workContent);
         });
 
         it('should include work-related content with work tags', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const workContent = 'Working on the new feature today #work #project';
             mockApp.vault.read.mockResolvedValue(workContent);
 
             const result = await fileOpsService.getNotesContent([mockFile]);
+            expect(mockFile instanceof TFile).toBe(true);
             expect(result).toContain('2024-01-01');
             expect(result).toContain(workContent);
         });
 
         it('should include work-related content from work folders', async () => {
-            const mockFile = {
-                path: 'work/daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('work/daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const content = 'Today was a good day.';
             mockApp.vault.read.mockResolvedValue(content);
@@ -154,10 +150,8 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should exclude non-work content', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const personalContent = 'Went to the movies with friends. Had a great time at the restaurant.';
             mockApp.vault.read.mockResolvedValue(personalContent);
@@ -192,10 +186,8 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should include content with included keywords', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const healthContent = 'Did a great exercise today and focused on nutrition.';
             mockApp.vault.read.mockResolvedValue(healthContent);
@@ -228,10 +220,8 @@ describe('Analysis Scope Functionality', () => {
             const tagService = new FileOperationsService(mockApp, tagOnlyConfig, mockErrorHandler);
             await tagService.initialize();
 
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const healthContent = 'Great day for fitness #health #fitness';
             mockApp.vault.read.mockResolvedValue(healthContent);
@@ -264,10 +254,8 @@ describe('Analysis Scope Functionality', () => {
             const folderService = new FileOperationsService(mockApp, folderOnlyConfig, mockErrorHandler);
             await folderService.initialize();
 
-            const mockFile = {
-                path: 'Health/daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('Health/daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const content = 'Today was a good day.';
             mockApp.vault.read.mockResolvedValue(content);
@@ -278,10 +266,8 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should exclude content with excluded keywords', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const workContent = 'Had a work meeting today about the project.';
             mockApp.vault.read.mockResolvedValue(workContent);
@@ -291,10 +277,8 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should exclude content with excluded tags', async () => {
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const workContent = 'Working on the project #work #business';
             mockApp.vault.read.mockResolvedValue(workContent);
@@ -304,10 +288,8 @@ describe('Analysis Scope Functionality', () => {
         });
 
         it('should exclude content from excluded folders', async () => {
-            const mockFile = {
-                path: 'Work/daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('Work/daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const content = 'Today was a good day.';
             mockApp.vault.read.mockResolvedValue(content);
@@ -331,10 +313,8 @@ describe('Analysis Scope Functionality', () => {
             fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
             await fileOpsService.initialize();
 
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const personalContent = 'Went to the movies with friends.';
             mockApp.vault.read.mockResolvedValue(personalContent);
@@ -366,10 +346,8 @@ describe('Analysis Scope Functionality', () => {
             fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
             await fileOpsService.initialize();
 
-            const mockFile = {
-                path: 'daily/2024-01-01.md',
-                basename: '2024-01-01'
-            } as TFile;
+            const mockFile = new TFile('daily/2024-01-01.md');
+            mockFile.basename = '2024-01-01';
 
             const content = 'Any content should be included.';
             mockApp.vault.read.mockResolvedValue(content);
