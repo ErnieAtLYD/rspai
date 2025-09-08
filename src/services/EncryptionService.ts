@@ -34,7 +34,6 @@ export class EncryptionService extends BaseService {
     protected async onInitialize(): Promise<void> {
         if (!this.isWebCryptoAvailable()) {
             const cryptoError = new Error("Web Crypto API not available. Cannot initialize encryption service.");
-            console.error('EncryptionService initialization error:', cryptoError.message);
             throw cryptoError;
         }
 

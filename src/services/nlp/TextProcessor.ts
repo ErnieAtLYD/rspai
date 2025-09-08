@@ -81,8 +81,7 @@ export class TextProcessor {
 			const doc = nlp(text);
 			entities = this.extractEntities(doc);
 		} catch (error) {
-			// Could use logger here if needed, but this is a lightweight fallback
-			console.warn("Entity extraction failed:", error);
+			// Silently continue with empty entities array on error
 		}
 		
 		const keywords = await this.extractKeywords(cleanedText);

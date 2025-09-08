@@ -462,26 +462,18 @@ ${backlinks}
      * Initialize the file operations service
      */
     protected async onInitialize(): Promise<void> {
-
-        try {
-            // Validate configuration
-            if (!this.config.reflectionFolder) {
-                const configError = new Error("Reflection folder is not configured");
-                console.error('FileOperationsService initialization error:', configError.message);
-                throw configError;
-            }
-
-            if (this.config.daysToInclude < 1) {
-                const configError = new Error("Days to include must be at least 1");
-                console.error('FileOperationsService initialization error:', configError.message);
-                throw configError;
-            }
-
-            this.logger.lifecycle('initialized', `scanning ${this.config.daysToInclude} days`);
-        } catch (error) {
-            console.error('FileOperationsService initialization failed:', error);
-            throw error;
+        // Validate configuration
+        if (!this.config.reflectionFolder) {
+            const configError = new Error("Reflection folder is not configured");
+            throw configError;
         }
+
+        if (this.config.daysToInclude < 1) {
+            const configError = new Error("Days to include must be at least 1");
+            throw configError;
+        }
+
+        this.logger.lifecycle('initialized', `scanning ${this.config.daysToInclude} days`);
     }
 
     /**

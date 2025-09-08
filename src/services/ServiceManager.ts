@@ -268,7 +268,7 @@ export class ServiceManager {
                         }
                     );
                 } else {
-                    console.error(`Failed to initialize service '${key}':`, error);
+                    // Service initialization failed, but no error handler available to report it
                 }
             }
         }
@@ -307,7 +307,7 @@ export class ServiceManager {
                         }
                     );
                 } else {
-                    console.error(`Failed to dispose service '${key}':`, error);
+                    // Service disposal failed, but no error handler available to report it
                 }
             }
         }
@@ -378,7 +378,7 @@ export class ServiceManager {
                                 }
                             );
                         } else {
-                            console.error('Service initialization failed:', error);
+                            // Service initialization failed, but no error handler available to report it
                         }
                     });
                 }
@@ -393,7 +393,7 @@ export class ServiceManager {
                         }
                     );
                 } else {
-                    console.error('Service initialization failed:', error);
+                    // Service initialization failed, but no error handler available to report it
                 }
             }
         }

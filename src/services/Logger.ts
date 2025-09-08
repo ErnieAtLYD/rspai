@@ -52,12 +52,8 @@ export class Logger {
 	 */
 	async error(message: string, error?: Error, context?: LogErrorContext): Promise<void> {
 		// Always log to console first
-		const prefix = `[${this.serviceName}]`;
-		if (error) {
-			console.error(`${prefix} ERROR: ${message}`, error.message, context || '');
-		} else {
-			console.error(`${prefix} ERROR: ${message}`, context || '');
-		}
+		// Use private log method for consistency
+		this.log('error', message, context as LogContext);
 
 		// Use ErrorHandlingService if available and we have an actual Error object
 		if (this.errorHandler && error) {
@@ -77,7 +73,7 @@ export class Logger {
 					};
 				await this.errorHandler.handleError(error, errorContext);
 			} catch (handlerError) {
-				console.error(`${prefix} ErrorHandler failed:`, handlerError);
+				// ErrorHandler failed, but main error was already logged above
 			}
 		}
 	}

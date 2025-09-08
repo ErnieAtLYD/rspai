@@ -105,8 +105,7 @@ export class SentimentAnalyzer {
 				confidence_level: Math.abs(polarity)
 			};
 		} catch (error) {
-			// Could use logger here if needed, but this is a lightweight fallback
-			console.warn("Sentiment analysis failed:", error);
+			// Silently return neutral sentiment on error for lightweight fallback
 			return this.getNeutralSentiment();
 		}
 	}

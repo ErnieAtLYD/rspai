@@ -109,9 +109,8 @@ export abstract class BaseService implements IService {
             try {
                 this.errorCallback(serviceName, error, operation);
             } catch (callbackError) {
-                // Fallback to console if callback fails
-                console.error(`Failed to handle ${serviceName} ${operation} error via callback:`, callbackError);
-                console.error(`Original ${serviceName} ${operation} error:`, error);
+                // Fallback to console if callback fails - report original error only
+                console.error(`Failed to ${operation} ${serviceName}:`, error);
             }
         } else {
             // Fallback to console logging only
