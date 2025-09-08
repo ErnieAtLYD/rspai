@@ -2,11 +2,11 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import JournalReflectionPlugin from "../main";
 import { SettingBuilder, SettingDefinition } from "./settings/SettingBuilder";
+import { FolderValidator } from "./settings/FolderValidator";
 import {
 	createSettingsConfig,
 	SettingsSection,
-} from "./settings/settingsConfig";
-import { FolderValidator } from "./settings/FolderValidator";
+} from "./settings/SettingsConfig";
 
 /**
  * The JournalReflectionSettingTab class is responsible for
@@ -124,7 +124,6 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 		title: string,
 		icon: string
 	): void {
-		header.style.cursor = "pointer";
 		header.addEventListener("click", () => {
 			const isCollapsed = content.classList.contains(
 				"retrospect-collapsed"
@@ -137,8 +136,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * The onSettingUpdate method is responsible for handling 
-   * the update of the settings.
+	 * The onSettingUpdate method is responsible for handling the update of the settings.
 	 * @param key - The key of the setting.
 	 * @param _value - The value of the setting.
 	 * @returns A promise that resolves when the setting is updated.
@@ -162,8 +160,7 @@ export class JournalReflectionSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * The addValidation method is responsible for adding 
-   * validation to the settings.
+	 * The addValidation method is responsible for adding validation to the settings.
 	 * @param setting - The setting element.
 	 * @param config - The configuration of the setting.
 	 */
