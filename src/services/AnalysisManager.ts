@@ -96,14 +96,13 @@ export class AnalysisManager extends BaseService {
         // Don't load analysis history during initialization - defer until all services are ready
         // This will be loaded lazily on first use
         
-        // Use console logging during initialization instead of error handler
-        console.log("AnalysisManager initialized");
+        this.logger.lifecycle('initialized');
     }
 
     protected async onDispose(): Promise<void> {
         // Cancel active analyses
         if (this.activeAnalyses.size > 0) {
-            console.log(`AnalysisManager: Cancelling ${this.activeAnalyses.size} active analyses`);
+            this.logger.info(`Cancelling ${this.activeAnalyses.size} active analyses`);
         }
         this.activeAnalyses.clear();
 
@@ -114,7 +113,7 @@ export class AnalysisManager extends BaseService {
         
         this.analysisHistory = [];
         this.historyLoaded = false;
-        console.log("AnalysisManager disposed");
+        this.logger.lifecycle('disposed');
     }
 
     /**
@@ -450,14 +449,14 @@ Please provide a 2-3 paragraph summary that:
         try {
             // Check if cache service is ready before attempting to load
             if (!this.config.cacheService.isReady()) {
-                console.log('AnalysisManager: Cache service not ready, skipping history load');
+                this.logger.debug('Cache service not ready, skipping history load');
                 return;
             }
             
             const cached = await this.config.cacheService.get<AnalysisResult[]>('analysis_history');
             if (cached) {
                 this.analysisHistory = cached;
-                console.log(`AnalysisManager: Loaded ${cached.length} entries from analysis history`);
+                this.logger.debug(`Loaded ${cached.length} entries from analysis history`);
             }
         } catch (error) {
             // Use console logging if error handler is not ready
@@ -472,7 +471,7 @@ Please provide a 2-3 paragraph summary that:
                     { showNotice: false }
                 );
             } else {
-                console.warn('AnalysisManager: Failed to load analysis history:', error);
+                this.logger.warn('Failed to load analysis history', { error: error instanceof Error ? error.message : String(error) });
             }
         }
     }
@@ -495,8 +494,7 @@ Please provide a 2-3 paragraph summary that:
                     { showNotice: false }
                 );
             } else {
-                // Fallback to console logging during disposal
-                console.warn('AnalysisManager: Failed to save analysis history:', error);
+                this.logger.warn('Failed to save analysis history', { error: error instanceof Error ? error.message : String(error) });
             }
         }
     }
