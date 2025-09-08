@@ -1,7 +1,7 @@
 {
 	"id": "retrospect-ai",
 	"name": "Retrospect AI",
-	"version": "2.3.0",
+	"version": "2.4.0",
 	"minAppVersion": "0.15.0",
 	"description": "AI-powered weekly journal summaries. Transform daily notes into meaningful insights.",
 	"author": "Ernie Hsiung",

@@ -129,7 +129,7 @@ export class NLPAnalysisService extends BaseService {
 		this.initializeProductivityBlockerPatterns();
 		this.initializeThemeExtractionModels();
 
-		console.log("NLP Analysis Service initialized");
+		this.logger.lifecycle('initialized');
 	}
 
 	protected async onDispose(): Promise<void> {
@@ -138,7 +138,7 @@ export class NLPAnalysisService extends BaseService {
 		this.sentimentAnalyzer = null;
 		this.stemmer = null;
 		this.stopWords = null;
-		console.log("NLP Analysis Service disposed");
+		this.logger.lifecycle('disposed');
 	}
 
 	/**
@@ -997,7 +997,7 @@ export class NLPAnalysisService extends BaseService {
 				(instance as unknown as { clearCache: () => void }).clearCache();
 			}
 		} catch (error) {
-			console.warn('Error disposing TF-IDF instance:', error);
+			this.logger.warn('Error disposing TF-IDF instance', { error: error instanceof Error ? error.message : String(error) });
 		}
 	}
 

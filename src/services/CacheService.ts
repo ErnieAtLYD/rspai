@@ -77,7 +77,7 @@ export class CacheService extends BaseService {
         }
         
         this.startCleanupTimer();
-        console.log(`Cache service initialized with ${this.cache.size} entries`);
+        this.logger.lifecycle('initialized', `with ${this.cache.size} entries`);
     }
 
     protected async onDispose(): Promise<void> {
@@ -97,13 +97,13 @@ export class CacheService extends BaseService {
             try {
                 await this.forceBatchWrite();
             } catch (error) {
-                console.warn('Failed to save final cache state during disposal:', error);
+                this.logger.warn('Failed to save final cache state during disposal', { error: error instanceof Error ? error.message : String(error) });
             }
         }
         
         this.cache.clear();
         this.pendingWrites.clear();
-        console.log("Cache service disposed");
+        this.logger.lifecycle('disposed');
     }
 
     /**
@@ -351,11 +351,11 @@ export class CacheService extends BaseService {
                             );
                         }
             else if (error instanceof Error && error.message.includes('ENOENT')) {
-                                console.log('CacheService: No existing cache found, starting fresh');
+                                this.logger.debug('No existing cache found, starting fresh');
                             }
             else {
                                 // Other errors (corrupted file, etc.)
-                                console.warn('CacheService: Could not load cache from disk, starting fresh:', error);
+                                this.logger.warn('Could not load cache from disk, starting fresh', { error: error instanceof Error ? error.message : String(error) });
                             }
 
         }

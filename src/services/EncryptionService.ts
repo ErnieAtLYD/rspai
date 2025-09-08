@@ -38,16 +38,14 @@ export class EncryptionService extends BaseService {
             throw cryptoError;
         }
 
-        // Log successful initialization to console during initialization
-        console.log("EncryptionService initialized successfully");
+        this.logger.lifecycle('initialized');
     }
 
     protected async onDispose(): Promise<void> {
         // Clear any cached keys or sensitive data
         this.config = { ...this.defaultConfig };
 
-        // Use console logging instead of error handler during disposal
-        console.log("EncryptionService disposed");
+        this.logger.lifecycle('disposed');
     }
 
     /**

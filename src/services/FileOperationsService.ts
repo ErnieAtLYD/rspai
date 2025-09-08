@@ -477,8 +477,7 @@ ${backlinks}
                 throw configError;
             }
 
-            // Log successful initialization to console during initialization
-            console.log(`FileOperationsService initialized - scanning ${this.config.daysToInclude} days`);
+            this.logger.lifecycle('initialized', `scanning ${this.config.daysToInclude} days`);
         } catch (error) {
             console.error('FileOperationsService initialization failed:', error);
             throw error;
@@ -654,8 +653,6 @@ ${backlinks}
      * Dispose the file operations service
      */
     protected async onDispose(): Promise<void> {
-        // Use console logging instead of error handler during disposal
-        // since the ErrorHandlingService may be disposed first
-        console.log("FileOperationsService disposed");
+        this.logger.lifecycle('disposed');
     }
 }

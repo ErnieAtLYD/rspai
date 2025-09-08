@@ -580,8 +580,7 @@ Please provide a structured reflection that would be meaningful for weekly revie
             );
         }
 
-        // Log service initialization (using console.log is acceptable for service lifecycle)
-        console.log(`AI service initialized with model: ${this.config.model}`);
+        this.logger.lifecycle('initialized', `with model: ${this.config.model}`);
     }
 
     /**
@@ -603,7 +602,6 @@ Please provide a structured reflection that would be meaningful for weekly revie
             apiUrl: ""
         };
         
-        // Log service disposal (using console.log is acceptable for service lifecycle)
-        console.log("AI service disposed");
+        this.logger.lifecycle('disposed');
     }
 }
