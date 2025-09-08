@@ -68,7 +68,7 @@ export class CacheService extends BaseService {
         };
         // Sanitize plugin ID to prevent path traversal attacks
         const sanitizedPluginId = this.sanitizePluginId(pluginId);
-        this.cacheFilePath = `.obsidian/plugins/${sanitizedPluginId}/cache.json`;
+        this.cacheFilePath = `${this.app.vault.configDir}/plugins/${sanitizedPluginId}/cache.json`;
     }
 
     protected async onInitialize(): Promise<void> {

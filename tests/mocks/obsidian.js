@@ -8,6 +8,7 @@ class App {
 class Vault {
     constructor() {
         this.adapter = new FileSystemAdapter();
+        this.configDir = '.obsidian';
     }
 }
 
