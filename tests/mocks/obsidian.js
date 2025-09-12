@@ -1,14 +1,14 @@
 // Mock Obsidian API for testing
 class App {
-    constructor() {
-        this.vault = new Vault();
+    constructor(configDir) {
+        this.vault = new Vault(configDir);
     }
 }
 
 class Vault {
-    constructor() {
+    constructor(configDir = '.obsidian') {
         this.adapter = new FileSystemAdapter();
-        this.configDir = '.obsidian';
+        this.configDir = configDir;
     }
 }
 
