@@ -14,6 +14,18 @@ const mockApp = {
     }
 } as any;
 
+// Helper function to create mock app with custom configDir
+const createMockApp = (configDir = '.obsidian') => ({
+    vault: {
+        configDir,
+        adapter: {
+            read: jest.fn(),
+            write: jest.fn(),
+            exists: jest.fn()
+        }
+    }
+} as any);
+
 // Mock ErrorHandlingService
 const mockErrorHandler = {
     handleError: jest.fn(),
@@ -28,43 +40,45 @@ describe('CacheService', () => {
         // Mock executeWithRetry to just execute the function
         mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
         mockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
+        // Reset the mockApp configDir to default for each test
+        mockApp.vault.configDir = '.obsidian';
     });
 
     describe('Plugin ID Sanitization', () => {
         test('should sanitize valid plugin ID correctly', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'retrospect-ai');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/retrospect-ai/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/retrospect-ai/cache.json`);
         });
 
         test('should remove path traversal sequences', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, '../../../malicious');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/plugin----malicious/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/plugin----malicious/cache.json`);
         });
 
         test('should replace path separators with hyphens', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'folder/subfolder\\malicious');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/folder-subfolder-malicious/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/folder-subfolder-malicious/cache.json`);
         });
 
         test('should remove special characters', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'plugin@#$%name!');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/pluginname/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/pluginname/cache.json`);
         });
 
         test('should convert to lowercase', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'MyPlugin-NAME');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/myplugin-name/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/myplugin-name/cache.json`);
         });
 
         test('should prepend "plugin-" if it starts with non-alphanumeric', () => {
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, '-my-plugin');
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/plugin--my-plugin/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/plugin--my-plugin/cache.json`);
         });
 
         test('should limit length to 50 characters', () => {
             const longName = 'a'.repeat(100);
             cacheService = new CacheService(mockApp, mockErrorHandler, {}, longName);
-            expect(cacheService['cacheFilePath']).toBe('.obsidian/plugins/' + 'a'.repeat(50) + '/cache.json');
+            expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/${'a'.repeat(50)}/cache.json`);
         });
 
         test('should throw error for empty plugin ID', () => {
@@ -83,6 +97,44 @@ describe('CacheService', () => {
             expect(() => {
                 new CacheService(mockApp, mockErrorHandler, {}, null as any);
             }).toThrow('Plugin ID must be a non-empty string');
+        });
+    });
+
+    describe('Custom Config Directory Support', () => {
+        test('should work with custom config directory name', () => {
+            const customMockApp = createMockApp('.my-obsidian');
+            mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
+            customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
+            
+            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+            expect(cacheService['cacheFilePath']).toBe('.my-obsidian/plugins/test-plugin/cache.json');
+        });
+
+        test('should work with config directory without leading dot', () => {
+            const customMockApp = createMockApp('obsidian-config');
+            mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
+            customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
+            
+            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+            expect(cacheService['cacheFilePath']).toBe('obsidian-config/plugins/test-plugin/cache.json');
+        });
+
+        test('should work with nested config directory', () => {
+            const customMockApp = createMockApp('config/obsidian');
+            mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
+            customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
+            
+            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+            expect(cacheService['cacheFilePath']).toBe('config/obsidian/plugins/test-plugin/cache.json');
+        });
+
+        test('should sanitize plugin ID correctly with custom config dir', () => {
+            const customMockApp = createMockApp('.vault-config');
+            mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
+            customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
+            
+            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'My-Plugin@2024!');
+            expect(cacheService['cacheFilePath']).toBe('.vault-config/plugins/my-plugin2024/cache.json');
         });
     });
 
