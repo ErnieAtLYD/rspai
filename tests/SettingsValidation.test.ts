@@ -417,19 +417,19 @@ describe('Settings Validation', () => {
 
     describe('llmProvider validation', () => {
         test('should use default for invalid LLM provider', () => {
-            plugin.settings.llmProvider = 'option2' as any; // Invalid provider
+            plugin.settings.llmProvider = 'option2' as unknown as ('openai' | 'ollama'); // Invalid provider
             plugin.validateSettings();
             expect(plugin.settings.llmProvider).toBe('openai');
         });
 
         test('should use default when llmProvider is null', () => {
-            plugin.settings.llmProvider = null as any;
+            plugin.settings.llmProvider = null as unknown as ('openai' | 'ollama');
             plugin.validateSettings();
             expect(plugin.settings.llmProvider).toBe('openai');
         });
 
         test('should use default when llmProvider is undefined', () => {
-            plugin.settings.llmProvider = undefined as any;
+            plugin.settings.llmProvider = undefined as unknown as ('openai' | 'ollama');
             plugin.validateSettings();
             expect(plugin.settings.llmProvider).toBe('openai');
         });

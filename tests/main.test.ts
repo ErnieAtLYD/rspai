@@ -52,7 +52,7 @@ jest.mock('../src/modals');
 jest.mock('../src/ui/SettingsUI');
 
 // Mock window.moment
-(global as any).window = {
+(global as Record<string, any>).window = {
     moment: jest.fn(() => ({
         format: jest.fn().mockReturnValue('2024-01-01 12:00')
     }))
@@ -141,7 +141,7 @@ describe('JournalReflectionPlugin', () => {
 
         it('should validate settings correctly', async () => {
             plugin.settings.daysToInclude = -1;
-            plugin.settings.periodicNoteFolders = ['', 'valid-folder', null as any];
+            plugin.settings.periodicNoteFolders = ['', 'valid-folder', null as unknown as string];
             plugin.settings.reflectionFolder = '';
             
             await plugin.saveSettings();
@@ -194,7 +194,7 @@ describe('JournalReflectionPlugin', () => {
         });
 
         it('should handle invalid API key types gracefully', async () => {
-            plugin.settings.openaiApiKey = null as any;
+            plugin.settings.openaiApiKey = null as unknown as string;
             plugin.settings.encryptionEnabled = false;
             
             const result = await plugin.getDecryptedApiKey();
@@ -213,12 +213,12 @@ describe('JournalReflectionPlugin', () => {
                 has: jest.fn().mockReturnValue(true),
                 resolve: jest.fn()
             };
-            plugin.serviceManager = mockServiceManager as any;
+            plugin.serviceManager = mockServiceManager as ServiceManager;
             
             // Mock error handler
             plugin.errorHandler = {
                 handleError: jest.fn()
-            } as any;
+            } as ErrorHandlingService;
         });
 
         it('should validate API key correctly for OpenAI', async () => {
@@ -249,7 +249,7 @@ describe('JournalReflectionPlugin', () => {
         });
 
         it('should fail validation when service manager is not initialized', async () => {
-            plugin.serviceManager = null as any;
+            plugin.serviceManager = null as unknown as ServiceManager;
             
             const result = await plugin['validateAnalysisPrerequisites']();
             

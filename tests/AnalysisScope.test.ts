@@ -1,6 +1,6 @@
 // tests/AnalysisScope.test.ts
 
-import { TFile } from 'obsidian';
+import { TFile, App } from 'obsidian';
 import { FileOperationsService, FileOperationsConfig } from '../src/services/FileOperationsService';
 import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
@@ -33,7 +33,7 @@ jest.mock('obsidian', () => ({
 }));
 
 describe('Analysis Scope Functionality', () => {
-    let mockApp: any;
+    let mockApp: Partial<App>;
     let mockErrorHandler: ErrorHandlingService;
     let fileOpsService: FileOperationsService;
 
@@ -54,7 +54,7 @@ describe('Analysis Scope Functionality', () => {
         mockErrorHandler = {
             executeWithRetry: jest.fn((fn) => fn()),
             handleError: jest.fn()
-        } as any;
+        } as ErrorHandlingService;
     });
 
     describe('Analysis Scope Settings', () => {
@@ -68,7 +68,7 @@ describe('Analysis Scope Functionality', () => {
                 analysisScope: 'whole-life'
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             expect(fileOpsService).toBeDefined();
         });
 
@@ -82,7 +82,7 @@ describe('Analysis Scope Functionality', () => {
                 analysisScope: 'work-only'
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             expect(fileOpsService).toBeDefined();
         });
 
@@ -105,7 +105,7 @@ describe('Analysis Scope Functionality', () => {
                 }
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             expect(fileOpsService).toBeDefined();
         });
     });
@@ -121,7 +121,7 @@ describe('Analysis Scope Functionality', () => {
                 analysisScope: 'work-only'
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             await fileOpsService.initialize();
         });
 
@@ -195,7 +195,7 @@ describe('Analysis Scope Functionality', () => {
                 }
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             await fileOpsService.initialize();
         });
 
@@ -231,7 +231,7 @@ describe('Analysis Scope Functionality', () => {
                 }
             };
 
-            const tagService = new FileOperationsService(mockApp, tagOnlyConfig, mockErrorHandler);
+            const tagService = new FileOperationsService(mockApp as App, tagOnlyConfig, mockErrorHandler);
             await tagService.initialize();
 
             const mockFile = new TFile('daily/2024-01-01.md');
@@ -265,7 +265,7 @@ describe('Analysis Scope Functionality', () => {
                 }
             };
 
-            const folderService = new FileOperationsService(mockApp, folderOnlyConfig, mockErrorHandler);
+            const folderService = new FileOperationsService(mockApp as App, folderOnlyConfig, mockErrorHandler);
             await folderService.initialize();
 
             const mockFile = new TFile('Health/daily/2024-01-01.md');
@@ -324,7 +324,7 @@ describe('Analysis Scope Functionality', () => {
                 analysisScope: 'work-only'
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             await fileOpsService.initialize();
 
             const mockFile = new TFile('daily/2024-01-01.md');
@@ -357,7 +357,7 @@ describe('Analysis Scope Functionality', () => {
                 }
             };
 
-            fileOpsService = new FileOperationsService(mockApp, config, mockErrorHandler);
+            fileOpsService = new FileOperationsService(mockApp as App, config, mockErrorHandler);
             await fileOpsService.initialize();
 
             const mockFile = new TFile('daily/2024-01-01.md');

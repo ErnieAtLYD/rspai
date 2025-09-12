@@ -36,24 +36,27 @@ let natural: NaturalModule | undefined;
 
 export async function getNlp(): Promise<(text: string) => CompromiseDoc> {
     if (!nlp) {
-        const mod = await import("compromise") as any;
-        nlp = (mod.default || mod) as (text: string) => CompromiseDoc;
+        const mod = await import("compromise") as unknown;
+        const compromiseModule = mod as { default?: (text: string) => CompromiseDoc } | ((text: string) => CompromiseDoc);
+        nlp = (typeof compromiseModule === 'function' ? compromiseModule : (compromiseModule as { default?: (text: string) => CompromiseDoc }).default) as (text: string) => CompromiseDoc;
     }
     return nlp;
 }
 
 export async function getSentiment(): Promise<new () => SentimentAnalyzerLib> {
     if (!Sentiment) {
-        const mod = await import("sentiment") as any;
-        Sentiment = (mod.default || mod) as new () => SentimentAnalyzerLib;
+        const mod = await import("sentiment") as unknown;
+        const sentimentModule = mod as { default?: new () => SentimentAnalyzerLib } | (new () => SentimentAnalyzerLib);
+        Sentiment = (typeof sentimentModule === 'function' ? sentimentModule : (sentimentModule as { default?: new () => SentimentAnalyzerLib }).default) as new () => SentimentAnalyzerLib;
     }
     return Sentiment;
 }
 
 export async function getNatural(): Promise<NaturalModule> {
     if (!natural) {
-        const mod = await import("natural") as any;
-        natural = mod as NaturalModule;
+        const mod = await import("natural") as unknown;
+        const naturalModule = mod as { default?: NaturalModule } | NaturalModule;
+        natural = ('default' in (naturalModule as { default?: NaturalModule }) ? (naturalModule as { default: NaturalModule }).default : naturalModule as NaturalModule);
     }
     return natural;
 }
