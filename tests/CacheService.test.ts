@@ -1,36 +1,38 @@
 // tests/CacheService.test.ts
 
 import { CacheService } from '../src/services/CacheService';
+import { App } from 'obsidian';
+import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
-const mockApp = {
+const mockApp: Partial<App> = {
     vault: {
         configDir: '.obsidian',
         adapter: {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        }
+        } as any
     }
-} as any;
+};
 
 // Helper function to create mock app with custom configDir
-const createMockApp = (configDir = '.obsidian') => ({
+const createMockApp = (configDir = '.obsidian'): Partial<App> => ({
     vault: {
         configDir,
         adapter: {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        }
+        } as any
     }
-} as any);
+});
 
 // Mock ErrorHandlingService
-const mockErrorHandler = {
+const mockErrorHandler: Partial<ErrorHandlingService> = {
     handleError: jest.fn(),
     executeWithRetry: jest.fn()
-} as any;
+};
 
 describe('CacheService', () => {
     let cacheService: CacheService;
@@ -46,7 +48,7 @@ describe('CacheService', () => {
 
     describe('Plugin ID Sanitization', () => {
         test('should sanitize valid plugin ID correctly', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'retrospect-ai');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'retrospect-ai');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/retrospect-ai/cache.json`);
         });
 
@@ -95,7 +97,7 @@ describe('CacheService', () => {
 
         test('should throw error for non-string plugin ID', () => {
             expect(() => {
-                new CacheService(mockApp, mockErrorHandler, {}, null as any);
+                new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, null as unknown as string);
             }).toThrow('Plugin ID must be a non-empty string');
         });
     });

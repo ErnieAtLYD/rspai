@@ -1,37 +1,40 @@
 // tests/NLPAnalysisService.test.ts
 
 import { NLPAnalysisService, NLPAnalysisConfig } from '../src/services/NLPAnalysisService';
+import { App } from 'obsidian';
+import { CacheService } from '../src/services/CacheService';
+import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
-const mockApp = {
+const mockApp: Partial<App> = {
     vault: {
         adapter: {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        }
+        } as any
     }
-} as any;
+};
 
 // Mock CacheService
-const mockCacheService = {
+const mockCacheService: Partial<CacheService> = {
     get: jest.fn(),
     set: jest.fn(),
     has: jest.fn(),
     delete: jest.fn(),
     clear: jest.fn()
-} as any;
+};
 
 // Mock ErrorHandlingService
-const mockErrorHandler = {
+const mockErrorHandler: Partial<ErrorHandlingService> = {
     handleError: jest.fn(),
     executeWithRetry: jest.fn()
-} as any;
+};
 
 // Mock NLP Config
 const mockConfig: NLPAnalysisConfig = {
-    cacheService: mockCacheService,
-    errorHandler: mockErrorHandler,
+    cacheService: mockCacheService as CacheService,
+    errorHandler: mockErrorHandler as ErrorHandlingService,
     enableEntityRecognition: true,
     enableAdvancedSentiment: true,
     themeExtractionDepth: 'moderate',

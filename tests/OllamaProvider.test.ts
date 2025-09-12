@@ -30,7 +30,7 @@ describe('OllamaProvider (via AIService)', () => {
                     exists: jest.fn()
                 }
             }
-        } as any;
+        } as App;
         
         // Mock error handler
         mockErrorHandler = {
@@ -42,7 +42,7 @@ describe('OllamaProvider (via AIService)', () => {
             initialize: jest.fn(),
             dispose: jest.fn(),
             isReady: jest.fn().mockReturnValue(true)
-        } as any;
+        } as jest.Mocked<ErrorHandlingService>;
         
         (ErrorHandlingService as jest.Mock).mockImplementation(() => mockErrorHandler);
         

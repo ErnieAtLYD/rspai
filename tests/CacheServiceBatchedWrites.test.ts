@@ -1,23 +1,25 @@
 // tests/CacheServiceBatchedWrites.test.ts
 
 import { CacheService, CacheConfig } from '../src/services/CacheService';
+import { App } from 'obsidian';
+import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
-const mockApp = {
+const mockApp: Partial<App> = {
     vault: {
         adapter: {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        }
+        } as any
     }
-} as any;
+};
 
 // Mock ErrorHandlingService
-const mockErrorHandler = {
+const mockErrorHandler: Partial<ErrorHandlingService> = {
     handleError: jest.fn(),
     executeWithRetry: jest.fn().mockImplementation((fn) => fn())
-} as any;
+};
 
 describe('CacheService Batched Writes', () => {
     let cacheService: CacheService;
@@ -36,7 +38,7 @@ describe('CacheService Batched Writes', () => {
             writeMode: 'batched'
         };
         
-        cacheService = new CacheService(mockApp, mockErrorHandler, config, 'test-plugin');
+        cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, config, 'test-plugin');
     });
 
     afterEach(async () => {
@@ -75,7 +77,7 @@ describe('CacheService Batched Writes', () => {
     describe('Write Modes', () => {
         test('should support immediate write mode', async () => {
             config.writeMode = 'immediate';
-            cacheService = new CacheService(mockApp, mockErrorHandler, config, 'test-plugin');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, config, 'test-plugin');
             await cacheService.initialize();
             
             await cacheService.set('test-key', 'test-value');
@@ -89,7 +91,7 @@ describe('CacheService Batched Writes', () => {
 
         test('should support lazy write mode', async () => {
             config.writeMode = 'lazy';
-            cacheService = new CacheService(mockApp, mockErrorHandler, config, 'test-plugin');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, config, 'test-plugin');
             await cacheService.initialize();
             
             await cacheService.set('test-key', 'test-value');

@@ -3,6 +3,12 @@
 import { App } from "obsidian";
 import { ErrorHandlingService, ErrorType, ErrorCode, RetrospectError, ErrorContext, ErrorHandlingConfig } from "../src/services/ErrorHandlingService";
 
+// Test interface to access private methods safely
+interface TestableErrorHandlingService extends ErrorHandlingService {
+    classifyError(error: Error, context: ErrorContext): RetrospectError;
+    calculateBackoffDelay(attempt: number, baseDelay: number): number;
+}
+
 // Mock Obsidian's Notice to prevent issues in testing
 jest.mock("obsidian", () => ({
     App: jest.fn(),
@@ -39,7 +45,7 @@ describe("ErrorHandlingService", () => {
         describe("API Key Errors", () => {
             it("should classify invalid API key errors", () => {
                 const error = new Error("API key is invalid");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result).toBeInstanceOf(RetrospectError);
                 expect(result.type).toBe(ErrorType.USER);
@@ -49,7 +55,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify missing API key errors", () => {
                 const error = new Error("API key is missing");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.USER);
                 expect(result.code).toBe(ErrorCode.API_KEY_MISSING);
@@ -58,7 +64,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify not configured API key errors", () => {
                 const error = new Error("API key not configured");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.USER);
                 expect(result.code).toBe(ErrorCode.API_KEY_MISSING);
@@ -68,7 +74,7 @@ describe("ErrorHandlingService", () => {
         describe("Rate Limiting Errors", () => {
             it("should classify rate limit errors", () => {
                 const error = new Error("Rate limit exceeded");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.API);
                 expect(result.code).toBe(ErrorCode.API_RATE_LIMITED);
@@ -78,7 +84,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify HTTP 429 errors", () => {
                 const error = new Error("HTTP 429 Too Many Requests");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.API);
                 expect(result.code).toBe(ErrorCode.API_RATE_LIMITED);
@@ -89,7 +95,7 @@ describe("ErrorHandlingService", () => {
         describe("Network Errors", () => {
             it("should classify network errors", () => {
                 const error = new Error("Network error occurred");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.NETWORK);
                 expect(result.code).toBe(ErrorCode.API_NETWORK_ERROR);
@@ -99,7 +105,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify fetch errors", () => {
                 const error = new Error("Fetch failed");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.NETWORK);
                 expect(result.code).toBe(ErrorCode.API_NETWORK_ERROR);
@@ -107,7 +113,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify connection errors", () => {
                 const error = new Error("Connection refused");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.NETWORK);
                 expect(result.code).toBe(ErrorCode.API_NETWORK_ERROR);
@@ -117,7 +123,7 @@ describe("ErrorHandlingService", () => {
         describe("Filesystem Errors", () => {
             it("should classify file not found errors", () => {
                 const error = new Error("File not found");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.FILE_NOT_FOUND);
@@ -126,7 +132,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify ENOENT errors", () => {
                 const error = new Error("ENOENT: no such file or directory");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.FILE_NOT_FOUND);
@@ -134,7 +140,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify folder not found errors", () => {
                 const error = new Error("Folder not found");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.FOLDER_NOT_FOUND);
@@ -143,7 +149,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify directory errors", () => {
                 const error = new Error("Directory does not exist");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.FOLDER_NOT_FOUND);
@@ -151,7 +157,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify permission errors", () => {
                 const error = new Error("Permission denied");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.PERMISSION_DENIED);
@@ -160,7 +166,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify access denied errors", () => {
                 const error = new Error("Access denied to file");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.FILESYSTEM);
                 expect(result.code).toBe(ErrorCode.PERMISSION_DENIED);
@@ -170,7 +176,7 @@ describe("ErrorHandlingService", () => {
         describe("Encryption/Decryption Errors", () => {
             it("should classify encryption failed errors", () => {
                 const error = new Error("Encryption failed");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.VALIDATION);
                 expect(result.code).toBe(ErrorCode.ENCRYPTION_FAILED);
@@ -179,7 +185,7 @@ describe("ErrorHandlingService", () => {
 
             it("should classify decryption failed errors", () => {
                 const error = new Error("Decryption failed");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.VALIDATION);
                 expect(result.code).toBe(ErrorCode.DECRYPTION_FAILED);
@@ -190,7 +196,7 @@ describe("ErrorHandlingService", () => {
         describe("Default Classification", () => {
             it("should default to INVALID_CONFIG for unmatched errors", () => {
                 const error = new Error("Some random error");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.USER);
                 expect(result.code).toBe(ErrorCode.INVALID_CONFIG);
@@ -199,7 +205,7 @@ describe("ErrorHandlingService", () => {
 
             it("should handle empty error messages", () => {
                 const error = new Error("");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.USER);
                 expect(result.code).toBe(ErrorCode.INVALID_CONFIG);
@@ -209,7 +215,7 @@ describe("ErrorHandlingService", () => {
         describe("Case Insensitivity", () => {
             it("should classify errors case-insensitively", () => {
                 const error = new Error("API KEY IS INVALID");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.USER);
                 expect(result.code).toBe(ErrorCode.API_KEY_INVALID);
@@ -217,7 +223,7 @@ describe("ErrorHandlingService", () => {
 
             it("should handle mixed case error messages", () => {
                 const error = new Error("Network Error Occurred");
-                const result = (service as any).classifyError(error, defaultContext);
+                const result = (service as TestableErrorHandlingService).classifyError(error, defaultContext);
 
                 expect(result.type).toBe(ErrorType.NETWORK);
                 expect(result.code).toBe(ErrorCode.API_NETWORK_ERROR);
@@ -234,7 +240,7 @@ describe("ErrorHandlingService", () => {
                     timestamp: 123456789
                 };
 
-                const result = (service as any).classifyError(error, context);
+                const result = (service as TestableErrorHandlingService).classifyError(error, context);
 
                 expect(result.context.operation).toBe("test-op");
                 expect(result.context.component).toBe("test-comp");
@@ -525,9 +531,9 @@ describe("ErrorHandlingService", () => {
                 const baseDelay = 10;
                 
                 // Test multiple attempts to verify exponential growth
-                const delay1 = (service as any).calculateBackoffDelay(0, baseDelay);
-                const delay2 = (service as any).calculateBackoffDelay(1, baseDelay);
-                const delay3 = (service as any).calculateBackoffDelay(2, baseDelay);
+                const delay1 = (service as TestableErrorHandlingService).calculateBackoffDelay(0, baseDelay);
+                const delay2 = (service as TestableErrorHandlingService).calculateBackoffDelay(1, baseDelay);
+                const delay3 = (service as TestableErrorHandlingService).calculateBackoffDelay(2, baseDelay);
 
                 // Should follow exponential pattern: baseDelay * 2^attempt * jitter
                 // Jitter is between 0.85 and 1.15, so we test bounds
@@ -546,7 +552,7 @@ describe("ErrorHandlingService", () => {
                 const maxDelay = 30000; // This is hardcoded in the service
                 
                 // High attempt number should be capped at maxDelay
-                const delay = (service as any).calculateBackoffDelay(10, baseDelay);
+                const delay = (service as TestableErrorHandlingService).calculateBackoffDelay(10, baseDelay);
                 
                 expect(delay).toBeLessThanOrEqual(maxDelay);
             });
@@ -557,7 +563,7 @@ describe("ErrorHandlingService", () => {
                 
                 // Run multiple calculations to verify jitter varies
                 const delays = Array.from({ length: 10 }, () => 
-                    (service as any).calculateBackoffDelay(attempt, baseDelay)
+                    (service as TestableErrorHandlingService).calculateBackoffDelay(attempt, baseDelay)
                 );
                 
                 // Check that not all delays are identical (jitter is working)
