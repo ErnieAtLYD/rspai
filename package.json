@@ -1,6 +1,6 @@
 {
 	"name": "retrospect-ai",
-	"version": "2.4.2",
+	"version": "2.4.3",
 	"description": "Simple journal reflection summaries powered by AI. Transform your daily notes into meaningful insights.",
 	"main": "main.js",
 	"type": "module",
