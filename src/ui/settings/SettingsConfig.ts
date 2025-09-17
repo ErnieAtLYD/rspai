@@ -69,6 +69,28 @@ export function createSettingsConfig(plugin: JournalReflectionPlugin): SettingsS
           defaultValue: 'gpt-4o-mini',
           conditional: (settings) => settings.llmProvider === 'openai'
         },
+        {
+          type: 'slider',
+          name: "Max Tokens",
+          description: "Maximum number of tokens for OpenAI responses (affects response length and cost)",
+          key: 'openaiMaxTokens',
+          min: 100,
+          max: 4000,
+          step: 100,
+          defaultValue: 1000,
+          conditional: (settings) => settings.llmProvider === 'openai'
+        },
+        {
+          type: 'slider',
+          name: "Temperature",
+          description: "Creativity level for OpenAI responses (0.0 = focused, 1.0 = creative)",
+          key: 'openaiTemperature',
+          min: 0.0,
+          max: 1.0,
+          step: 0.1,
+          defaultValue: 0.7,
+          conditional: (settings) => settings.llmProvider === 'openai'
+        },
         // Ollama specific settings
         {
           type: 'text',
