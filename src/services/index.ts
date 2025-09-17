@@ -20,3 +20,5 @@ export type { ErrorHandlingConfig, ErrorContext, ErrorHandlerOptions } from "./E
 export { RetrospectError, ErrorType, ErrorCode } from "./ErrorHandlingService";
 export { NLPAnalysisService } from "./NLPAnalysisService";
 export type { ProductivityTheme, BlockerPattern, SentimentAnalysis, TextPreprocessingResult, NLPAnalysisConfig } from "./NLPAnalysisService";
+export { Logger, createLogger } from "./Logger";
+export type { LogLevel, LogContext, LogErrorContext } from "./Logger";
