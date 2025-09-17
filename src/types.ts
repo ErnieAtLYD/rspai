@@ -8,6 +8,8 @@ export interface JournalReflectionSettings {
 	// OpenAI Settings
 	openaiApiKey: string | EncryptedData;
 	openaiModel: string;
+	openaiMaxTokens?: number;
+	openaiTemperature?: number;
 	// Ollama Settings
 	ollamaBaseUrl: string;
 	ollamaModel: string;

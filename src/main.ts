@@ -62,6 +62,8 @@ export const DEFAULT_SETTINGS: JournalReflectionSettings = {
 	// OpenAI Settings
 	openaiApiKey: "",
 	openaiModel: OPENAI_MODEL,
+	openaiMaxTokens: OPENAI_MAX_TOKENS,
+	openaiTemperature: OPENAI_TEMPERATURE,
 	// Ollama Settings
 	ollamaBaseUrl: "http://localhost:11434",
 	ollamaModel: "llama3.1:8b",
@@ -241,8 +243,8 @@ export default class JournalReflectionPlugin extends Plugin {
 					provider: this.settings.llmProvider,
 					apiKey: "", // Will be set when needed
 					model: this.settings.llmProvider === 'openai' ? this.settings.openaiModel : this.settings.ollamaModel,
-					maxTokens: OPENAI_MAX_TOKENS,
-					temperature: OPENAI_TEMPERATURE,
+					maxTokens: this.settings.llmProvider === 'openai' ? (this.settings.openaiMaxTokens ?? OPENAI_MAX_TOKENS) : undefined,
+					temperature: this.settings.llmProvider === 'openai' ? (this.settings.openaiTemperature ?? OPENAI_TEMPERATURE) : undefined,
 					apiUrl: this.settings.llmProvider === 'openai' ? OPENAI_API_URL : this.settings.ollamaBaseUrl,
 					timeout: this.settings.llmProvider === 'ollama' ? this.settings.ollamaTimeout : undefined
 				};
@@ -365,8 +367,8 @@ export default class JournalReflectionPlugin extends Plugin {
 				provider: this.settings.llmProvider,
 				apiKey: await this.getDecryptedApiKey(),
 				model: this.settings.llmProvider === 'openai' ? this.settings.openaiModel : this.settings.ollamaModel,
-				maxTokens: OPENAI_MAX_TOKENS,
-				temperature: OPENAI_TEMPERATURE,
+				maxTokens: this.settings.llmProvider === 'openai' ? (this.settings.openaiMaxTokens ?? OPENAI_MAX_TOKENS) : undefined,
+				temperature: this.settings.llmProvider === 'openai' ? (this.settings.openaiTemperature ?? OPENAI_TEMPERATURE) : undefined,
 				apiUrl: this.settings.llmProvider === 'openai' ? OPENAI_API_URL : this.settings.ollamaBaseUrl,
 				timeout: this.settings.llmProvider === 'ollama' ? this.settings.ollamaTimeout : undefined
 			};
