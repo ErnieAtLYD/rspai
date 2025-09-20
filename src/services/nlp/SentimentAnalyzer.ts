@@ -3,20 +3,22 @@
 import { TextProcessor } from './TextProcessor';
 import { getSentiment, SentimentAnalyzerLib } from './nlp-loader';
 
+export interface EmotionScores {
+	joy: number;
+	anger: number;
+	fear: number;
+	sadness: number;
+	surprise: number;
+	trust: number;
+}
+
 export interface SentimentAnalysis {
 	overall: {
 		polarity: number; // -1 to 1
 		subjectivity: number; // 0 to 1
 		label: "positive" | "neutral" | "negative";
 	};
-	emotions: {
-		joy: number;
-		anger: number;
-		fear: number;
-		sadness: number;
-		surprise: number;
-		trust: number;
-	};
+	emotions: EmotionScores;
 	arousal: "calm" | "moderate" | "energetic";
 	productivity_sentiment: "optimistic" | "neutral" | "concerned";
 	confidence_level: number;
@@ -38,7 +40,7 @@ export class SentimentAnalyzer {
 		return this.sentimentAnalyzer;
 	}
 
-	private calculateProductivitySentiment(polarity: number, emotions: any): "optimistic" | "neutral" | "concerned" {
+	private calculateProductivitySentiment(polarity: number, emotions: EmotionScores): "optimistic" | "neutral" | "concerned" {
 		if (polarity > 0.3 && emotions.joy > emotions.sadness) {
 			return "optimistic";
 		} else if (polarity < -0.3 || emotions.sadness > emotions.joy) {
@@ -47,14 +49,14 @@ export class SentimentAnalyzer {
 		return "neutral";
 	}
 
-	private calculateArousal(emotions: any): "calm" | "moderate" | "energetic" {
+	private calculateArousal(emotions: EmotionScores): "calm" | "moderate" | "energetic" {
 		const energyScore = emotions.joy + emotions.surprise - emotions.sadness - emotions.fear;
 		if (energyScore > 0.5) return "energetic";
 		if (energyScore < -0.5) return "calm";
 		return "moderate";
 	}
 
-	private async analyzeEmotions(text: string): Promise<any> {
+	private async analyzeEmotions(text: string): Promise<EmotionScores> {
 		const processed = await this.textProcessor.processText(text);
 		
 		// Simple keyword-based emotion detection
@@ -67,12 +69,19 @@ export class SentimentAnalyzer {
 			trust: ["confident", "secure", "trust", "reliable", "certain", "assured"]
 		};
 
-		const emotions: any = {};
+		const emotions: EmotionScores = {
+			joy: 0,
+			anger: 0,
+			fear: 0,
+			sadness: 0,
+			surprise: 0,
+			trust: 0
+		};
 		for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
 			const matches = processed.tokens.filter(token =>
 				keywords.some(keyword => token.includes(keyword))
 			).length;
-			emotions[emotion] = Math.min(matches / processed.tokens.length * 10, 1.0);
+			emotions[emotion as keyof EmotionScores] = Math.min(matches / processed.tokens.length * 10, 1.0);
 		}
 
 		return emotions;
@@ -124,7 +133,7 @@ export class SentimentAnalyzer {
 				sadness: 0,
 				surprise: 0,
 				trust: 0
-			},
+			} as EmotionScores,
 			arousal: "moderate",
 			productivity_sentiment: "neutral",
 			confidence_level: 0

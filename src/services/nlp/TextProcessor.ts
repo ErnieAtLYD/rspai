@@ -1,6 +1,6 @@
 // src/services/nlp/TextProcessor.ts
 
-import { getNlp, getNatural, CompromiseDoc } from './nlp-loader';
+import { getNlp, getNatural, CompromiseDoc, NaturalModule } from './nlp-loader';
 
 export interface EntityData {
 	people: string[];
@@ -9,7 +9,7 @@ export interface EntityData {
 }
 
 export class TextProcessor {
-	private stemmer: any = null;
+	private stemmer: NaturalModule['PorterStemmer'] | null = null;
 	private stopWords: Set<string> | null = null;
 
 	private async ensureNaturalDependencies(): Promise<void> {
@@ -34,7 +34,7 @@ export class TextProcessor {
 		const tokenizer = new natural.WordTokenizer();
 		return tokenizer.tokenize(text)
 			.filter((token: string) => token.length > 2 && !this.stopWords!.has(token))
-			.map((token: string) => this.stemmer.stem(token));
+			.map((token: string) => this.stemmer!.stem(token));
 	}
 
 	extractEntities(doc: CompromiseDoc): EntityData {
