@@ -134,7 +134,7 @@ export class BlockerDetector {
 					const severity = this.getSeverityLevel(blockerType, confidence);
 					
 					blockers.push({
-						type: blockerType as any,
+						type: blockerType as BlockerPattern['type'],
 						severity,
 						confidence,
 						indicators: matches,
