@@ -53,45 +53,45 @@ describe('CacheService', () => {
         });
 
         test('should remove path traversal sequences', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, '../../../malicious');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, '../../../malicious');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/plugin----malicious/cache.json`);
         });
 
         test('should replace path separators with hyphens', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'folder/subfolder\\malicious');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'folder/subfolder\\malicious');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/folder-subfolder-malicious/cache.json`);
         });
 
         test('should remove special characters', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'plugin@#$%name!');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'plugin@#$%name!');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/pluginname/cache.json`);
         });
 
         test('should convert to lowercase', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, 'MyPlugin-NAME');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'MyPlugin-NAME');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/myplugin-name/cache.json`);
         });
 
         test('should prepend "plugin-" if it starts with non-alphanumeric', () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, '-my-plugin');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, '-my-plugin');
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/plugin--my-plugin/cache.json`);
         });
 
         test('should limit length to 50 characters', () => {
             const longName = 'a'.repeat(100);
-            cacheService = new CacheService(mockApp, mockErrorHandler, {}, longName);
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, longName);
             expect(cacheService['cacheFilePath']).toBe(`${mockApp.vault.configDir}/plugins/${'a'.repeat(50)}/cache.json`);
         });
 
         test('should throw error for empty plugin ID', () => {
             expect(() => {
-                new CacheService(mockApp, mockErrorHandler, {}, '');
+                new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, '');
             }).toThrow('Plugin ID must be a non-empty string');
         });
 
         test('should throw error for plugin ID with only invalid characters', () => {
             expect(() => {
-                new CacheService(mockApp, mockErrorHandler, {}, '!@#$%^&*()');
+                new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, {}, '!@#$%^&*()');
             }).toThrow('Plugin ID contains only invalid characters');
         });
 
@@ -107,8 +107,8 @@ describe('CacheService', () => {
             const customMockApp = createMockApp('.my-obsidian');
             mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
             customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
-            
-            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+
+            cacheService = new CacheService(customMockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'test-plugin');
             expect(cacheService['cacheFilePath']).toBe('.my-obsidian/plugins/test-plugin/cache.json');
         });
 
@@ -116,8 +116,8 @@ describe('CacheService', () => {
             const customMockApp = createMockApp('obsidian-config');
             mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
             customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
-            
-            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+
+            cacheService = new CacheService(customMockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'test-plugin');
             expect(cacheService['cacheFilePath']).toBe('obsidian-config/plugins/test-plugin/cache.json');
         });
 
@@ -125,8 +125,8 @@ describe('CacheService', () => {
             const customMockApp = createMockApp('config/obsidian');
             mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
             customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
-            
-            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'test-plugin');
+
+            cacheService = new CacheService(customMockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'test-plugin');
             expect(cacheService['cacheFilePath']).toBe('config/obsidian/plugins/test-plugin/cache.json');
         });
 
@@ -134,15 +134,15 @@ describe('CacheService', () => {
             const customMockApp = createMockApp('.vault-config');
             mockErrorHandler.executeWithRetry.mockImplementation((fn: () => any) => fn());
             customMockApp.vault.adapter.read.mockRejectedValue(new Error('File not found'));
-            
-            cacheService = new CacheService(customMockApp, mockErrorHandler, {}, 'My-Plugin@2024!');
+
+            cacheService = new CacheService(customMockApp as App, mockErrorHandler as ErrorHandlingService, {}, 'My-Plugin@2024!');
             expect(cacheService['cacheFilePath']).toBe('.vault-config/plugins/my-plugin2024/cache.json');
         });
     });
 
     describe('Cache Operations', () => {
         beforeEach(async () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, { persistToDisk: false }, 'test-plugin');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, { persistToDisk: false }, 'test-plugin');
             await cacheService.initialize();
         });
 
@@ -199,7 +199,7 @@ describe('CacheService', () => {
 
     describe('Hit Ratio Tracking', () => {
         beforeEach(async () => {
-            cacheService = new CacheService(mockApp, mockErrorHandler, { persistToDisk: false }, 'test-plugin');
+            cacheService = new CacheService(mockApp as App, mockErrorHandler as ErrorHandlingService, { persistToDisk: false }, 'test-plugin');
             await cacheService.initialize();
         });
 
