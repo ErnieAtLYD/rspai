@@ -1,7 +1,7 @@
 // tests/NLPAnalysisService.test.ts
 
 import { NLPAnalysisService, NLPAnalysisConfig } from '../src/services/NLPAnalysisService';
-import { App } from 'obsidian';
+import { App, DataAdapter } from 'obsidian';
 import { CacheService } from '../src/services/CacheService';
 import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
@@ -12,7 +12,7 @@ const mockApp: Partial<App> = {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        } as any
+        } as jest.Mocked<Pick<DataAdapter, 'read' | 'write' | 'exists'>>
     }
 };
 

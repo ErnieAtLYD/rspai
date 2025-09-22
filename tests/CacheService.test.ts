@@ -1,7 +1,7 @@
 // tests/CacheService.test.ts
 
 import { CacheService } from '../src/services/CacheService';
-import type { App } from 'obsidian';
+import type { App, DataAdapter } from 'obsidian';
 import type { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
@@ -12,7 +12,7 @@ const mockApp: Partial<App> = {
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        } as any
+        } as jest.Mocked<Pick<DataAdapter, 'read' | 'write' | 'exists'>>
     }
 };
 
@@ -24,7 +24,7 @@ const createMockApp = (configDir = '.obsidian'): Partial<App> => ({
             read: jest.fn(),
             write: jest.fn(),
             exists: jest.fn()
-        } as any
+        } as jest.Mocked<Pick<DataAdapter, 'read' | 'write' | 'exists'>>
     }
 });
 
