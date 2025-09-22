@@ -1,8 +1,8 @@
 // tests/CacheService.test.ts
 
 import { CacheService } from '../src/services/CacheService';
-import { App } from 'obsidian';
-import { ErrorHandlingService } from '../src/services/ErrorHandlingService';
+import type { App } from 'obsidian';
+import type { ErrorHandlingService } from '../src/services/ErrorHandlingService';
 
 // Mock Obsidian App
 const mockApp: Partial<App> = {
